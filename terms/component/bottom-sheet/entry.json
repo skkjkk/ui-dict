@@ -70,7 +70,6 @@
     "https://m3.material.io/components/bottom-sheets/guidelines",
     "https://developer.apple.com/design/human-interface-guidelines/sheets"
   ],
-  "verifiedWith": "claude-sonnet-4 · 2026-09",
   "contributors": [
     { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
   ]
