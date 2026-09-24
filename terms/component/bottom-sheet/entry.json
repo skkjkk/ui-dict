@@ -1,0 +1,77 @@
+{
+  "id": "bottom-sheet",
+  "no": "C-01",
+  "category": "component",
+  "nameZh": "底部弹层",
+  "nameEn": "Bottom Sheet",
+  "aliases": [
+    "从屏幕下面滑上来的面板",
+    "半屏弹窗",
+    "可以往上拖的抽屉",
+    "拖动换高度的卡片",
+    "Slide up Panel",
+    "Modal sheet"
+  ],
+  "definition": "附着在屏幕底缘、可向上拖拽展开的面板，提供介于全屏页面与瞬时提示之间的第三档承载空间。用户随时用下拉手势或点遮罩让它退出，心智负担低于 Dialog。与 Dialog 的区别：Dialog 打断并等待决定，Bottom Sheet 不打断上下文、可与底图持续对比。",
+  "whenNotToUse": [
+    "需要用户必须二选一才能继续时 → 用 Dialog/Alert",
+    "内容是短时反馈、无需停留操作时 → 用 Snackbar（Toast）",
+    "只有 2-4 个动作选项时 → 用 Action Sheet",
+    "桌面宽屏（>1024px）→ 居中 Dialog 或侧边 Drawer，底部贴边在宽屏上视觉断裂"
+  ],
+  "confusedWith": ["dialog", "snackbar", "action-sheet"],
+  "anatomy": [
+    { "part": "Handle 把手", "note": "顶部居中小横条，暗示可拖拽；唯一必绘部件" },
+    { "part": "标题区", "note": "常驻，滚动内容从其下穿过" },
+    { "part": "内容区", "note": "可滚动主体，滚到底后才接管下拉手势" },
+    { "part": "Scrim 遮罩", "note": "背后压暗层，点击即关闭" },
+    { "part": "Snap points 停靠位", "note": "peek/half/full 档位，松手吸附最近一档" }
+  ],
+  "promptTemplate": {
+    "core": "移动端 Bottom Sheet：视口底缘圆角面板，顶部居中画把手（36×5px、圆角 3px、rgba(0,0,0,.25)）；停靠位 peek {PEEK}% / half {HALF}% / full 94%，初始 half；拖把手实时跟手（越界用 0.55 阻尼 rubber-band），松手按速度+位移吸附最近档（下滑速度 >0.5px/ms 直接关闭）；scrim 浓度随拖拽进度渐变到 {SCRIM}；内容滚到底才接管下拉；role=dialog、Esc 关闭、焦点圈定。",
+    "stack": "原生 CSS + 原生 JS（Pointer Events）实现拖拽、吸附、焦点管理。",
+    "constraints": [
+      "不要用 <dialog> 元素做拖拽宿主（modal 行为与自由停靠冲突），用 div 自管 focus trap",
+      "不要在 pointermove 里逐帧改 height——触发布局重排导致低端机掉帧；拖拽期 translateY、落位才写高度",
+      "不要让 scrim 不拦截点击——用户必须能点空白关闭",
+      "不要省略 prefers-reduced-motion 与 (hover:none) 触屏降级"
+    ],
+    "verify": [
+      "页面底部露出约 half 高的面板，顶部可见把手",
+      "按住面板拖动实时跟手，内容区可独立滚动",
+      "松手回弹吸附到最近档位，有轻微过冲",
+      "向下拖过阈值松手则完全滑出、遮罩淡出；点遮罩/Esc 同样关闭"
+    ],
+    "reference": "参考气质：Apple Music iOS 播放面板、Google Maps 搜索结果抽屉——克制、跟手、吸附干脆。",
+    "variants": [
+      { "label": "更含蓄", "delta": "去掉过冲：吸附 easing 用 cubic-bezier(.2,.8,.2,1)，scrim 降至 0.3" },
+      { "label": "更多档位", "delta": "snap points 增加 30% 一档，把手加宽到 44px" }
+    ]
+  },
+  "params": [
+    { "key": "PEEK", "label": "peek 停靠位 (%屏高)", "def": 15, "min": 5, "max": 30, "step": 1, "hint": "最小可见高度" },
+    { "key": "HALF", "label": "half 停靠位 (%屏高)", "def": 60, "min": 40, "max": 80, "step": 5, "hint": "初始高度" },
+    { "key": "SCRIM", "label": "遮罩浓度", "def": 0.4, "min": 0, "max": 0.6, "step": 0.05, "hint": "影响聚焦感" }
+  ],
+  "scenarios": [
+    "地图 App 搜索结果列表（Google Maps / 高德）",
+    "音乐 App 播放面板（Apple Music / Spotify）",
+    "电商/OTA 筛选器：边看结果边收筛选（携程酒店筛选）",
+    "移动端分享面板"
+  ],
+  "pitfalls": [
+    "把手用 ::after 画省节点，但失去真实命中区——拖拽起点判定要把把手上下各 12px 算进热区，否则小屏按不准",
+    "iOS 上列表滚动与拖拽手势打架：必须实现「内容滚到底才接管下拉」，否则用户在列表里滑动会误拖面板；Android 无此问题，测试别只用桌面",
+    "height 逐帧动画会重排，低端机掉帧——拖拽期 translateY、松手瞬间才回写 height，两件事分开",
+    "焦点圈定漏做时键盘用户 Tab 跑到背后页面；Esc 关闭还必须归还触发按钮焦点——a11y 与动画同等优先级"
+  ],
+  "related": ["snackbar", "dialog", "action-sheet", "drawer"],
+  "refs": [
+    "https://m3.material.io/components/bottom-sheets/guidelines",
+    "https://developer.apple.com/design/human-interface-guidelines/sheets"
+  ],
+  "verifiedWith": "claude-sonnet-4 · 2026-09",
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}

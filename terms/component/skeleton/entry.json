@@ -1,0 +1,73 @@
+{
+  "id": "skeleton",
+  "no": "C-02",
+  "category": "component",
+  "nameZh": "骨架屏",
+  "nameEn": "Skeleton Screen",
+  "aliases": [
+    "内容没出来前的灰块",
+    "加载占位块",
+    "一闪一闪的灰条",
+    "先摆好版式再填内容",
+    "shimmer 占位",
+    "灰骨架"
+  ],
+  "definition": "内容加载期间，用与最终版式同形状的灰色占位块先行铺好画面，常配一道流动微光暗示\"正在加载\"。与 Spinner 的区别：Spinner 只说\"等一下\"，骨架屏说\"你要的东西马上出现在这个位置\"，能显著降低感知等待。微光（Shimmer）是它常用的动效手法，不是它本身。",
+  "whenNotToUse": [
+    "加载极快（<300ms）→ 骨架屏一闪反而更跳，宁可留白或直接出结果",
+    "最终内容尺寸未知、无法预排同形版式 → 占位与真实内容对不上，替换瞬间剧烈跳动，比 Spinner 更糟",
+    "小面积行内元素 → 用一个轻量 spinner 或文字\"加载中\"即可"
+  ],
+  "confusedWith": ["shimmer", "spinner"],
+  "anatomy": [
+    { "part": "占位块 Base", "note": "灰底，形状/尺寸对齐最终内容（头像圆、标题条、正文行）" },
+    { "part": "微光扫过 Shimmer", "note": "一道高光横向掠过的动画，暗示进行中；是手法不是本体" },
+    { "part": "版式容器", "note": "占位块排布必须与真实内容同构，替换时零位移" }
+  ],
+  "promptTemplate": {
+    "core": "一个内容卡片的骨架屏占位：左侧圆形头像占位（{SIZE}px），右侧三条文本占位（宽度分别 60% / 100% / 45%，高 12px）。每块底色 #e9e6e1，叠加一道从左到右循环扫过的高光微光，扫过一轮耗时 {DUR}s（linear 无限循环），占位块圆角 {RADIUS}px。真实数据到达时，用淡出 200ms 无缝替换为内容。",
+    "stack": "用 CSS linear-gradient + background-position 动画实现微光（不要用 JS 逐帧），占位块用 div。",
+    "constraints": [
+      "占位块尺寸必须与最终内容同构，否则替换瞬间会跳动——这是骨架屏最大的翻车点",
+      "微光循环不要快于 1s（太闪=干扰），也不要给静态小元素加",
+      "必须提供 prefers-reduced-motion 降级：关闭扫光，只留静态灰块",
+      "给容器加 aria-busy=true 与 role=status，别让读屏软件把占位块当内容念出来",
+      "加载失败要有兜底：微光不能永远空转，超时后回退到错误态"
+    ],
+    "verify": [
+      "首屏即出现与卡片同形状的灰色占位（圆 + 三横条）",
+      "一道柔光从左到右循环扫过，节奏平稳不刺眼",
+      "数据到达时占位淡出、内容就位，无明显跳动",
+      "系统开启\"减少动效\"后，扫光停止只剩静态灰块"
+    ],
+    "reference": "参考气质：Facebook / LinkedIn App 冷启动时的信息流占位；克制、低对比、与真实版式严丝合缝。",
+    "variants": [
+      { "label": "脉冲式", "delta": "整块明暗呼吸（opacity 0.6↔1）替代扫光，更省性能、更适合低端机" },
+      { "label": "多卡列表", "delta": "把单卡骨架纵向重复 4 次模拟信息流加载" }
+    ]
+  },
+  "params": [
+    { "key": "DUR", "label": "微光周期 (s)", "def": 1.4, "min": 0.8, "max": 3, "step": 0.1, "hint": "越大越舒缓；<1s 会显得躁" },
+    { "key": "RADIUS", "label": "占位块圆角 (px)", "def": 8, "min": 0, "max": 16, "step": 1, "hint": "与卡片设计语言一致" },
+    { "key": "SIZE", "label": "头像占位尺寸 (px)", "def": 52, "min": 32, "max": 80, "step": 4 }
+  ],
+  "scenarios": [
+    "App 冷启动信息流（Facebook / 微博）",
+    "列表/卡片类数据首次拉取（电商商品卡、用户列表）",
+    "详情页正文到达前的版式预占"
+  ],
+  "pitfalls": [
+    "占位块用真实内容的尺寸/间距来画，别随手写死——骨架屏的价值全在\"替换零跳动\"，对不上就退化成一次突兀的闪屏",
+    "微光用 background-position 动画（合成器友好），不要用 box-shadow 或 filter 逐帧——列表里几十个骨架同时跑会掉帧",
+    "读屏可达性常被漏：占位块要 aria-busy/role=status 并 aria-hidden 掉灰条，否则视障用户听到一堆空内容",
+    "加载失败或超时要收场：微光无限空转=告诉用户\"永远在加载\"，务必设超时回退到错误态或重试"
+  ],
+  "related": ["shimmer"],
+  "refs": [
+    "https://www.w3.org/WAI/ARIA/apg/patterns/"
+  ],
+  "verifiedWith": "claude-sonnet-4 · 2026-09",
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "id": "magnetic-button",
+  "no": "M-01",
+  "category": "motion",
+  "nameZh": "磁吸按钮",
+  "nameEn": "Magnetic Button",
+  "aliases": [
+    "鼠标靠近就被吸过去",
+    "吸附按钮",
+    "跟着光标跑的按钮",
+    "像被磁铁吸住一样",
+    "pull to cursor button"
+  ],
+  "definition": "光标进入感应区后按钮整体向光标位移、离开后弹簧回弹原位的交互。与 hover 缩放（Scale）的区别：磁吸是位置追随光标、带追逐感，缩放是原地变形。位移必须用 transform，运动模型必须是弹簧而非线性过渡。",
+  "whenNotToUse": [
+    "触屏为主的产品 → 没有 hover 语义，退化成普通按钮等于没做",
+    "表单提交/不可逆操作按钮 → 位移会让用户点不准目标",
+    "一屏内多个磁吸按钮相邻过密 → 感应区互相打架"
+  ],
+  "confusedWith": ["hover-scale", "cursor-follow"],
+  "promptTemplate": {
+    "core": "一个磁吸按钮：当指针进入按钮中心半径 {RADIUS}px 感应区时，按钮整体向光标方向位移，位移量与距离成反比（上限为按钮宽度的 30%）；位移用逐帧弹簧积分 stiffness {STIFF} / damping {DAMP}（v=(v+Δ·stiff)·damp，p+=v），要过冲后回稳，禁止线性插值；离开感应区后以同一参数弹回原位；点击与键盘 focus 正常可用。",
+    "stack": "原生 CSS + 原生 JS（Pointer Events + requestAnimationFrame 节流）实现感应、弹簧积分与回弹。",
+    "constraints": [
+      "不要用 CSS transition 模拟吸附——会失去追逐光标的连续感",
+      "感应区不要超过 200px——会误吸、多按钮互相打架",
+      "不要在吸附同时改变按钮尺寸或阴影强度——视觉噪音",
+      "不要在 pointermove 里直接改 transform 不做 rAF 节流——高频事件会掉帧",
+      "触屏 (hover:none) 设备自动退化为普通按钮"
+    ],
+    "verify": [
+      "远处移动鼠标：按钮先轻微倾向光标",
+      "进入感应区：明显被吸过去并过冲回弹",
+      "离开感应区：弹回原位，全程无布局位移、无闪烁",
+      "Tab 聚焦后 Enter 点击正常工作"
+    ],
+    "reference": "参考气质：Apple AirPods 官网导航按钮的吸附——克制、premium、单次追随在 0.3s 内完成。",
+    "variants": [
+      { "label": "更含蓄", "delta": "半径 80px、stiffness 0.12、阻尼 0.7" },
+      { "label": "更戏剧", "delta": "半径 160px，按钮内文案以 0.5 倍位移反向跟随（慢半拍）" }
+    ]
+  },
+  "params": [
+    { "key": "RADIUS", "label": "感应半径 (px)", "def": 120, "min": 60, "max": 200, "step": 5, "hint": "越大越容易被误触发" },
+    { "key": "STIFF", "label": "弹簧刚度 stiffness", "def": 0.09, "min": 0.02, "max": 0.2, "step": 0.005, "hint": "越大追随越快" },
+    { "key": "DAMP", "label": "阻尼 damping", "def": 0.72, "min": 0.5, "max": 0.92, "step": 0.01, "hint": "越小过冲回弹越明显" }
+  ],
+  "scenarios": [
+    "品牌官网导航 CTA（Apple / Linear 风格）",
+    "作品集站点的社交链接簇",
+    "下载按钮等单点高价值操作的强化"
+  ],
+  "pitfalls": [
+    "感应区判定要用「圆心距离」而非「矩形外扩 padding」，否则按钮角落的灵敏度和中心差 3 倍",
+    "位移基准要缓存未位移时的 getBoundingClientRect（把当前 transform 偏移减回去），否则移动中矩形自追光标，按钮会抖",
+    "requestAnimationFrame 循环必须在静止后停掉（判 |Δ|<0.05 即归零退出），常驻 rAF 白白烧电池",
+    "aria/键盘可达性优先：focus-visible 高亮环画在吸附前坐标，否则 Tab 用户看到焦点乱跳"
+  ],
+  "related": ["hover-scale", "cursor-follow", "shimmer"],
+  "refs": [],
+  "verifiedWith": "claude-sonnet-4 · 2026-09",
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}

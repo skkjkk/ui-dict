@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/
+.astro/
+src/generated/
+.playwright-cli/
+*.log
+.DS_Store

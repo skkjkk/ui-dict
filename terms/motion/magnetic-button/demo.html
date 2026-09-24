@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>磁吸按钮 Magnetic Button · ui-dict M-01</title>
+<style>
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: grid;
+    place-items: center;
+    background: #f6f5f2;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .stage { position: relative; display: grid; place-items: center; width: 280px; height: 160px; }
+  button {
+    appearance: none; border: 0; cursor: pointer;
+    padding: 15px 36px; border-radius: 999px;
+    background: #141414; color: #fff;
+    font-size: 15px; letter-spacing: .06em;
+    will-change: transform;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .16);
+  }
+  button:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 4px; }
+  .tip {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    font-size: 12px; color: #8a857c;
+  }
+  @media (hover: none) { .tip::after { content: " · 触屏设备已退化为普通按钮"; } }
+</style>
+</head>
+<body>
+  <div class="stage"><button id="mag" type="button">磁吸按钮</button></div>
+  <div class="tip">把鼠标移向按钮 —— 进入感应区会被"吸"过去，离开则弹回</div>
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "RADIUS": 120, "STIFF": 0.09, "DAMP": 0.72 };
+  /* ui-dict:params:end */
+
+  const MAX_RATIO = 0.3;
+  const b = document.getElementById("mag");
+
+  // 降级：触屏无 hover 语义、或用户要求减少动效 → 保持普通按钮
+  if (matchMedia("(hover: none)").matches || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  let tx = 0, ty = 0, x = 0, y = 0, vx = 0, vy = 0, raf = null;
+
+  function onMove(e) {
+    const r = b.getBoundingClientRect();
+    // 关键：矩形含当前 transform 偏移，减去后才得到"未位移"的原点中心
+    const cx = r.left + r.width / 2 - x;
+    const cy = r.top + r.height / 2 - y;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const d = Math.hypot(dx, dy);
+
+    if (d < PARAMS.RADIUS && d > 0.01) {
+      const k = (1 - d / PARAMS.RADIUS) * MAX_RATIO * r.width;
+      tx = (dx / d) * k;
+      ty = (dy / d) * k;
+    } else {
+      tx = 0; ty = 0;
+    }
+    if (raf === null) raf = requestAnimationFrame(step);
+  }
+
+  function step() {
+    vx = (vx + (tx - x) * PARAMS.STIFF) * PARAMS.DAMP;
+    vy = (vy + (ty - y) * PARAMS.STIFF) * PARAMS.DAMP;
+    x += vx; y += vy;
+    b.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+
+    const settled = Math.abs(tx - x) < 0.05 && Math.abs(ty - y) < 0.05
+      && Math.abs(vx) < 0.05 && Math.abs(vy) < 0.05;
+    if (settled) {
+      x = tx; y = ty;
+      b.style.transform = `translate(${x}px, ${y}px)`;
+      raf = null;                       // 静止后必须停掉 rAF，不常驻烧电池
+    } else {
+      raf = requestAnimationFrame(step);
+    }
+  }
+
+  addEventListener("pointermove", onMove, { passive: true });
+})();
+</script>
+</body>
+</html>

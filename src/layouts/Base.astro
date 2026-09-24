@@ -1,0 +1,29 @@
+---
+// src/layouts/Base.astro —— 编辑部词典外壳
+import "@/styles/global.css";
+const { title = "UI 词典 · UI Lexicon", desc = "前端设计词汇与模式的活词典：输入你想要的感觉，找到它的名字、提示词和能跑的代码。" } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title}</title>
+  <meta name="description" content={desc}>
+  <meta name="theme-color" content="#faf9f6">
+</head>
+<body>
+  <div class="max-w-[1060px] mx-auto px-5 sm:px-7 pb-24 pt-10">
+    <slot />
+    <footer class="mt-20 pt-4 border-t hair text-[12.5px]" style="color:var(--color-muted)">
+      <div class="flex flex-wrap gap-x-6 gap-y-1 items-baseline">
+        <span>UI 词典 UI LEXICON</span>
+        <span>感觉 → 词汇 → prompt → 代码，四步同屏</span>
+        <a href="/" class="underline hover:text-[var(--color-ink)]">索引</a>
+        <a href="https://github.com" class="underline hover:text-[var(--color-ink)]">GitHub</a>
+        <span>词条代码 MIT · 免登录 · AI 可直读</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>骨架屏 Skeleton · ui-dict C-02</title>
+<style>
+  :root { --dur: 1.4s; --radius: 8px; --size: 52px; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; gap: 18px;
+    grid-auto-rows: max-content; align-content: center;
+    background: #f6f5f2;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .card {
+    width: min(340px, 88vw); background: #fff; border-radius: 14px;
+    padding: 18px; display: flex; gap: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06);
+    min-height: calc(var(--size) + 6px);
+  }
+  /* 占位块：形状/尺寸与真实内容严格同构，替换时零跳动 */
+  .sk {
+    background: linear-gradient(90deg, #e9e6e1 25%, #f7f5f1 50%, #e9e6e1 75%);
+    background-size: 200% 100%;
+    animation: shimmer var(--dur) linear infinite;
+    border-radius: var(--radius);
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .av { width: var(--size); height: var(--size); border-radius: 50%; flex: none; }
+  .lines { flex: 1; display: grid; gap: 10px; align-content: center; }
+  .l1 { height: 12px; width: 60%; }
+  .l2 { height: 12px; width: 100%; }
+  .l3 { height: 12px; width: 45%; }
+
+  /* 真实内容态（与骨架同构） */
+  .real { display: none; width: 100%; gap: 14px; align-items: center; }
+  .card.loaded .sk-wrap { display: none; }
+  .card.loaded .real { display: flex; }
+  .real .face { width: var(--size); height: var(--size); border-radius: 50%; flex: none;
+    background: linear-gradient(135deg,#0b4f6c,#3a8fb0); color:#fff; display: grid; place-items:center;
+    font-size: 18px; font-weight: 600; }
+  .real .txt b { display: block; font-size: 15px; }
+  .real .txt small { color: #8a857c; font-size: 12.5px; }
+  .real .txt p { margin: 4px 0 0; font-size: 13px; color: #44403a; }
+
+  .sk-wrap { display: flex; width: 100%; gap: 14px; }
+  .fade { animation: fade .2s ease-out; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  .bar { display: flex; gap: 10px; align-items: center; }
+  button {
+    border: 1px solid #1a1a1a; background: #fff; padding: 7px 14px; border-radius: 999px;
+    font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #efeadf; }
+  .hint { font-size: 12px; color: #8a857c; }
+  @media (prefers-reduced-motion: reduce) { .sk { animation: none; } .fade { animation: none; } }
+</style>
+</head>
+<body>
+  <div class="card" id="card" role="status" aria-busy="true" aria-live="polite">
+    <div class="sk-wrap" aria-hidden="true">
+      <div class="sk av"></div>
+      <div class="lines"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div></div>
+    </div>
+    <div class="real">
+      <div class="face">D</div>
+      <div class="txt">
+        <b>skkjkk</b>
+        <small>@designer · 2 小时前</small>
+        <p>骨架屏的价值全在替换那一刻——版式对上了，就零跳动。</p>
+      </div>
+    </div>
+  </div>
+  <div class="bar">
+    <button id="toggle" type="button">载入内容</button>
+    <span class="hint">点按钮切换骨架 ↔ 内容，观察替换是否跳动</span>
+  </div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DUR": 1.4, "RADIUS": 8, "SIZE": 52 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  root.setProperty("--dur", PARAMS.DUR + "s");
+  root.setProperty("--radius", PARAMS.RADIUS + "px");
+  root.setProperty("--size", PARAMS.SIZE + "px");
+
+  const card = document.getElementById("card");
+  const btn = document.getElementById("toggle");
+  let loaded = false;
+
+  function render() {
+    loaded = !loaded;
+    card.classList.toggle("loaded", loaded);
+    card.classList.toggle("fade", true);
+    card.setAttribute("aria-busy", String(!loaded));
+    btn.textContent = loaded ? "回到骨架" : "载入内容";
+  }
+  btn.addEventListener("click", render);
+
+  // 首次挂载后自动演示一次“加载完成”，2.6s 后
+  setTimeout(() => { if (!loaded) render(); }, 2600);
+})();
+</script>
+</body>
+</html>

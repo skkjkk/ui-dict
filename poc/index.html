@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ui-dict POC · 词条真渲染验证（srcdoc 同源机制）</title>
+<style>
+  :root { --ink:#1a1a1a; --paper:#faf9f6; --muted:#8a857c; --line:#e3dfd6; --accent:#0b4f6c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font-family:Georgia,"Noto Serif SC","Source Han Serif SC",serif; line-height:1.75; }
+  .wrap { max-width:1020px; margin:0 auto; padding:40px 28px 80px; }
+  header.mast { border-bottom:3px double var(--ink); padding-bottom:18px; margin-bottom:8px;
+                display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; }
+  header.mast h1 { font-size:30px; margin:0; letter-spacing:.02em; }
+  header.mast .sub { color:var(--muted); font-size:13px; font-family:ui-monospace,Consolas,monospace; }
+  .notice { background:#fff7e0; border:1px solid #ead9a8; padding:10px 14px; font-size:13.5px; margin:18px 0 34px; }
+  h2.sec { font-size:15px; letter-spacing:.35em; color:var(--muted); font-weight:400;
+           border-bottom:1px solid var(--line); padding-bottom:8px; margin:44px 0 18px; }
+  /* ---------- 索引墙 ---------- */
+  .searchrow { display:flex; gap:14px; align-items:center; margin-bottom:16px; }
+  #q { flex:1; padding:10px 14px; font:15px Georgia,serif; border:1px solid var(--line);
+       background:#fff; border-radius:2px; }
+  .hint { font-size:12.5px; color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
+  .card { border:1px solid var(--line); background:#fff; }
+  .card iframe { width:100%; height:150px; border:0; display:block; background:#f6f5f2; }
+  .card .meta { padding:10px 14px 12px; }
+  .card .no { font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--accent); letter-spacing:.12em; }
+  .card b { display:block; font-size:16px; margin:2px 0 1px; }
+  .card small { color:var(--muted); font-size:12px; }
+  #empty { display:none; color:var(--muted); font-size:14px; padding:14px 2px; }
+  /* ---------- 词条页 ---------- */
+  .entry { border:1px solid var(--line); background:#fff; padding:30px 34px 34px; }
+  .entry h3 { margin:0 0 2px; font-size:26px; }
+  .entry h3 .en { color:var(--muted); font-size:17px; font-style:italic; margin-left:10px; }
+  .alias { font-size:13px; color:var(--muted); margin:2px 0 14px; }
+  .alias code { background:#f1ede4; padding:1px 7px; margin-right:6px; border-radius:2px; font-size:12px; }
+  .def { font-size:15.5px; margin:0 0 20px; max-width:64ch; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+  .actions button { font:13px ui-monospace,Consolas,monospace; padding:9px 16px; cursor:pointer;
+                    border:1px solid var(--ink); background:#fff; color:var(--ink); letter-spacing:.05em; }
+  .actions button.primary { background:var(--ink); color:#fff; }
+  .cols { display:grid; grid-template-columns:1.15fr .85fr; gap:20px; }
+  @media (max-width:820px){ .cols { grid-template-columns:1fr; } }
+  .demo-box iframe { width:100%; height:300px; border:1px solid var(--line); display:block; background:#f6f5f2; }
+  .demo-bar { display:flex; justify-content:space-between; align-items:center; font-size:11px;
+              font-family:ui-monospace,Consolas,monospace; color:var(--muted); letter-spacing:.1em;
+              margin-bottom:6px; }
+  .demo-bar a { color:var(--accent); cursor:pointer; text-decoration:underline; }
+  .param { margin:12px 0; font-size:13px; }
+  .param label { display:flex; justify-content:space-between; font-family:ui-monospace,Consolas,monospace; }
+  .param input[type=range] { width:100%; accent-color:var(--accent); }
+  pre#code { background:#232323; color:#d8d5cc; font:12px/1.6 ui-monospace,Consolas,monospace;
+             padding:14px 16px; max-height:300px; overflow:auto; margin:0; border-radius:2px; }
+  .prerule { font-size:11px; color:var(--muted); font-family:ui-monospace,Consolas,monospace;
+             letter-spacing:.1em; margin:18px 0 6px; }
+  pre#prompt { background:#f1ede4; color:#444036; font:12px/1.7 ui-monospace,Consolas,monospace;
+               padding:14px 16px; max-height:260px; overflow:auto; margin:0; white-space:pre-wrap; border-radius:2px; }
+  footer { margin-top:50px; font-size:12.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <h1>UI 词典 <span style="font-size:15px;color:var(--muted)">UI Lexicon</span></h1>
+  <div class="sub">POC · srcdoc 同源渲染验证 · 2026-09</div>
+</header>
+
+<div class="notice">🧪 本文件验证三件事：① 词条卡 = 活的（索引墙 iframe 悬停即玩）② 词条详情页 demo 与复制代码<b>逐字节同源</b>（滑杆改参数，代码块实时变）③ "独立页打开 Demo" 与"粘进空白文件双击"等价。词条：M-01 磁吸按钮 / C-02 骨架屏。</div>
+
+<h2 class="sec">索 引 · INDEX（输入你想要的感觉试试）</h2>
+<div class="searchrow">
+  <input id="q" placeholder="试试输入「鼠标吸过去」「一闪一闪的光」「糊玻璃」…">
+  <span class="hint">按描述反查 · MiniSearch 正装版将索引 name/aliases/definition</span>
+</div>
+<div class="grid" id="wall"></div>
+<div id="empty">没有命中。试试「淡入」或 Fade，或换个口语说法。</div>
+
+<h2 class="sec">词 条 · ENTRY M-01</h2>
+<article class="entry">
+  <div class="no">No. M-01 · 动效 / MOTION</div>
+  <h3>磁吸按钮<span class="en">Magnetic Button</span></h3>
+  <div class="alias">别名：
+    <code>鼠标靠近就被吸过去</code><code>吸附按钮</code><code>跟着光标跑的按钮</code><code>pull to cursor</code>
+  </div>
+  <p class="def">悬停感应区内按钮整体向光标位移、离开后弹簧回弹原位的交互。与 hover 放大（Scale）的区别：磁吸是<b>位置追随</b>光标、带追逐感，缩放是原地变形。位移须用 transform，动画模型须是弹簧而非线性过渡。</p>
+
+  <div class="actions">
+    <button class="primary" id="copyPrompt">复制 Prompt</button>
+    <button id="copyCode">复制代码（当前参数版）</button>
+    <button id="openAlone">独立页打开 Demo ↗</button>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="demo-bar"><span>LIVE DEMO · iframe srcdoc = demoCode 本体</span><a id="replay">↺ 重播</a></div>
+      <div class="demo-box"><iframe id="mainDemo" sandbox="allow-scripts" title="magnetic button live demo"></iframe></div>
+    </div>
+    <div>
+      <div class="demo-bar"><span>PARS · 参数滑杆（实时回写代码）</span></div>
+      <div class="param"><label>感应半径 RADIUS <output id="oR">120</output></label>
+        <input type="range" id="sR" min="60" max="200" step="5" value="120"></div>
+      <div class="param"><label>弹簧刚度 STIFF <output id="oS">0.09</output></label>
+        <input type="range" id="sS" min="0.02" max="0.20" step="0.005" value="0.09"></div>
+      <div class="param"><label>阻尼 DAMP <output id="oD">0.72</output></label>
+        <input type="range" id="sD" min="0.50" max="0.92" step="0.01" value="0.72"></div>
+      <div class="prerule">CODE · demoCode（与左侧 iframe 同源，复制即所得）</div>
+      <pre id="code"></pre>
+    </div>
+  </div>
+
+  <div class="prerule">PROMPT CARD（拼装产物 = 复制 Prompt 按钮的内容）</div>
+  <pre id="prompt"></pre>
+</article>
+
+<footer>正装架构：terms/&lt;类&gt;/&lt;id&gt;/{entry.js, demo.html} → 30 行 Node 脚本打包 terms-data.js → 本外壳读取渲染。搜索换 MiniSearch（vendored）。POC 手写了两个词条的数据内联，正式版全部来自词条仓库。</footer>
+</div>
+
+<!-- ================= 词条 demo 数据（template 存放，避免 </script> 转义地狱；正式版即 demo.html 文件） ================= -->
+
+<template id="tpl-magnetic"><!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<title>磁吸按钮 Magnetic Button · ui-dict M-01</title><style>
+html,body{height:100%}
+body{margin:0;display:grid;place-items:center;background:#f6f5f2;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+#wrap{position:relative;display:grid;place-items:center;width:260px;height:150px}
+button{appearance:none;border:0;cursor:pointer;padding:14px 34px;border-radius:999px;background:#141414;color:#fff;font-size:15px;letter-spacing:.05em;will-change:transform;box-shadow:0 6px 18px rgba(0,0,0,.14)}
+</style></head><body>
+<div id="wrap"><button id="b">磁吸按钮</button></div>
+<script>
+(function(){
+  var RADIUS = 120;
+  var STIFF = 0.09;
+  var DAMP = 0.72;
+  var MAX_RATIO = 0.3;
+  if (matchMedia("(hover: none)").matches) return;
+  var b = document.getElementById("b");
+  var tx=0,ty=0,x=0,y=0,vx=0,vy=0,raf=null;
+  addEventListener("pointermove", function(e){
+    var r = b.getBoundingClientRect();
+    var cx = r.left + r.width/2 - x, cy = r.top + r.height/2 - y;
+    var dx = e.clientX - cx, dy = e.clientY - cy;
+    var d = Math.hypot(dx, dy);
+    if (d < RADIUS && d > 0.01) {
+      var k = (1 - d/RADIUS) * MAX_RATIO * r.width;
+      tx = dx/d*k; ty = dy/d*k;
+    } else { tx = 0; ty = 0; }
+    if (raf === null) raf = requestAnimationFrame(step);
+  });
+  function step(){
+    vx = (vx + (tx - x) * STIFF) * DAMP;
+    vy = (vy + (ty - y) * STIFF) * DAMP;
+    x += vx; y += vy;
+    b.style.transform = "translate(" + x.toFixed(2) + "px," + y.toFixed(2) + "px)";
+    if (Math.abs(x-tx)>.05 || Math.abs(y-ty)>.05 || Math.abs(vx)>.05 || Math.abs(vy)>.05) {
+      raf = requestAnimationFrame(step);
+    } else { x=tx; y=ty; b.style.transform = "translate("+x+"px,"+y+"px)"; raf = null; }
+  }
+})();
+</script></body></html></template>
+
+<template id="tpl-skeleton"><!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<title>骨架屏 Skeleton · ui-dict C-02</title><style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f5f2;font-family:system-ui,sans-serif}
+.card{width:min(320px,86%);background:#fff;border-radius:14px;padding:18px;display:flex;gap:14px;box-shadow:0 4px 16px rgba(0,0,0,.06)}
+.sk{background:linear-gradient(90deg,#e9e6e1 25%,#f7f5f1 50%,#e9e6e1 75%);background-size:200% 100%;animation:sh var(--dur,1.4s) linear infinite;border-radius:8px}
+@keyframes sh{to{background-position:-200% 0}}
+.av{width:52px;height:52px;border-radius:50%;flex:none}
+.lines{flex:1;display:grid;gap:10px;align-content:center}
+.l1{height:12px;width:70%}.l2{height:12px;width:100%}.l3{height:12px;width:45%}
+@media (prefers-reduced-motion: reduce){ .sk{animation:none} }
+</style></head><body>
+<div class="card"><div class="sk av"></div><div class="lines"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div></div></div>
+</body></html></template>
+
+<script>
+(function(){
+  "use strict";
+  // ---------- 词条索引数据（正式版来自 terms-data.js） ----------
+  var TERMS = [
+    { id:"magnetic-button", no:"M-01", cat:"动效", nameZh:"磁吸按钮", nameEn:"Magnetic Button",
+      aliases:["鼠标靠近就被吸过去","吸附按钮","跟着光标跑","被磁铁吸住"],
+      tpl:"tpl-magnetic", card:"main",
+      params:[["RADIUS",60,200,5],["STIFF",0.02,0.20,0.005],["DAMP",0.50,0.92,0.01]] },
+    { id:"skeleton", no:"C-02", cat:"组件", nameZh:"骨架屏", nameEn:"Skeleton Screen",
+      aliases:["加载占位块","一闪一闪的光","内容没出来前的灰块","shimmer 微光占位"],
+      tpl:"tpl-skeleton", card:"plain", params:[] }
+  ];
+
+  // ---------- 索引墙：卡片即 demo ----------
+  var wall = document.getElementById("wall");
+  TERMS.forEach(function(t){
+    var c = document.createElement("div");
+    c.className = "card"; c.dataset.id = t.id;
+    c.innerHTML = '<iframe sandbox="allow-scripts" title="'+t.nameZh+' live card"></iframe>'
+      + '<div class="meta"><span class="no">'+t.no+' · '+t.cat+'</span><b>'+t.nameZh
+      + ' <small>'+t.nameEn+'</small></b><small>'+t.aliases.slice(0,2).join(' ／ ')+'</small></div>';
+    wall.appendChild(c);
+    c.__term = t;
+    var f = c.querySelector("iframe");
+    var io = new IntersectionObserver(function(en){
+      if (en[0].isIntersecting) { f.srcdoc = doc(t, {}); io.disconnect(); }
+    });
+    io.observe(c);
+  });
+
+  // ---------- demoCode 组装 ----------
+  // 实测（verify-parse.js，真实 HTML 解析器）：<template> 会静默剥离
+  // <!DOCTYPE>/<html>/<body> 标签，且 innerHTML 自带首尾换行。因此：
+  // 1) 必须前置 DOCTYPE，否则 iframe 落入 quirks mode（BackCompat）——
+  //    而用户把 demo.html 粘贴/下载后是标准模式，两处渲染会不一致；
+  // 2) trim 掉模板空白，保证“复制的代码”与“demo 文件”逐字节等价。
+  function doc(t, vals){
+    var s = '<!DOCTYPE html>\n' + document.getElementById(t.tpl).innerHTML.trim();
+    (t.params||[]).forEach(function(p){
+      if (vals[p[0]] !== undefined) s = s.replace(new RegExp("("+p[0]+"\\s*=\\s*)[\\d.]+"), "$1"+vals[p[0]]);
+    });
+    return s;
+  }
+  function curVals(){
+    return { RADIUS: +sR.value, STIFF: +sS.value, DAMP: +sD.value };
+  }
+
+  // ---------- 词条详情页 ----------
+  var T = TERMS[0], main = document.getElementById("mainDemo"),
+      code = document.getElementById("code"),
+      sR=document.getElementById("sR"), sS=document.getElementById("sS"), sD=document.getElementById("sD"),
+      oR=document.getElementById("oR"), oS=document.getElementById("oS"), oD=document.getElementById("oD");
+  function refreshEntry(){
+    var v = curVals();
+    var s = doc(T, v);
+    main.srcdoc = s;
+    code.textContent = s.replace(/^\n+/,"");
+    oR.textContent = v.RADIUS; oS.textContent = (+v.STIFF).toFixed(3); oD.textContent = (+v.DAMP).toFixed(2);
+  }
+  [sR,sS,sD].forEach(function(i){ i.addEventListener("input", refreshEntry); });
+  document.getElementById("replay").addEventListener("click", refreshEntry);
+  refreshEntry();
+
+  // ---------- 独立页打开 = 与粘贴进空白文件等价 ----------
+  document.getElementById("openAlone").addEventListener("click", function(){
+    var url = URL.createObjectURL(new Blob([doc(T, curVals())], {type:"text/html"}));
+    window.open(url, "_blank");
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4e4);
+  });
+
+  // ---------- PromptCard 拼装（调研线 04 草案的实装） ----------
+  function buildPrompt(t, v){
+    return "实现一个\u201c"+t.nameZh+"（"+t.nameEn+"）\u201d交互组件，要求：\n\n"
+      + "【行为规格】\n"
+      + "- 一个磁吸按钮放在页面容器内。当鼠标进入按钮中心半径 "+v.RADIUS+"px 的感应区时，按钮整体向光标方向位移，位移量与距离成反比（最大不超过按钮宽度的 30%）；\n"
+      + "- 位移用弹簧模型逐帧积分：stiffness ≈ "+(+v.STIFF).toFixed(3)+"、damping ≈ "+(+v.DAMP).toFixed(2)+"（每帧 v=(v+Δ·stiff)·damp，p+=v），要过冲后回稳，不要线性插值；\n"
+      + "- 鼠标离开感应区后按钮以同一弹簧参数弹回原位；点击、键盘聚焦必须正常工作。\n\n"
+      + "【技术约束】\n- 单个自包含 HTML 文件：原生 CSS + 原生 JS，零第三方依赖、零网络请求、无构建步骤，粘贴即可运行；\n"
+      + "- 用 transform: translate() 位移（不改 left/top）；监听 pointermove 并用 requestAnimationFrame 节流；\n- 触屏设备 (hover: none) 自动退化为普通按钮。\n\n"
+      + "【避免】\n- 不要用 CSS transition 模拟吸附（会失去\u201c追逐光标\u201d的连续感）；\n- 感应区不要大于 200px（会误吸、多个按钮互相打架）；\n- 不要在吸附同时改变按钮尺寸或阴影强度。\n\n"
+      + "【参考气质】Apple AirPods 官网导航按钮的吸附：克制、premium、0.3s 内完成。\n\n"
+      + "【验收】生成后我移动鼠标应看到：远处按钮先轻微倾向光标 → 进入感应区明显被\u201c吸\u201d过去并过冲回弹 → 离开时弹回原位，全程无布局位移、无闪烁。";
+  }
+  var promptBox = document.getElementById("prompt");
+  function refreshPrompt(){ promptBox.textContent = buildPrompt(T, curVals()); }
+  [sR,sS,sD].forEach(function(i){ i.addEventListener("input", refreshPrompt); });
+  refreshPrompt();
+
+  // ---------- 复制 ----------
+  function copy(btn, text){
+    navigator.clipboard.writeText(text).then(function(){
+      var old = btn.textContent; btn.textContent = "✓ 已复制";
+      setTimeout(function(){ btn.textContent = old; }, 1200);
+    });
+  }
+  document.getElementById("copyCode").addEventListener("click", function(){ copy(this, doc(T, curVals())); });
+  document.getElementById("copyPrompt").addEventListener("click", function(){ copy(this, promptBox.textContent); });
+
+  // ---------- 搜索反查（迷你版：正式=MiniSearch+别名加权） ----------
+  var q = document.getElementById("q"), empty = document.getElementById("empty");
+  q.addEventListener("input", function(){
+    var s = q.value.trim().toLowerCase(), hit = 0;
+    wall.querySelectorAll(".card").forEach(function(c){
+      var t = c.__term;
+      var hay = (t.nameZh+t.nameEn+t.aliases.join("")).toLowerCase();
+      var ok = !s || hay.indexOf(s) > -1 || t.aliases.some(function(a){ return s && a.toLowerCase().indexOf(s) > -1; });
+      c.style.display = ok ? "" : "none"; if (ok) hit++;
+    });
+    empty.style.display = (s && !hit) ? "block" : "none";
+  });
+})();
+</script>
+</body>
+</html>

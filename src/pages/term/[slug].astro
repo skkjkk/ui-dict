@@ -1,0 +1,191 @@
+---
+// src/pages/term/[slug].astro —— 词条详情页（十段版式的 v0.1 实装）
+// 数据源：构建期产物 site-data.js（TERMS + DEMOS），SSR 不碰文件系统。
+import Base from "@/layouts/Base.astro";
+import { TERMS, DEMOS, CATEGORY_LABELS } from "@/generated/site-data.js";
+import { assemblePrompt } from "@/lib/prompt.mjs";
+
+const all = TERMS.map((t) => ({ ...t, demoCode: DEMOS[t.slug] ?? "" }));
+
+export function getStaticPaths() {
+  return TERMS.map((t) => ({ params: { slug: t.slug } }));
+}
+const { slug } = Astro.params;
+const t = all.find((x) => x.slug === slug);
+if (!t) throw new Error(`词条不存在：${slug}`);
+
+const known = new Map(all.map((x) => [x.id, x]));
+const idx = all.findIndex((x) => x.id === t.id);
+const prev = idx > 0 ? all[idx - 1] : null;
+const next = idx < all.length - 1 ? all[idx + 1] : null;
+
+const promptDefault = assemblePrompt(t);
+---
+<Base title={`${t.nameZh} ${t.nameEn} · ${t.no} · UI 词典`} desc={`${t.nameZh}：${t.definition.slice(0, 80)}…`}>
+  <nav class="num mb-3">
+    <a href="/" class="underline" style="color:var(--color-accent)">索引</a>
+    <span class="mx-2" style="color:var(--color-muted)">/</span>
+    <span>{CATEGORY_LABELS[t.category]} {t.category}</span>
+  </nav>
+
+  <article class="border hair rounded-sm bg-white px-5 py-6 sm:px-8 sm:py-8">
+    <!-- ① 页眉：编号 + 中英正名 -->
+    <header>
+      <div class="num">No. {t.no} · {CATEGORY_LABELS[t.category]} / {t.category}</div>
+      <h1 class="text-[28px] sm:text-[32px] m-0 mt-1">
+        {t.nameZh}<span class="text-[17px] italic font-normal ml-3" style="color:var(--color-muted)">{t.nameEn}</span>
+      </h1>
+      {t.aliases?.length > 0 && (
+        <div class="flex flex-wrap gap-1.5 mt-2.5">
+          {t.aliases.map((a) => <span class="chip">{a}</span>)}
+        </div>
+      )}
+    </header>
+
+    <!-- ② 定义 -->
+    <p class="text-[15.5px] mt-5 mb-0 max-w-[68ch]">{t.definition}</p>
+
+    <!-- ③ 该用 / 不该用 -->
+    {(t.whenNotToUse?.length ?? 0) > 0 && (
+      <section class="mt-6 grid sm:grid-cols-2 gap-4">
+        <div class="border hair rounded-sm p-4">
+          <div class="eyebrow mb-2" style="color:#2e6b3e">该用 · WHEN</div>
+          <ul class="m-0 pl-4 text-[13.5px] space-y-1.5">
+            {t.scenarios.map((s) => <li>{s}</li>)}
+          </ul>
+        </div>
+        <div class="border hair rounded-sm p-4">
+          <div class="eyebrow mb-2" style="color:#8a3a2e">不该用 · WHEN NOT</div>
+          <ul class="m-0 pl-4 text-[13.5px] space-y-1.5">
+            {t.whenNotToUse.map((s) => <li>{s}</li>)}
+          </ul>
+        </div>
+      </section>
+    )}
+
+    <!-- ④ 解剖（组件类） -->
+    {t.anatomy?.length > 0 && (
+      <section class="mt-7">
+        <div class="eyebrow mb-2">解剖 · ANATOMY</div>
+        <ol class="m-0 pl-5 text-[13.5px] space-y-1">
+          {t.anatomy.map((a) => <li><b>{a.part}</b>{a.note ? <span style="color:var(--color-muted)"> — {a.note}</span> : null}</li>)}
+        </ol>
+      </section>
+    )}
+
+    <!-- ⑤ 操作三按钮 -->
+    <div id="entry-actions" class="mt-7 flex flex-wrap gap-2.5">
+      <button class="btn btn-primary" data-copy="prompt">复制 Prompt</button>
+      <button class="btn" data-copy="code">复制代码<span data-live-note>（当前参数）</span></button>
+      <button class="btn" data-open-demo>独立页打开 Demo ↗</button>
+      <button class="btn" data-copy="card">复制整张词条卡</button>
+    </div>
+
+    <!-- ⑥ Live Demo + 参数 + 代码（同源三态） -->
+    <div class="mt-4 grid lg:grid-cols-[1.1fr_0.9fr] gap-5">
+      <div>
+        <div class="eyebrow mb-2 flex items-center justify-between">
+          <span>LIVE DEMO · iframe srcdoc = demoCode 本体</span>
+          <button class="mono text-[11px] underline" data-replay style="color:var(--color-accent)">↺ 重播</button>
+        </div>
+        <iframe id="live" class="demo-frame" style="height:340px" sandbox="allow-scripts" title={`${t.nameZh} live demo`}></iframe>
+        <div class="mono text-[11px] mt-1.5" style="color:var(--color-muted)">
+          <span data-demo-meta>零依赖单文件 · {Math.round((t.demoCode?.length ?? 0) / 1024 * 10) / 10} KB · 0 网络请求</span>
+        </div>
+      </div>
+      <div>
+        {t.params?.length > 0 && (
+          <div id="params" class="mb-4">
+            <div class="eyebrow mb-2">调一调 · PARAMS</div>
+            {t.params.map((p) => (
+              <label class="block mb-3">
+                <span class="mono text-[12px] flex justify-between">
+                  <span>{p.label}</span>
+                  <output data-out={p.key}>{String(p.def)}</output>
+                </span>
+                <input type="range" class="mt-1" data-param={p.key}
+                  min={p.min} max={p.max} step={p.step} value={String(p.def)}>
+                {p.hint && <span class="text-[11px]" style="color:var(--color-muted)">{p.hint}</span>}
+              </label>
+            ))}
+          </div>
+        )}
+        <div class="eyebrow mb-2">代码 · 与左侧 demo 逐字节同源</div>
+        <div class="code-scroll border hair rounded-sm bg-[#232323] text-[#d8d5cc]">
+          <pre class="p-3.5"><code id="code">{t.demoCode}</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑦ Prompt 卡 -->
+    <section class="mt-7">
+      <div class="eyebrow mb-2">PROMPT 卡 · 复制丢给任何 AI 编码工具</div>
+      <pre id="prompt" class="prompt-preview">{promptDefault}</pre>
+      {t.promptTemplate.variants?.length > 0 && (
+        <div class="mt-2 text-[12px]" style="color:var(--color-muted)">
+          变体：{t.promptTemplate.variants.map((v) => `${v.label}（${v.delta}）`).join(" · ")}
+        </div>
+      )}
+    </section>
+
+    <!-- ⑧ 坑 -->
+    {t.pitfalls?.length > 0 && (
+      <section class="mt-7">
+        <div class="eyebrow mb-2">常见坑 · PITFALLS</div>
+        <ul class="m-0 pl-5 text-[13.5px] space-y-1.5">
+          {t.pitfalls.map((p) => <li>{p}</li>)}
+        </ul>
+      </section>
+    )}
+
+    <!-- ⑨ 易混淆 / 相关 / 规范 -->
+    {(t.confusedWith?.length || t.related?.length || t.refs?.length) && (
+      <section class="mt-7 grid sm:grid-cols-3 gap-5 text-[13.5px]">
+        {t.confusedWith?.length > 0 && (
+          <div>
+            <div class="eyebrow mb-2">易混淆</div>
+            <div class="flex flex-wrap gap-1.5">
+              {t.confusedWith.map((id) => known.has(id)
+                ? <a class="chip underline" href={`/term/${known.get(id).slug}`}>{known.get(id).nameZh}</a>
+                : <span class="chip opacity-60">{id}</span>)}
+            </div>
+          </div>
+        )}
+        {t.related?.length > 0 && (
+          <div>
+            <div class="eyebrow mb-2">相关词条</div>
+            <div class="flex flex-wrap gap-1.5">
+              {t.related.map((id) => known.has(id)
+                ? <a class="chip underline" href={`/term/${known.get(id).slug}`}>{known.get(id).nameZh}</a>
+                : <span class="chip opacity-60">{id}</span>)}
+            </div>
+          </div>
+        )}
+        {t.refs?.length > 0 && (
+          <div>
+            <div class="eyebrow mb-2">规范出处</div>
+            <ul class="m-0 pl-4 space-y-1">
+              {t.refs.map((r) => <li class="mono text-[11.5px] break-all"><a class="underline" href={r} rel="noopener">{new URL(r).host}</a></li>)}
+            </ul>
+          </div>
+        )}
+      </section>
+    )}
+
+    <!-- ⑩ 溯源 + Prev/Next -->
+    <footer class="mt-8 pt-3 border-t hair flex flex-wrap gap-x-5 gap-y-1 items-baseline text-[12px]" style="color:var(--color-muted)">
+      {t.contributors.map((c) => <span>生成 {c.generator} · 审校 <b style="color:var(--color-ink)">{c.reviewer}</b> · {c.date}</span>)}
+      {t.verifiedWith && <span>prompt 验证 {t.verifiedWith}</span>}
+      <span>代码 MIT</span>
+    </footer>
+  </article>
+
+  <nav class="mt-5 flex justify-between text-[13.5px]">
+    {prev ? <a class="num underline" href={`/term/${prev.slug}`}>← {prev.no} {prev.nameZh}</a> : <span class="num">← 已是首条</span>}
+    {next ? <a class="num underline" href={`/term/${next.slug}`}>{next.no} {next.nameZh} →</a> : <span class="num">末条 →</span>}
+  </nav>
+
+  <script>
+    import "@/scripts/entry.js";
+  </script>
+</Base>

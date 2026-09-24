@@ -1,0 +1,89 @@
+---
+// src/pages/index.astro —— 首页：编号词条全索引墙（可被爬虫/AI 直读）+ 客户端活 demo 与反查搜索
+// 数据源：消费构建期产物 src/generated/site-data.js（CLI 读盘生成，SSR 不再碰 fs）。
+import Base from "@/layouts/Base.astro";
+import { TERMS, CATEGORY_LABELS } from "@/generated/site-data.js";
+
+const terms = TERMS;
+const byCat = Object.keys(CATEGORY_LABELS).map((c) => ({
+  key: c, label: CATEGORY_LABELS[c], count: terms.filter((t) => t.category === c).length,
+}));
+---
+<Base>
+  <header class="rule pb-4 mb-3 flex items-end justify-between flex-wrap gap-2">
+    <div>
+      <h1 class="text-[30px] sm:text-[34px] m-0 tracking-wide">
+        UI 词典 <span class="text-[15px]" style="color:var(--color-muted)">UI Lexicon</span>
+      </h1>
+      <p class="m-0 mt-1 text-[13.5px]" style="color:var(--color-muted)">
+        输入你想要的感觉，找到它的<b style="color:var(--color-ink)">名字、提示词和能跑的代码</b>。
+      </p>
+    </div>
+    <div class="text-right">
+      <div class="num">{terms.length} 词条收录</div>
+      <div class="text-[11px] mono" style="color:var(--color-muted)">v0.1 · 2026</div>
+    </div>
+  </header>
+
+  <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] mono py-3 mb-4" style="color:var(--color-muted)">
+    {byCat.map((c) => <span><b style="color:var(--color-ink)">{c.count}</b> {c.label} {c.key}</span>)}
+  </div>
+
+  <!-- 反查搜索（客户端 MiniSearch 增强；无 JS 时原生可滚动浏览） -->
+  <div id="search-root" class="mb-5">
+    <input id="q" type="search" autocomplete="off"
+      class="w-full text-[15px] py-2.5 px-3.5 bg-white border hair rounded-sm outline-none"
+      style="font-family:var(--font-serif)"
+      placeholder="试试输入「鼠标吸过去」「一闪一闪的光」「半屏弹窗」…">
+    <div class="text-[11.5px] mt-1.5 mono" style="color:var(--color-muted)">
+      按<b>描述反查</b>：说人话即可命中词条 · 命中别名 / 定义 / 场景全文
+    </div>
+  </div>
+  <div id="no-result" class="hidden text-[14px] py-6" style="color:var(--color-muted)">
+    没有命中。试试「淡入」或 Fade，或换个口语说法。
+  </div>
+
+  <main id="wall" class="grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(288px,1fr))">
+    {terms.map((t) => (
+      <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug} data-hay={`${t.nameZh} ${t.nameEn} ${t.aliases.join(" ")} ${t.definition} ${t.scenarios.join(" ")}`}>
+        <iframe data-demo={t.slug} sandbox="allow-scripts" title={`${t.nameZh} 实时预览`} loading="lazy"></iframe>
+        <div class="p-3.5 pt-2.5">
+          <div class="num mb-0.5">{t.no} · {CATEGORY_LABELS[t.category]} {t.category}</div>
+          <div class="text-[16.5px] font-semibold">
+            {t.nameZh} <span class="text-[13px] italic font-normal" style="color:var(--color-muted)">{t.nameEn}</span>
+          </div>
+          <div class="text-[12px] mt-0.5 truncate-2" style="color:var(--color-muted)">
+            {t.aliases.slice(0, 3).join(" ／ ")}
+          </div>
+        </div>
+      </a>
+    ))}
+  </main>
+
+  <section class="mt-14 border hair rounded-sm bg-white p-5 sm:p-7">
+    <div class="eyebrow mb-3">词条解剖 · ANATOMY</div>
+    <div class="grid sm:grid-cols-3 gap-5 text-[13.5px]">
+      <div>
+        <div class="font-semibold mb-1">名字 + 别名</div>
+        <p class="m-0" style="color:var(--color-muted)">中英正名，外加一堆口语描述——"鼠标吸过去"这种说法也能搜到。</p>
+      </div>
+      <div>
+        <div class="font-semibold mb-1">Prompt 卡 + Live Demo</div>
+        <p class="m-0" style="color:var(--color-muted)">结构化提示词一键复制；右边的动效就是你复制的那段代码本身。</p>
+      </div>
+      <div>
+        <div class="font-semibold mb-1">零依赖单文件</div>
+        <p class="m-0" style="color:var(--color-muted)">粘进空白 .html 双击就能活。无框架、无网络请求、无构建步骤。</p>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import "@/scripts/home.js";
+  </script>
+</Base>
+<style>
+  .truncate-2 {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+</style>
