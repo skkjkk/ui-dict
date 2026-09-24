@@ -1,0 +1,78 @@
+{
+  "id": "snackbar",
+  "no": "C-03",
+  "category": "component",
+  "nameZh": "消息条",
+  "nameEn": "Snackbar (Toast)",
+  "aliases": [
+    "底部弹出又自动消失的小黑条",
+    "一闪而过的提示",
+    "toast 提示",
+    "带撤销按钮的提示条",
+    "从下面冒出来的通知",
+    "Snackbar"
+  ],
+  "definition": "对一次操作做轻量反馈的暗色小条：从屏幕边缘（通常底部）弹出、停留数秒后自行滑走，不打断用户也不要求确认。Material 称 Snackbar（可带一个操作按钮）、iOS 与业界口语称 Toast——区别就在 Toast 纯提示不可操作、Snackbar 允许挂单个「撤销」。与 Dialog 的区别：Dialog 阻断流程等待决定，消息条假定你根本没在看它，看完自己走；与 Bottom Sheet 的区别：Sheet 承载可停留可拖拽的内容，消息条是限时反馈。",
+  "whenNotToUse": [
+    "错误必须被处理才能继续 → 行内校验或 Dialog；消息条会自我消失，用户可能根本没看到",
+    "反馈需要停留供细读、或含多个动作 → 升级 Bottom Sheet 或页面内嵌通知条",
+    "消息要留痕供事后回看 → 走站内信/系统通知，别赌用户那 3.5 秒的注意力",
+    "内容里含可点击链接 → 自我消逝的载体配跳转 = 误触陷阱，链接该活在稳定的位置里"
+  ],
+  "confusedWith": ["bottom-sheet"],
+  "anatomy": [
+    { "part": "消息文本", "note": "单行主体，最多两行截断；唯一必绘部位" },
+    { "part": "操作按钮", "note": "可选，且仅一个（「撤销」「查看」）；点击即完成动作并收起" },
+    { "part": "关闭按钮", "note": "给停留型消息一个手动退出口；纯提示形态（Toast）可省" },
+    { "part": "计时进度", "note": "如有：随剩余时间收缩，把「还有多久消失」变成可见预期" }
+  ],
+  "promptTemplate": {
+    "core": "实现移动端风格的 Snackbar（Toast）消息条：操作（保存/复制/删除）成功后，从视口底部居中推入一条暗色消息条（rgba(24,24,24,{OPACITY})、圆角 10px、白字 13.5px）。触发：代码调用 show(text, action?)。入场：transform translateY(130%)→0 叠 opacity 0→1，260ms cubic-bezier(.2,.8,.2,1)。停留 {DURATION}ms，期间底部进度条同步 scaleX 1→0。结束态：原路滑出 240ms 后节点从 DOM 移除。可挂一个操作按钮（如「撤销」）与关闭按钮。支持同时堆叠 {MAX_STACK} 条（新条在底、旧条上推），超量立即送走最旧一条。容器全屏覆盖但 pointer-events:none、仅条体 auto，不得遮挡底层操作；常驻容器标 aria-live=polite，只增删子节点。",
+    "stack": "原生 CSS + 原生 JS（setTimeout 倒计时 + hover/focus 暂停 + flex 堆叠）实现队列与进度，无组件库。",
+    "constraints": [
+      "不要给全屏容器留 pointer-events 默认值——不设 none 它就是一堵隐形墙，用户点到底层按钮没反应会以为界面卡死",
+      "不要用 left/top/margin 做入退场动画——transform/opacity 才走合成器，逐帧重排会在低端机掉帧",
+      "不要用 aria-live=assertive——它会打断读屏正在念的内容；反馈消息默认 polite，assertive 只留给致命错误",
+      "不要在一条里放 ≥2 个操作——Snackbar 只承载一个动作，更多请升级 Bottom Sheet 或 Dialog",
+      "不要省略 prefers-reduced-motion：滑入滑出退化为即时出现/移除，进度条可隐藏"
+    ],
+    "verify": [
+      "点按钮后黑条从底部滑入停留约 3.5s，再滑出且节点被移除",
+      "底部白色进度随停留时长同步收缩；hover 时倒计时与进度一起暂停，移开续跑",
+      "连发多条消息向上堆叠，超过上限时最旧一条先被送走",
+      "消息条显示期间，页面底部的按钮依然能点击——容器不拦截指针",
+      "容器带 aria-live=polite，读屏按礼貌通道播报新消息"
+    ],
+    "reference": "参考气质：Material Design 3 Snackbar、Google Maps「已保存」提示——克制、单动作、不打断、自我了断。",
+    "variants": [
+      { "label": "顶部通知形态", "delta": "改为顶部下滑进入、无操作无关闭按钮（更接近 iOS/微信 Toast），适合系统级弱网提示" },
+      { "label": "浅色主题", "delta": "条体改白卡 + 1px 边框 + 投影，操作色用品牌主色；适配浅背景产品" }
+    ]
+  },
+  "params": [
+    { "key": "DURATION", "label": "停留时长 (ms)", "def": 3500, "min": 1500, "max": 8000, "step": 500, "hint": "<2s 读不完一句话，>6s 就成常驻通知了" },
+    { "key": "OPACITY", "label": "条体背景不透明度", "def": 0.92, "min": 0.7, "max": 1, "step": 0.02, "hint": "影响深浅色屏上的可读性与悬浮感" },
+    { "key": "MAX_STACK", "label": "同屏堆叠上限 (条)", "def": 3, "min": 1, "max": 5, "step": 1, "hint": "超量送走最旧，防止消息堆成遮挡视线的墙" }
+  ],
+  "scenarios": [
+    "「已保存 / 已发布 / 已复制到剪贴板」等轻量操作的结果反馈（微信、Telegram）",
+    "Gmail 删除邮件后的 5 秒「撤销」窗口——Snackbar 的教科书场景",
+    "弱网「暂时离线，更改将在恢复后同步」提示",
+    "电商 App 加购成功的底部确认条"
+  ],
+  "pitfalls": [
+    "容器全屏覆盖必须 pointer-events:none、仅条体本身 auto，否则透明的容器会截胡底层按钮的点击——这是消息条最反直觉的事故点，用户只会觉得「界面卡了」",
+    "读屏播报挂在「常驻容器的子节点变动」上，所以 aria-live 容器要始终存在、只往里增删消息；如果每条消息重建一次容器，读屏软件会把新消息当环境噪音漏掉",
+    "hover/focus 不暂停倒计时，用户正要按「撤销」条就消失了，因为停留是一刀切的 setTimeout——生产实现要在 mouseenter 冻结剩余时长、移开后继续",
+    "进度条时长与 setTimeout 必须同源同参，只改其一就会出现「进度还剩一半却提前消失」——进度是用户对剩余时间的唯一预期，撒谎比没有更糟",
+    "堆叠不设上限会一路堆到拇指够不着的屏幕上方，因为消息条贴底生长、旧的又不肯让位——所以超量必须立即送走最旧一条"
+  ],
+  "related": ["bottom-sheet"],
+  "refs": [
+    "https://m3.material.io/components/snackbar/guidelines",
+    "https://www.w3.org/TR/wai-aria-1.2/#aria-live"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}

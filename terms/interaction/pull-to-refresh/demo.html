@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>下拉刷新 Pull-to-Refresh · ui-dict I-01</title>
+<style>
+  :root { --th: 70px; --spin: 1200ms; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    /* vh 打底、svh 覆盖：svh 不随移动端地址栏伸缩跳动 */
+    min-height: 100vh; min-height: 100svh;
+    display: grid; place-items: center; gap: 12px; padding: 18px;
+    background: #eef0f3;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .phone {
+    width: min(380px, 94vw); height: min(560px, 80svh);
+    display: flex; flex-direction: column;
+    background: #fff; border: 1px solid #dcdfe4; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 10px 30px rgba(20, 30, 50, .10);
+  }
+  .bar {
+    flex: none; display: flex; align-items: baseline; justify-content: space-between;
+    padding: 14px 16px 10px; border-bottom: 1px solid #f0f1f3;
+  }
+  .bar b { font-size: 16px; }
+  #hint { font-size: 12px; color: #8a919c; }
+  /* overscroll-behavior：禁掉浏览器自己的下拉过界行为（如 Chrome 的页面刷新条），手势才归我们管 */
+  .viewport { flex: 1; overflow-y: auto; overscroll-behavior-y: contain; position: relative; }
+  .content { position: relative; padding-top: 2px; user-select: none; }
+  /* 指示器：停在列表顶缘之上（top 负值 = 自身高度），靠 content 整体 translateY 把它"拽"出来 */
+  .pt-ind {
+    position: absolute; left: 50%; top: -46px; transform: translateX(-50%);
+    width: 38px; height: 38px; border-radius: 50%;
+    background: #fff; border: 2.5px solid #2b6cb0; color: #2b6cb0;
+    display: grid; place-items: center;
+    box-shadow: 0 2px 10px rgba(30, 60, 100, .18);
+  }
+  .pt-ind svg { grid-area: 1 / 1; }
+  #check { visibility: hidden; }
+  /* 拉距阶段：箭头离散旋转（角度 ∝ 拉距/阈值），由 JS 写 transform */
+  /* 刷新阶段：箭头连续转——时长走 --spin，正是参数 DURATION */
+  .pt-ind.spinning #arrow { animation: spin var(--spin) linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  ul { list-style: none; margin: 0; padding: 6px 0 14px; }
+  li { display: flex; gap: 11px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f4f5f7; }
+  .face {
+    flex: none; width: 40px; height: 40px; border-radius: 50%;
+    display: grid; place-items: center; color: #fff; font-size: 17px;
+    background: linear-gradient(135deg, #2b6cb0, #6a8caf);
+  }
+  .txt { flex: 1; min-width: 0; }
+  .txt b { font-size: 14px; display: block; }
+  .txt span {
+    font-size: 12.5px; color: #7a828d; display: block;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  li time { flex: none; font-size: 11px; color: #aab0b9; }
+  li.fresh .face { background: linear-gradient(135deg, #0b8a5c, #3ab98a); }
+  li.fresh time { color: #0b8a5c; font-weight: 600; }
+  /* 新条目滑入：自上而下淡进，错峰 60ms 形成"刷出来"的连击感 */
+  li.new { animation: slidein .28s ease-out both; }
+  @keyframes slidein { from { opacity: 0; transform: translateY(-10px); } }
+  #btn {
+    flex: none; margin: 10px 16px 14px; padding: 10px; border: 1px solid #cfd4da;
+    border-radius: 10px; background: #f7f8fa; color: #2b6cb0; font-size: 13px; cursor: pointer;
+  }
+  #btn:hover { background: #eef3fa; }
+  #btn:focus-visible { outline: 2px solid #2b6cb0; outline-offset: 2px; }
+  .tip { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+         font-size: 11.5px; color: #8a919c; max-width: 92vw; text-align: center; }
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：取消旋转/滑入/回弹过冲等动画，但阈值-触发-更新的完整功能链保留 */
+    .pt-ind.spinning #arrow { animation: none; }
+    .pt-ind.spinning { border-style: dashed; }
+    li.new { animation: none; }
+    .content { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <section class="phone" aria-label="下拉刷新演示">
+    <header class="bar"><b>消息</b><span id="hint" aria-live="polite">下拉刷新</span></header>
+    <div class="viewport" id="vp">
+      <div class="content" id="content">
+        <div class="pt-ind" id="ind" aria-hidden="true">
+          <svg id="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M6 13l6 6 6-6"/>
+          </svg>
+          <svg id="check" width="18" height="18" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.5 12.5l5 5 10-11"/>
+          </svg>
+        </div>
+        <ul id="feed"></ul>
+      </div>
+    </div>
+    <button id="btn" type="button">⌨ 键盘等价：立即刷新（无触屏时的退路）</button>
+  </section>
+  <div class="tip">滚到列表顶部后继续往下拽：过线松手触发刷新 · 桌面可按住向下拖</div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "THRESHOLD": 70, "RESIST": 0.5, "DURATION": 1200 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  root.setProperty("--th", PARAMS.THRESHOLD + "px");
+  root.setProperty("--spin", PARAMS.DURATION + "ms");
+
+  const vp = document.getElementById("vp"), content = document.getElementById("content"),
+        ind = document.getElementById("ind"), arrow = document.getElementById("arrow"),
+        check = document.getElementById("check"), hint = document.getElementById("hint"),
+        feed = document.getElementById("feed"), btn = document.getElementById("btn");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const SPRING = "cubic-bezier(.18,.89,.32,1.28)";  // 末端>1 的控制点 = 回弹那一下过冲
+
+  // —— 初始列表（本地造数据，零网络请求） ——
+  const NAMES = [["阿","阿岚 · 设计组"],["凯","凯彬"],["莉","莉莎"],["远","张远"],["晨","陈晨"],["蕾","小蕾"],["航","刘航"],["琳","— 系统通知"]];
+  function makeItem(name, text, time, fresh) {
+    const li = document.createElement("li");
+    if (fresh) li.className = "fresh";
+    li.innerHTML = '<span class="face">' + name[0] + '</span>' +
+      '<span class="txt"><b>' + name.slice(1) + '</b><span>' + text + '</span></span>' +
+      '<time>' + time + '</time>';
+    return li;
+  }
+  NAMES.forEach(function (n, i) {
+    feed.appendChild(makeItem(n, "收到一条消息：" + ["方案已更新","周五对一下稿子","附件请查收","新版本发布了","图片 9 张","会议纪要","在吗","2 条新提醒"][i], (i + 1) * 13 + " 分钟前", false));
+  });
+
+  // —— 手势状态机 ——
+  let sy = null, pull = 0, armed = false, refreshing = false, usedTouch = false;
+
+  function setPull(px) {
+    pull = px;
+    content.style.transition = "none";              // 拖拽期必须跟手，绝不等过渡动画
+    content.style.transform = "translateY(" + px + "px)";
+    const p = Math.min(1, px / PARAMS.THRESHOLD);   // 拉距/阈值 → 0~1 进度
+    arrow.style.transform = "rotate(" + (p * 360) + "deg)";   // 箭头旋转角 ∝ 进度
+    if (p >= 1 && !armed) { armed = true; hint.textContent = "松开刷新"; }
+    else if (p < 1 && armed) { armed = false; hint.textContent = "下拉刷新"; }
+  }
+  function begin(y) {
+    if (refreshing) return;                 // 刷新中上锁：再拽不叠加第二个刷新流程
+    if (vp.scrollTop > 0) return;           // 手势裁决①：只认"已在顶部"的下拉
+    sy = y;
+  }
+  function move(y, cancelNative) {
+    if (sy === null || refreshing) return;
+    const dy = y - sy;
+    if (dy <= 0) { setPull(0); return; }    // 往回推 = 想往上滚：交还原生滚动
+    if (vp.scrollTop > 0) { sy = null; setPull(0); return; }  // 裁决②：列表已滚动则退出接管
+    cancelNative();                         // 确认接管才 preventDefault（passive:true 下这行无效）
+    // 阻尼：位移 = 手指位移 × RESIST（1:1 跟手会让 8px 手抖就触发刷新）
+    let px = dy * PARAMS.RESIST;
+    if (px > PARAMS.THRESHOLD * 1.6)        // 越拉越沉：超 1.6 倍阈值后再加一层 0.3 硬阻尼
+      px = PARAMS.THRESHOLD * 1.6 + (px - PARAMS.THRESHOLD * 1.6) * 0.3;
+    setPull(px);
+  }
+  function end() {
+    if (sy === null) return;
+    sy = null;
+    if (refreshing) return;
+    if (pull >= PARAMS.THRESHOLD) startRefresh();
+    else springBack("下拉刷新");            // 未到阈值：纯回弹，不触发（与橡皮筋的分界线）
+  }
+
+  function springBack(finalHint) {
+    content.style.transition = reduce ? "none" : "transform .42s " + SPRING;
+    content.style.transform = "translateY(0)";
+    pull = 0; armed = false;
+    arrow.style.transform = "";
+    setTimeout(function () {
+      ind.classList.remove("spinning", "done");
+      check.style.visibility = "hidden"; arrow.style.visibility = "visible";
+      if (finalHint) hint.textContent = finalHint;
+      refreshing = false;                   // 回弹完成才解锁下拉
+    }, reduce ? 0 : 440);
+  }
+
+  function startRefresh() {
+    refreshing = true;
+    ind.classList.add("spinning");          // 进入刷新态：箭头连续旋转（时长 = DURATION）
+    content.style.transition = "transform .18s ease-out";
+    content.style.transform = "translateY(" + PARAMS.THRESHOLD + "px)";  // 停靠位：钉在阈值处
+    hint.textContent = "刷新中…";
+
+    setTimeout(function () {
+      // —— 结束态：真实更新内容（不更新的假刷新等于坏掉） ——
+      ind.classList.remove("spinning");
+      arrow.style.visibility = "hidden"; check.style.visibility = "visible";
+      ind.classList.add("done");
+      const news = [["新 · 阿岚","你的草稿已通过评审","刚刚"], ["新 · 凯彬","明天上午十点老地方","刚刚"], ["新 · 系统通知","词典构建完成","刚刚"]];
+      news.forEach(function (n, i) {
+        const li = makeItem(n[0], n[1], n[2], true);
+        li.classList.add("new");
+        li.style.animationDelay = (i * 60) + "ms";   // 60ms 错峰滑入，形成"刷出来"的连击
+        feed.insertBefore(li, feed.firstChild);
+      });
+      hint.textContent = "已更新 ✓";
+      setTimeout(function () { springBack("下拉刷新"); }, 300);  // ✓ 停留 300ms 再吸回
+    }, PARAMS.DURATION);
+  }
+
+  // —— 触摸通道：touchmove 必须 passive:false，否则 preventDefault 无效、
+  //    原生橡皮筋会和我们的位移打架（两层动效同时出现） ——
+  vp.addEventListener("touchstart", function (e) {
+    usedTouch = true; begin(e.touches[0].clientY);
+  }, { passive: true });
+  vp.addEventListener("touchmove", function (e) {
+    move(e.touches[0].clientY, function () { e.preventDefault(); });
+  }, { passive: false });
+  addEventListener("touchend", end);
+
+  // —— 鼠标通道：桌面演示与混合设备的兜底 ——
+  vp.addEventListener("mousedown", function (e) {
+    if (usedTouch) return;                  // 触屏设备上的合成 mouse 事件直接忽略
+    e.preventDefault();                     // 阻止按住拖拽选中文字
+    begin(e.clientY);
+  });
+  addEventListener("mousemove", function (e) {
+    if (sy === null) return;
+    move(e.clientY, function () { e.preventDefault(); });
+  });
+  addEventListener("mouseup", end);
+
+  // —— 键盘等价退路：触屏手势不是唯一入口，a11y 要求功能可达 ——
+  btn.addEventListener("click", function () { if (!refreshing) startRefresh(); });
+})();
+</script>
+</body>
+</html>

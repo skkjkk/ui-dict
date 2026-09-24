@@ -1,0 +1,74 @@
+{
+  "id": "scrollytelling",
+  "no": "L-02",
+  "category": "layout",
+  "nameZh": "滚动叙事",
+  "nameEn": "Scrollytelling",
+  "aliases": [
+    "边滚边出现的页面",
+    "滚动触发动画的长页",
+    "纽约时报那种讲故事滚动",
+    "滚到哪段哪段亮起来",
+    "顶部有进度条的滚动页",
+    "scroll 驱动的图文展开"
+  ],
+  "definition": "把叙事节奏绑定在滚动进度上的布局：内容按段落预藏（透明度/位移归零），滚到视口阈值时逐段揭示，或让固定舞台随滚动切换状态，用户用滚轮'翻页'读故事。适合数据新闻、产品发布长页、单页官网。与 Parallax（视差）的区别：视差的目的是深度错觉——不同层以不同速率移动模拟远近，内容本身始终在场；滚动叙事的目的是一步一揭示的时间线，滚动改变的是'讲到哪了'，不是空间层次。",
+  "whenNotToUse": [
+    "工具型/查找型页面（后台、搜索结果）→ 用户要跳读直达，逐段锁死节奏是阻碍",
+    "段落极多且每段都带入场动画 → 每次刷新都要滚一遍全部动画，回头客会疯",
+    "内容撑不起叙事结构时 → 硬凑三幕式会把 200 字注水成三屏空转"
+  ],
+  "confusedWith": ["bento-grid", "magnetic-button"],
+  "anatomy": [
+    { "part": "Stepper 步骤段", "note": "一个滚动节拍对应一段文案/一个状态，是叙事的最小单位" },
+    { "part": "Reveal 揭示层", "note": "初始 opacity:0 + translateY，跨过阈值后加 .shown 类淡入上移" },
+    { "part": "Progress 进度条", "note": "顶部细条按 scrollTop/(总高-视口高) 走完 0→100%，给用户'还剩多少故事'的预期" },
+    { "part": "Sticky 舞台（可选）", "note": "position:sticky 的固定视觉区 + 侧列滚动文字，图文新闻常用" }
+  ],
+  "promptTemplate": {
+    "core": "一个滚动叙事（Scrollytelling）单页：顶部固定 {PROGRESS_H}px 进度条（transform: scaleX(0→1) 表示阅读进度，随 scrollTop/(document高-视口高) 连续更新）。主体 3 个叙事段落，每段入场前 opacity:0 且 translateY({RISE}px)，用 IntersectionObserver 以 threshold {THRESHOLD} 判定进入视口后加 .shown 类，以 transform/opacity 过渡 600ms ease-out 淡入上移，揭示一次后保持在场（unobserve 不反复触发）。段落各占约 60svh 高以保证有真实滚动行程。整体节奏：第一段大标题定调、第二段数据/图文推进、第三段收束 CTA。",
+    "stack": "IntersectionObserver + scroll 事件（对 scrollTop 做 rAF 节流）实现，原生 CSS 过渡，零依赖零网络请求。",
+    "constraints": [
+      "揭示动画只动 transform/opacity，不要动画 height/margin——逐帧重排会掉帧",
+      "入场后 unobserve 该目标：叙事是时间线，回头重播会打断阅读流",
+      "进度条更新走 requestAnimationFrame 合并，不要在 scroll 回调里直接读写布局",
+      "段高别用裸 100vh：移动端地址栏收起会瞬间跳动一个地址栏的高度，用 svh/dvh 或留余量",
+      "prefers-reduced-motion 下内容直接全部在场（opacity:1、无位移），进度条保留"
+    ],
+    "verify": [
+      "打开时只有第一段可见，往下滚第二、三段依次淡入并上移归位",
+      "顶部进度条从 0 连续增长，滚到底恰好满宽",
+      "滚回上方，已揭示的段落不再重复播放动画",
+      "快速滚动时不卡顿、段落不闪烁"
+    ],
+    "reference": "参考气质：纽约时报数据新闻专栏、Apple 产品页的滚动章节、Stripe 首页叙事段。克制、一步一句、进度感明确。",
+    "variants": [
+      { "label": "粘性舞台版", "delta": "左列 position:sticky 放图，右列文字段逐段进出，图随 IO 换状态（图文新闻式）" },
+      { "label": "更强戏剧", "delta": "RISE 提到 60px、加 scale(.96→1)，段间距离拉到 100svh" }
+    ]
+  },
+  "params": [
+    { "key": "THRESHOLD", "label": "触发明暗比例 (0-1)", "def": 0.35, "min": 0.05, "max": 0.95, "step": 0.05, "hint": "元素面积露出多少才揭示；越大越'压轴'才出现" },
+    { "key": "RISE", "label": "上移揭示距离 (px)", "def": 32, "min": 8, "max": 80, "step": 4, "hint": "入场前下移量，越大越有'升起'感" },
+    { "key": "PROGRESS_H", "label": "进度条高 (px)", "def": 4, "min": 2, "max": 10, "step": 1 }
+  ],
+  "scenarios": [
+    "数据新闻/年度总结长稿（NYT、财新式图文滚动）",
+    "产品发布单页：一屏一个卖点逐段展开",
+    "个人/公司官网首页的品牌叙事段",
+    "教程页：步骤随滚动推进，配顶部进度提示"
+  ],
+  "pitfalls": [
+    "别用 scroll 事件逐帧做'进入视口'判定：每次滚动都全量读 getBoundingClientRect 强制同步布局，长页直接掉帧——IntersectionObserver 由浏览器批量异步观测，天然节流，只在状态翻转时回调；进度条这类必须连续更新的才留在 scroll+rAF 里做",
+    "position:sticky 舞台与 IO 配合时，rootMargin 不要写负 top：sticky 元素的相交计算发生在其被'钉住'之后，负 rootMargin 会让钉住期间的段落永远不满足阈值（或瞬间全满足），揭示时机整体错位——要么 root 用视口默认值，要么把判定目标从 sticky 子元素换进外层普通流节点",
+    "移动端地址栏收起/展开会改变可视视口高度，用 100vh 锚定的段落会瞬间跳动一个地址栏的高度、连带触发/撤销 IO 判定——段高与阈值判定改用 100svh（小视口）兜底 100vh，进度分母用 document.documentElement.scrollHeight 而不是硬编码视口数",
+    "揭示后若不 unobserve，用户来回滚动时动画反复重播，因为 .shown 类被 JS 依据相交状态反复摘挂——叙事型揭示默认'一次性'，只有强调对比的数据可视化才需要双向重播"
+  ],
+  "related": ["bento-grid", "shimmer", "magnetic-button"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}

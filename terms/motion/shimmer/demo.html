@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>微光扫过 Shimmer · ui-dict M-02</title>
+<style>
+  :root { --dur: 1.6s; --angle: 100deg; }   /* 由 PARAMS 回写：周期与高光带角度 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: grid; place-items: center; align-content: center; gap: 18px;
+    grid-auto-rows: max-content; padding: 24px;
+  }
+  .card {
+    width: min(360px, 92vw); background: #fff; border-radius: 14px; padding: 18px;
+    display: grid; gap: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06);
+  }
+  .row { display: flex; gap: 14px; align-items: center; }
+
+  /* 灰面本体：底色就是最终占位色，微光是叠在它上面的“手法”层 */
+  .sk { position: relative; overflow: hidden; background: #e9e6e1; border-radius: 8px; }
+  .av { width: 52px; height: 52px; border-radius: 50%; flex: none; }
+  .lines { flex: 1; display: grid; gap: 10px; }
+  .l1 { height: 12px; width: 60%; } .l2 { height: 12px; width: 100%; } .l3 { height: 12px; width: 45%; }
+  .hero { height: 120px; border-radius: 10px; }
+
+  /* 高光带：伪元素整面覆盖，linear-gradient 的角度直接吃 --angle——
+     90deg 时带体竖直、水平掠过；>90deg 带尾向右倾。渐变轴与平铺解耦，
+     因为 background-position 平铺在非垂直角下瓦片周期对不上、接缝会断带 */
+  .sk::after {
+    content: ""; position: absolute; inset: -50%;     /* 放大 200%，倾斜后仍能盖满母块 */
+    background: linear-gradient(var(--angle),
+      rgba(255,255,255,0) 42%, rgba(255,255,255,.85) 50%, rgba(255,255,255,0) 58%);
+    /* 位移走 transform：合成器动画，不触发布局——同一页四五块微光并行也不掉帧；
+       若用 left 推进则是每帧 layout+paint，这就是本词条最大的性能分界线 */
+    animation: sweep var(--dur) linear infinite;
+  }
+  @keyframes sweep {
+    from { transform: translateX(-50%); }
+    to   { transform: translateX(50%); }
+  }
+  .card.loaded .sk::after { animation: none; }          /* 状态到达：微光必须收场，循环=“永远没好”的谎 */
+
+  /* 真实内容态：与占位严格同构，替换瞬间零跳动 */
+  .real { display: none; }
+  .card.loaded .sk-wrap { display: none; }
+  .card.loaded .real { display: grid; gap: 14px; }
+  .real .face { width: 52px; height: 52px; border-radius: 50%; flex: none;
+    background: linear-gradient(135deg,#0b4f6c,#3a8fb0); color:#fff; display:grid; place-items:center;
+    font-size: 18px; font-weight: 600; }
+  .real b { font-size: 15px; display: block; }
+  .real small { color: #8a857c; font-size: 12.5px; }
+  .real .pic { height: 120px; border-radius: 10px; background: linear-gradient(135deg,#dbe7ee,#f2d9c4);
+    display: grid; place-items: center; color: #6b675f; font-size: 12.5px; }
+
+  .sk-wrap { display: grid; gap: 14px; }
+  .fade { animation: fade .2s ease-out; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  button {
+    border: 1px solid #1a1a1a; background: #fff; padding: 7px 14px; border-radius: 999px;
+    font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #efeadf; }
+  .hint { font-size: 12px; color: #8a857c; text-align: center; line-height: 1.7; max-width: 360px; }
+
+  /* 降级：关掉扫光只留静态灰面——「进行中」的语义由 aria-busy 承担，不靠光；
+     高对比循环光对前庭/光敏用户接近频闪刺激，这不是锦上添花是可及性义务 */
+  @media (prefers-reduced-motion: reduce) {
+    .sk::after { animation: none; } .fade { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="card" id="card" role="status" aria-busy="true" aria-live="polite">
+    <div class="sk-wrap" aria-hidden="true">
+      <div class="sk hero"></div>
+      <div class="row">
+        <div class="sk av"></div>
+        <div class="lines"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div></div>
+      </div>
+    </div>
+    <div class="real">
+      <div class="pic">封面图已到达</div>
+      <div class="row">
+        <div class="face">D</div>
+        <div>
+          <b>skkjkk</b>
+          <small>@designer · 微光是手法，骨架是组件——别把路写成目的地。</small>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bar">
+    <button id="toggle" type="button">载入完成</button>
+    <button id="again" type="button">重新加载</button>
+  </div>
+  <p class="hint">演示词条 M-02：一块卡片上循环扫过的高光。<br>
+     调 DUR 看节奏（&lt;1s 会读作闪烁），调 ANGLE 看带体倾斜——斜光靠渐变角度整带扫过，接缝不断。</p>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DUR": 1.6, "ANGLE": 100 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  // JS 真实消费参数：周期秒数与高光角度回写成 CSS 变量，
+  // 因为动画规格只有留在 CSS 里才能走合成器，JS 的职责是喂值不是逐帧推
+  root.setProperty("--dur", PARAMS.DUR + "s");
+  root.setProperty("--angle", PARAMS.ANGLE + "deg");
+
+  const card = document.getElementById("card");
+  const btn = document.getElementById("toggle");
+
+  function setState(loaded) {
+    card.classList.toggle("loaded", loaded);
+    card.classList.toggle("fade", true);
+    card.setAttribute("aria-busy", String(!loaded));
+    btn.textContent = loaded ? "重新加载" : "载入完成";
+    btn.dataset.done = String(loaded);
+  }
+  btn.addEventListener("click", () => setState(btn.dataset.done !== "true"));
+  document.getElementById("again").addEventListener("click", () => setState(false));
+
+  // 首次挂载 2.6s 后自动演示一次「数据到达、微光收场」——光停不下来就不配叫进度剧
+  setTimeout(() => { if (!card.classList.contains("loaded")) setState(true); }, 2600);
+})();
+</script>
+</body>
+</html>

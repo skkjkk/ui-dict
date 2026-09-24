@@ -1,0 +1,69 @@
+{
+  "id": "shimmer",
+  "no": "M-02",
+  "category": "motion",
+  "nameZh": "微光扫过",
+  "nameEn": "Shimmer",
+  "aliases": [
+    "一闪一闪的光",
+    "扫光",
+    "加载中的流光",
+    "骨头上爬过的光",
+    "一道白光掠过去",
+    "shine 效果"
+  ],
+  "definition": "一道柔和高光带在表面上循环掠过、暗示「这块区域活着、正在干活」的呈现手法，不是组件。它最著名的舞台是骨架屏（Skeleton）——灰占位块上爬过一道光只是它的经典用法之一：Shimmer 是光怎么走，Skeleton 是用版式承载光的组件，微光同样可以刷在按钮、卡片上。与 Pulse（呼吸）的区别：Pulse 是整面明暗起伏、渲染更省，Shimmer 是光在平移、方向感与「进行中」的暗示更强。",
+  "whenNotToUse": [
+    "内容已经到达 → 微光在成品上循环=「永远在加载」的错误信号，动画生命周期必须随状态停止",
+    "低端机/长列表几十个面同时扫 → 降级为整面 Pulse 或纯静态占位，性能撑不住时手法让路",
+    "周期小于 1 秒的高频扫动 → 人眼读作闪烁（flicker）而非进行中，光敏人群还要加一条可及性风险",
+    "需要向用户要一个决定 → 微光只是进度剧，不承担反馈职责，完成时用 Dialog/消息条说话"
+  ],
+  "confusedWith": ["skeleton"],
+  "promptTemplate": {
+    "core": "实现「微光扫过（Shimmer）」动效。触发：表面处于「进行中」状态即循环播放，状态结束即停止。运动模型：一条两端渐隐的白色高光带沿 {ANGLE}° 方向匀速掠过表面，用伪元素 + transform: translateX + rotate 实现（位移与倾角同帧完成，全程不触发布局）。时长：扫过一轮 {DUR}s，linear。结束态：无限循环；数据到达后动画移除、内容原地无缝替换（占位与内容形状同构，零跳动）。",
+    "stack": "纯 CSS 实现：linear-gradient 画高光带、@keyframes translateX 循环；JS 仅在状态切换时动 class。",
+    "constraints": [
+      "不要用 left/margin 驱动扫动——每帧触发布局重排，多块并行必掉帧；位移一律走 transform 合成器动画",
+      "不要斜角微光用 background-position 平铺实现——非 90° 时渐变轴周期与平铺周期对不上，瓦片接缝会露出断带",
+      "不要循环快于 1s——高频扫动读作闪烁不是进度感，节奏宁慢勿躁",
+      "不要省略 prefers-reduced-motion 降级：停光只留静态底色，「加载中」的语义由 aria-busy 与占位版式承担，不靠光"
+    ],
+    "verify": [
+      "白色高光带以稳定节奏斜向/横向掠过灰面，入场出场都从屏幕外开始，循环无断点",
+      "调大角度高光带整带倾斜扫过，瓦片边缘没有断裂错位",
+      "点「载入完成」动画停止、内容原地替换不跳动",
+      "系统开启「减少动效」后只剩静态底色，无扫光"
+    ],
+    "reference": "参考气质：Facebook / X 冷启动信息流微光；Linear 加载占位——低对比、疏朗节奏，光是提示不是表演。",
+    "variants": [
+      { "label": "脉冲呼吸", "delta": "整面 opacity 0.6↔1 交替（1.8s alternate）替代扫光，省一条动画通道，适合低端机" },
+      { "label": "按钮高级感扫光", "delta": "刷在 CTA 上：高光带收窄到 18% 宽、每 3s 才扫一轮，更像营销光效" }
+    ]
+  },
+  "params": [
+    { "key": "DUR", "label": "扫过周期 (s)", "def": 1.6, "min": 0.8, "max": 4, "step": 0.1, "hint": "一轮用时；<1s 会闪烁，1.6s 上下最从容" },
+    { "key": "ANGLE", "label": "高光带扫过角度 (deg)", "def": 100, "min": 60, "max": 120, "step": 5, "hint": "取 linear-gradient 角度语义：90°=竖直带水平扫，>90° 带尾向右倾" }
+  ],
+  "scenarios": [
+    "骨架屏占位块的「进行中」暗示（与 C-02 骨架屏配对使用）",
+    "图片/封面块先于正文到达时的占位扫光",
+    "CTA 按钮、会员卡上的高级感循环光（放慢周期、拉大间隔）",
+    "离线/同步页面的「仍然活着」呼吸提示"
+  ],
+  "pitfalls": [
+    "用 left/margin 驱动扫光会每帧触发 layout+paint，background-position 好一档（只 paint 不 layout）但仍在主线程——只有 transform: translateX 全程走合成器，一屏几十块微光才能不掉帧",
+    "非垂直角度的微光别用 background-position 平铺实现，因为渐变轴长度与横向平铺周期不相等，瓦片接缝处光带会错位成「断带」——整带覆盖层 + translateX 才能把斜光扫干净",
+    "reduced-motion 降级不是锦上添花，因为高对比循环光对前庭敏感用户接近频闪刺激；关掉扫光留静态底色，进行中的信息本来就该由 aria-busy 和占位版式承担",
+    "微光不随状态停止会永远空转，因为循环动画向用户宣告的是「还没好」——数据到达、超时、失败都必须给它一个收场，否则不如没有",
+    "周期压到 1s 以下反而看不出「进行中」，因为人眼把低频移动体才解读为过程、高频明暗解读为噪声——宁慢勿躁，微光的美德是克制"
+  ],
+  "related": ["skeleton", "glassmorphism"],
+  "refs": [
+    "https://www.w3.org/TR/mediaqueries-5/#prefers-reduced-motion",
+    "https://www.w3.org/TR/wai-aria-1.2/#aria-busy"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}

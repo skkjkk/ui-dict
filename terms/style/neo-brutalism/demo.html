@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新粗野主义 Neo-brutalism · ui-dict S-02</title>
+<style>
+  :root { --shadow: 6px; --border: 3px; --hue: 48; --hue2: 248; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+    /* 纸感浅底：浅色背景让黑描边和实心黑影成为绝对主角（深底会把轮廓吃掉） */
+    background: #f4f1ea;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, "PingFang SC", "Microsoft YaHei", monospace, system-ui, sans-serif;
+    color: #000;
+  }
+  .nb-card {
+    width: min(400px, 92vw); background: hsl(var(--hue), 95%, 60%);
+    /* 描边与硬投影同色同黑：一个用纯黑一个用深灰会显出"双轮廓"脏边 */
+    border: var(--border) solid #000;
+    /* 关键：第 3 个值（模糊半径）必须为 0 —— 有 blur 就塌回普通软阴影卡片 */
+    box-shadow: var(--shadow) var(--shadow) 0 #000;
+    border-radius: 6px;                 /* 小圆角：0~8px 才够"硬"，大圆角会变可爱风 */
+    padding: 26px 26px 30px;
+  }
+  .nb-tag {
+    display: inline-block; background: hsl(var(--hue2), 90%, 58%);
+    border: var(--border) solid #000; box-shadow: 3px 3px 0 #000;
+    font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 4px;
+    transform: rotate(-2deg);           /* 贴纸式歪斜：故意不规整，粗野的幽默感 */
+    margin-bottom: 14px;
+  }
+  .nb-card h2 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; }
+  .nb-card p { margin: 0 0 22px; font-size: 14px; line-height: 1.7; font-weight: 500; }
+  /* 签名交互按钮：默认"浮"在黑边上方（靠实心投影），按下即陷回纸面 */
+  .nb-btn {
+    appearance: none; cursor: pointer; font: inherit; font-weight: 700; font-size: 15px;
+    background: #fff; color: #000; border: var(--border) solid #000;
+    padding: 12px 22px; border-radius: 4px;
+    box-shadow: var(--shadow) var(--shadow) 0 #000;
+    /* 位移量必须严格等于投影偏移：移 {SHADOW}px 后按钮边缘正好压住原投影位置，黑影才收得干净 */
+    transform: translate(0, 0);
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .nb-btn:hover, .nb-btn:active {
+    transform: translate(var(--shadow), var(--shadow));   /* 朝投影方向平移 = "按下去" */
+    box-shadow: 0 0 0 #000;                               /* 位移到位的同时投影消失 */
+  }
+  .nb-btn:focus-visible { outline: var(--border) dashed #000; outline-offset: 3px; }
+  .hint { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+          font-size: 12px; color: #6b665c; }
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：位移（状态本身）保留，但去掉 transition，改瞬时切换，不做逐帧动画 */
+    .nb-btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="nb-card">
+    <span class="nb-tag">NEW · 硬边硬影</span>
+    <h2>把精致感全部丢掉。</h2>
+    <p>黑描边勾轮廓，实心投影当厚度，撞色块硬碰硬。悬停下面的按钮——位移恰好等于投影偏移，投影消失，像按进了纸面。</p>
+    <button class="nb-btn" id="btn" type="button">按 我 ▸</button>
+  </div>
+  <div class="hint">详情页滑杆可调：SHADOW 投影偏移 / BORDER 描边宽 / HUE 主色相</div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "SHADOW": 6, "BORDER": 3, "HUE": 48 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  root.setProperty("--shadow", PARAMS.SHADOW + "px");
+  root.setProperty("--border", PARAMS.BORDER + "px");
+  root.setProperty("--hue", String(PARAMS.HUE));
+  // 撞色色相偏 200°：邻近色相的饱和色并排会"打架成脏色"，互补对撞才有新粗野的张力
+  root.setProperty("--hue2", String((PARAMS.HUE + 200) % 360));
+})();
+</script>
+</body>
+</html>

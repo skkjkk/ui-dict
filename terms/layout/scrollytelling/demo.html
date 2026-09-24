@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>滚动叙事 Scrollytelling · ui-dict L-02</title>
+<style>
+  :root { --rise: 32px; --ph: 4px; --ease-out: cubic-bezier(.16,1,.3,1); }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    /* vh 打底、svh 后置覆盖：svh（小视口）不随地址栏伸缩跳动；老浏览器停在前一行 vh */
+    min-height: 100vh; min-height: 100svh;
+    background: #101418; color: #e8ecf1;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  /* 顶部进度条：scaleX 走完 0→1（合成器动画，不碰 width 避免逐帧重排） */
+  #progress {
+    position: fixed; top: 0; left: 0; z-index: 10;
+    width: 100%; height: var(--ph);
+    background: linear-gradient(90deg, #4cc9f0, #b5179e);
+    transform: scaleX(0); transform-origin: 0 50%;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 0 24px; }
+  section {
+    /* 每段约 60 视口高：保证相邻段之间确有滚动行程，揭示才有"翻页"感；
+       同上，vh 打底 svh 覆盖，躲开移动端地址栏伸缩导致的段高跳动 */
+    min-height: 60vh; min-height: 60svh;
+    display: grid; align-content: center;
+    border-bottom: 1px dashed rgba(255,255,255,.08);
+  }
+  .kicker { font-size: 12px; letter-spacing: .18em; color: #4cc9f0; margin-bottom: 10px; }
+  h1 { font-size: 34px; line-height: 1.25; margin: 0 0 14px; }
+  h2 { font-size: 26px; margin: 0 0 12px; }
+  p  { font-size: 15px; line-height: 1.9; color: #b9c2cc; margin: 0; }
+  .stat { display: flex; gap: 26px; margin: 18px 0 4px; }
+  .stat b { font-size: 30px; color: #fff; display: block; }
+  .stat small { font-size: 12px; color: #8892a0; }
+  /* 揭示前：透明 + 下移 {RISE}px；只动 transform/opacity，绝不动画布局属性 */
+  .reveal { opacity: 0; transform: translateY(var(--rise)); }
+  .reveal.shown {
+    opacity: 1; transform: translateY(0);
+    transition: opacity .6s var(--ease-out), transform .6s var(--ease-out);
+  }
+  /* 段内子元素依次错拍，形成"一句一句讲"的节奏。
+     注意顺序：transition 简写会把 delay 重置为 0，所以先写简写、后写 transition-delay */
+  .reveal h1, .reveal h2, .reveal p, .reveal .stat, .reveal .kicker {
+    opacity: 0; transform: translateY(calc(var(--rise) / 2));
+    transition: opacity .6s var(--ease-out), transform .6s var(--ease-out);
+  }
+  .reveal .kicker { transition-delay: .05s; }
+  .reveal h1, .reveal h2 { transition-delay: .12s; }
+  .reveal p, .reveal .stat { transition-delay: .2s; }
+  .reveal.shown h1, .reveal.shown h2, .reveal.shown p,
+  .reveal.shown .stat, .reveal.shown .kicker { opacity: 1; transform: translateY(0); }
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：叙事内容直接全部在场（揭示不该藏住信息），进度条保留 */
+    html { scroll-behavior: auto; }
+    .reveal, .reveal .kicker, .reveal h1, .reveal h2, .reveal p, .reveal .stat {
+      opacity: 1 !important; transform: none !important; transition: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+  <div id="progress" aria-hidden="true"></div>
+  <main>
+    <section class="reveal">
+      <div>
+        <div class="kicker">第一章 · 起</div>
+        <h1>故事跟着你的滚轮走。</h1>
+        <p>往下滚。每一段跨过视口阈值才淡入上移——这就是滚动叙事：把纵向滚动条变成翻页手势。顶部细条是你已读到的进度。</p>
+      </div>
+    </section>
+    <section class="reveal">
+      <div>
+        <div class="kicker">第二章 · 承</div>
+        <h2>数据随节拍登场。</h2>
+        <p>与视差（Parallax）不同：视差让各层以不同速率移动制造深度错觉，内容始终在场；滚动叙事改变的是"讲到哪了"。</p>
+        <div class="stat">
+          <div><b>600ms</b><small>单段揭示时长</small></div>
+          <div><b>3</b><small>叙事节拍</small></div>
+          <div><b>0</b><small>第三方依赖</small></div>
+        </div>
+      </div>
+    </section>
+    <section class="reveal">
+      <div>
+        <div class="kicker">第三章 · 合</div>
+        <h2>收束，然后行动。</h2>
+        <p>揭示一次后不再重播（unobserve）——叙事是时间线，来回滚动反复放动画会打断阅读。滚到这里，进度条应该刚好满宽。</p>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "THRESHOLD": 0.35, "RISE": 32, "PROGRESS_H": 4 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  root.setProperty("--rise", PARAMS.RISE + "px");
+  root.setProperty("--ph", PARAMS.PROGRESS_H + "px");
+
+  // —— 段落揭示：IntersectionObserver 由浏览器批量异步观测，
+  // 比在 scroll 里逐帧读 getBoundingClientRect 省（后者强制同步布局、长页掉帧）
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const targets = document.querySelectorAll(".reveal");
+  if (reduce || !("IntersectionObserver" in window)) {
+    // 降级或老浏览器：直接全部在场，信息不依赖动画
+    targets.forEach(t => t.classList.add("shown"));
+  } else {
+    const io = new IntersectionObserver((entries) => {
+      for (const en of entries) {
+        if (en.isIntersecting) {
+          en.target.classList.add("shown");
+          io.unobserve(en.target);      // 一次性揭示：回头不重播，保住叙事时间线
+        }
+      }
+    }, { threshold: PARAMS.THRESHOLD });   // 面积露出 {THRESHOLD} 才揭示：越大越"压轴"
+    targets.forEach(t => io.observe(t));
+  }
+
+  // —— 顶部进度条：必须连续更新，留在 scroll 事件里，但用 rAF 合并逐帧读写
+  const bar = document.getElementById("progress");
+  let ticking = false;
+  function paint() {
+    ticking = false;
+    const doc = document.documentElement;
+    // 分母用真实可滚行程（scrollHeight - 视口高），不硬编码 vh——躲开地址栏伸缩坑
+    const max = doc.scrollHeight - innerHeight;
+    const p = max > 0 ? Math.min(1, Math.max(0, doc.scrollTop / max)) : 1;
+    bar.style.transform = "scaleX(" + p + ")";
+  }
+  addEventListener("scroll", () => {
+    if (!ticking) { ticking = true; requestAnimationFrame(paint); }
+  }, { passive: true });
+  paint();   // 初始（刷新恢复滚动位置时）也要画一次
+})();
+</script>
+</body>
+</html>

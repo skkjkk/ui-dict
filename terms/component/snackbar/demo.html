@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消息条 Snackbar (Toast) · ui-dict C-03</title>
+<style>
+  :root { --sb-a: 0.92; }   /* 条体背景不透明度，由 PARAMS.OPACITY 回写 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 120px; max-width: 560px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .page p { font-size: 13.5px; color: #6b675f; margin: 0 0 16px; line-height: 1.7; }
+  .ops { display: flex; flex-wrap: wrap; gap: 10px; }
+  .ops button {
+    border: 1px solid #1a1a1a; background: #fff; padding: 9px 16px; border-radius: 999px;
+    font-size: 13.5px; cursor: pointer;
+  }
+  .ops button:hover { background: #efeadf; }
+  .ops button:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+
+  /* 页面底部常驻按钮：用来实证消息条容器不挡点击（坑 #1 的现场教学） */
+  #realBtn {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    padding: 12px 24px; border: 0; border-radius: 12px; background: #0b4f6c; color: #fff;
+    font-size: 14px; cursor: pointer; z-index: 1;
+    box-shadow: 0 8px 22px rgba(11,79,108,.28);
+  }
+  #realBtn b { font-variant-numeric: tabular-nums; }
+
+  /* 全屏容器 pointer-events:none：透明层绝不能截胡底层点击；aria-live 常驻、子节点只增删，
+     因为读屏软件监听的是「这个区域的变动」，重建容器本身会让播报丢失 */
+  #snacks {
+    position: fixed; inset: 0; z-index: 9; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    align-items: center; gap: 8px; padding: 0 16px 90px;   /* 底部留位给常驻按钮 */
+  }
+
+  .snack {
+    pointer-events: auto;                     /* 只有条体本身可交互 */
+    width: min(420px, 100%); position: relative; overflow: hidden;
+    background: rgba(24,24,24,var(--sb-a)); color: #fff;
+    border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px; font-size: 13.5px; line-height: 1.5;
+    transform: translateY(130%); opacity: 0;   /* 初始沉在轨道下：transform 走合成器，不碰 top/height */
+    transition: transform .26s cubic-bezier(.2,.8,.2,1), opacity .26s ease-out;
+  }
+  .snack.show { transform: translateY(0); opacity: 1; }
+  .snack.hide { transform: translateY(130%); opacity: 0;
+                transition: transform .24s ease-in, opacity .24s ease-in; }
+  .snack .msg { flex: 1; }
+  .snack .act {
+    border: 0; background: none; color: #8ecbff; font-size: 13.5px; font-weight: 600;
+    cursor: pointer; padding: 4px 6px; border-radius: 6px; flex: none;
+  }
+  .snack .act:hover { background: rgba(255,255,255,.1); }
+  .snack .x {
+    border: 0; background: none; color: rgba(255,255,255,.65); font-size: 16px; line-height: 1;
+    cursor: pointer; padding: 4px 6px; flex: none;
+  }
+  .snack .x:hover { color: #fff; }
+  /* 进度条 scaleX 收缩：transform 动画而非 width，避免逐帧重排；时长由 JS 与 setTimeout 同源写入 */
+  .snack .prog {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 2.5px;
+    background: rgba(255,255,255,.55); transform-origin: 0 50%;
+    animation: shrink linear forwards;
+  }
+  @keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .snack, .snack.hide { transition: none; }   /* 降级：滑入滑出改即时出现/移除 */
+    .snack .prog { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>我的收藏 · 演示页</h1>
+    <p>演示词条 C-03。点上面按钮触发不同形态的消息条：纯提示、带「撤销」、连发测试堆叠。
+       消息条从底部滑入、按 DURATION 停留（进度条同步收缩、悬停暂停），然后自动滑出。
+       注意：条体出现期间，页面最底部那颗蓝色按钮<strong>依然可以点</strong>——容器不挡指针。</p>
+    <div class="ops">
+      <button type="button" data-kind="save">保存更改</button>
+      <button type="button" data-kind="copy">复制链接</button>
+      <button type="button" data-kind="delete">删除条目（可撤销）</button>
+      <button type="button" data-kind="burst">连发 5 条（测堆叠）</button>
+    </div>
+  </main>
+  <button id="realBtn" type="button">底层按钮 · 已点 <b id="cnt">0</b> 次</button>
+
+  <div id="snacks" aria-live="polite"></div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DURATION": 3500, "OPACITY": 0.92, "MAX_STACK": 3 };
+  /* ui-dict:params:end */
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const box = document.getElementById("snacks");
+  // OPACITY 回写到 CSS 变量：条体背景 rgba 的 alpha 通道直接吃这个值
+  document.documentElement.style.setProperty("--sb-a", String(PARAMS.OPACITY));
+
+  function show(text, opts) {
+    opts = opts || {};
+    // 堆叠上限：超过 MAX_STACK 立即送走最旧一条，因为消息条贴底生长，
+    // 不排队的旧消息会一路堆到拇指够不着的屏幕上方
+    while (box.children.length >= PARAMS.MAX_STACK) dismiss(box.firstElementChild, true);
+
+    const s = document.createElement("div");
+    s.className = "snack";
+    const msg = document.createElement("span");
+    msg.className = "msg"; msg.textContent = text;
+    s.appendChild(msg);
+
+    if (opts.action) {                       // 操作按钮：Snackbar 与纯 Toast 的分界，有且只允许一个
+      const a = document.createElement("button");
+      a.type = "button"; a.className = "act"; a.textContent = opts.action;
+      a.addEventListener("click", () => { if (opts.onAction) opts.onAction(); dismiss(s); });
+      s.appendChild(a);
+    }
+    const x = document.createElement("button");  // 关闭按钮：给停留型消息一个手动退出口
+    x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "关闭提示");
+    x.addEventListener("click", () => dismiss(s));
+    s.appendChild(x);
+
+    const prog = document.createElement("i");    // 计时进度：把「还有多久消失」变成可见预期
+    prog.className = "prog";
+    // 进度与 setTimeout 同源同参：两处时长必须一致，否则会出现「进度剩一半却提前消失」
+    prog.style.animationDuration = PARAMS.DURATION + "ms";
+    s.appendChild(prog);
+
+    box.appendChild(s);
+    requestAnimationFrame(() => requestAnimationFrame(() => s.classList.add("show")));
+    // ↑ 双 rAF：先让初始 transform 完成一次布局提交，下一帧再加 .show，
+    //   否则新节点从初始态直落终态、没有过渡起点，滑入会退化成闪现
+
+    s._left = PARAMS.DURATION; s._start = performance.now();
+    s._timer = setTimeout(() => dismiss(s), PARAMS.DURATION);
+    // 悬停/聚焦暂停倒计时：用户正要按「撤销」时条不该消失；
+    // CSS 动画用 animationPlayState 冻结，保证进度条与定时器步调一致
+    s.addEventListener("mouseenter", pause); s.addEventListener("mouseleave", resume);
+    s.addEventListener("focusin", pause);    s.addEventListener("focusout", resume);
+    function pause() {
+      clearTimeout(s._timer);
+      s._left -= performance.now() - s._start;          // 记下剩余时长，恢复时续跑而不是重置
+      prog.style.animationPlayState = "paused";
+    }
+    function resume() {
+      s._start = performance.now();
+      s._timer = setTimeout(() => dismiss(s), Math.max(400, s._left));
+      prog.style.animationPlayState = "running";
+    }
+    return s;
+  }
+
+  function dismiss(s, immediate) {
+    // 幂等：堆叠挤兑与计时器可能同时叫走同一条；强制挤兑时哪怕它正在退场也立刻摘除，
+    // 否则「半死的节点占着 DOM」会让上面的 while 挤兑循环空转卡死
+    if (!s || s._gone) { if (s && immediate) s.remove(); return; }
+    s._gone = true;
+    clearTimeout(s._timer);
+    if (reduce || immediate) { s.remove(); return; }   // 降级/被挤兑时直接移除，不等 240ms 退场
+    s.classList.remove("show"); s.classList.add("hide");
+    setTimeout(() => s.remove(), 260);        // 等退场过渡跑完再摘节点，提前摘会看到「断崖消失」
+  }
+
+  document.querySelector(".ops").addEventListener("click", (e) => {
+    const k = e.target.dataset && e.target.dataset.kind;
+    if (k === "save")   show("更改已保存");
+    if (k === "copy")   show("链接已复制到剪贴板");
+    if (k === "delete") show("已删除 1 个条目", {
+      action: "撤销", onAction: () => show("已恢复该条目")
+    });
+    // 连发演示队列/堆叠：间隔小于停留时长，屏幕上方必然出现多条并存的场面
+    if (k === "burst") for (let i = 1; i <= 5; i++)
+      setTimeout(() => show("第 " + i + " 条消息 · 超过 " + PARAMS.MAX_STACK + " 条时最旧先被送走"), i * 350);
+  });
+
+  // 底层按钮计数：在消息条覆盖的区域点它也能涨数，实证容器 pointer-events:none 生效
+  const cnt = document.getElementById("cnt");
+  document.getElementById("realBtn").addEventListener("click", () => {
+    cnt.textContent = String(Number(cnt.textContent) + 1);
+  });
+
+  show("欢迎回来 · 本页演示停留 " + PARAMS.DURATION + "ms 的消息条");   // 首屏自触发一次，所见即所得
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+{
+  "id": "pull-to-refresh",
+  "no": "I-01",
+  "category": "interaction",
+  "nameZh": "下拉刷新",
+  "nameEn": "Pull-to-Refresh",
+  "aliases": [
+    "往下拽一下出新的",
+    "列表顶部下拉出转圈",
+    "朋友圈那种下拉",
+    "拽过一条线松手就刷新",
+    "pull down reload",
+    "带弹回去的加载圈"
+  ],
+  "definition": "列表已滚到顶时继续下拉，指示器跟手阻尼下沉，超过触发阈值松手即发起刷新，完成后内容更新、整体弹簧回弹归位。由 Tweetie（2009，Loren Brichter）发明，已成移动列表的通用手势。与橡皮筋滚动（rubber-banding）的区别：橡皮筋是 iOS 对越界滚动的纯物理回馈——松手无条件回弹、不承载任何语义；下拉刷新越过阈值后会'咬合'（进入刷新态并执行真实动作），阈值就是'回弹'与'触发'的分界线。",
+  "whenNotToUse": [
+    "内容极少变化（设置页、静态详情）→ 刷新无意义，徒增误触",
+    "已有自动轮询/实时推送 → 手动刷新与自动更新互相打架，状态更难解释",
+    "长文阅读中间 → 用户可能只是想往回滚一点，误触发丢阅读位置；此时用顶部刷新按钮"
+  ],
+  "confusedWith": ["skeleton", "snackbar"],
+  "anatomy": [
+    { "part": "Indicator 指示器", "note": "藏在列表顶缘之上的圆形控件，随拉距下沉露出，箭头旋转角度 ∝ 拉距/阈值" },
+    { "part": "Threshold 触发线", "note": "拉距阈值（常 60-90px）：过线前松手纯回弹，过线后松手咬合成刷新态——它是本手势的语义核心" },
+    { "part": "Resistance 阻尼", "note": "下拉位移 = 手指位移 × 阻尼系数（0-1），模拟越拉越沉，也防止轻微手势就误触" },
+    { "part": "Springback 回弹", "note": "刷新完成（或未到阈值松手）后以带轻微过冲的曲线吸回 0 位隐藏" }
+  ],
+  "promptTemplate": {
+    "core": "一个下拉刷新（Pull-to-Refresh）交互，动效四要素：\n- 触发：仅当列表 scrollTop ≤ 0 且指针向下位移 > 0 时接管手势（手势裁决：原生滚动优先，否则用户往上翻也给你拽出刷新）；刷新进行中拒绝再次下拉，防叠加。\n- 运动：列表与顶部圆形指示器整体下移 = 手指位移 × {RESIST}（阻尼）；指示器内箭头旋转角 = 拉距/{THRESHOLD}px × 360°；达阈值时切换提示文案为'松开刷新'。松手未达阈值以 cubic-bezier(.18,.89,.32,1.28) 420ms 回弹（轻微过冲）。\n- 时长：达阈值松手 → 指示器停在 {THRESHOLD}px 处、进入箭头连续旋转态（linear {DURATION}ms），到时长后停止。\n- 结束态：旋转结束 → 列表头部插入 3 条新项（新项 60ms 间隔依次滑入），指示器显示 ✓ 300ms → 弹簧回弹归位隐藏，恢复可下拉。提供键盘退路按钮直接触发同一刷新流程。",
+    "stack": "原生 CSS + 原生 JS（touch + mouse 事件对，passive:false 仅在确认接管时 preventDefault），零依赖零网络请求，新数据本地生成。",
+    "constraints": [
+      "不要在 touchmove 里无条件 preventDefault——列表内部滚动会被整个杀掉；只在 scrollTop<=0 && 向下 && 未刷新中才接管",
+      "下拉位移不要 1:1 跟手——必须乘阻尼系数，否则 8px 手抖就触发刷新",
+      "刷新中必须上锁（isRefreshing 标志）：不锁的话用户再拽一次会叠加两个刷新流程、指示器状态错乱",
+      "不要用 setTimeout 模拟完不更新的'假刷新'到底——结束态必须真实变更列表内容，否则用户以为坏了",
+      "prefers-reduced-motion 下取消回弹过冲与滑入动画，保留旋转与功能"
+    ],
+    "verify": [
+      "列表滚到顶后继续往下拽：整块内容跟手下沉（比手慢，有阻尼感），顶部露出圆指示器、箭头随拉距旋转",
+      "拽过约 70px 出现'松开刷新'提示；此时松手：指示器钉在阈值处转圈约 1.2 秒",
+      "转圈结束：列表顶部多出新条目（带'新'标记），✓ 一闪后整块弹回原位的吸附动画",
+      "没拽够就松手：直接弹回，不触发刷新",
+      "刷新转圈期间再下拉：无反应（已上锁）"
+    ],
+    "reference": "参考气质：微信朋友圈 / Twitter 旧版下拉——阻尼沉、咬合准、回弹干脆带一点过冲。",
+    "variants": [
+      { "label": "更紧致", "delta": "THRESHOLD 56px、RESIST 0.35、DURATION 900ms" },
+      { "label": "更戏剧", "delta": "回弹换真弹簧积分（stiffness 220/damping 22），指示器达阈值时挤压变形一下" }
+    ]
+  },
+  "params": [
+    { "key": "THRESHOLD", "label": "触发距离 (px)", "def": 70, "min": 40, "max": 140, "step": 5, "hint": "越小越灵敏，也越易误触" },
+    { "key": "RESIST", "label": "阻尼系数 (0-1)", "def": 0.5, "min": 0.15, "max": 0.9, "step": 0.05, "hint": "内容位移 = 手指位移 × 此值；越小越沉" },
+    { "key": "DURATION", "label": "刷新旋转时长 (ms)", "def": 1200, "min": 600, "max": 3000, "step": 100, "hint": "指示器在刷新态停留的时间" }
+  ],
+  "scenarios": [
+    "社交信息流（朋友圈、微博、X）",
+    "消息/邮件列表收新",
+    "电商订单、物流状态列表",
+    "通知中心、待办清单等会新增条目的顶部页"
+  ],
+  "pitfalls": [
+    "手势裁决是头号坑：必须只在 scrollTop ≤ 0 且继续向下时才 preventDefault 接管，否则用户在列表中间想往下滚一点历史，被你整个劫持成'下拉'——iOS/Android 原生列表都用这条边界做仲裁",
+    "用 Pointer Events 做接管手势却不在容器上声明 touch-action，等于白做：浏览器在首次平移时判定“这是原生滚动”，真滚起来就发 pointercancel 掐断指针流，你的下拉当场消失——要么给接管区设 touch-action（代价是该区域失去对应原生手势），要么像本词条一样改用 touch 事件 + passive:false 的条件 preventDefault，保住列表正常滚动",
+    "touchmove 监听若注册成 passive:true 就永远 preventDefault 不掉原生橡皮筋，指示器和系统过界回弹会同时出现、两层位移打架；必须 {passive:false} 且只在接管分支里调 preventDefault",
+    "刷新中不上 isRefreshing 锁，用户可以再下拉叠加第二个刷新请求：指示器停在两个状态之间抽搐、新数据顺序错乱——因为'下拉位移'与'刷新停靠位'共用同一个 transform 通道",
+    "回弹别用固定 linear：没有过冲的归位看起来像'被删除'而不是'吸回去'，cubic-bezier(.18,.89,.32,1.28) 末端 >1 的控制点就是那一下弹性；同时 desktop 无 touch 时要补 mouse 事件或键盘按钮，否则纯触屏实现把键鼠用户锁死"
+  ],
+  "related": ["skeleton", "snackbar", "bottom-sheet", "magnetic-button"],
+  "refs": [
+    "https://developer.apple.com/design/human-interface-guidelines/updating-and-refreshing-content",
+    "https://m3.material.io/components/pull-to-refresh/guidelines"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}
