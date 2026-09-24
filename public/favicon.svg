@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="10" fill="#faf9f6"/>
+  <rect x="4" y="4" width="56" height="56" rx="8" fill="none" stroke="#1a1a1a" stroke-width="2.5"/>
+  <line x1="12" y1="14" x2="52" y2="14" stroke="#1a1a1a" stroke-width="2"/>
+  <line x1="12" y1="18.5" x2="52" y2="18.5" stroke="#1a1a1a" stroke-width="1"/>
+  <text x="32" y="50" font-family="Georgia, 'Noto Serif SC', serif" font-size="30" font-weight="bold" text-anchor="middle" fill="#0b4f6c">典</text>
+</svg>

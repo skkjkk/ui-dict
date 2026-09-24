@@ -58,3 +58,38 @@ export function openStandalone(html) {
   window.open(url, "_blank", "noopener");
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+
+// ---------- 全站“减少动效”偏好（README 版式蓝图第 5 段承诺） ----------
+// 两层生效：① 外壳 html.reduce-motion 类（卡片过渡等）；② 注入进 iframe srcdoc 的覆盖样式，
+// 让 demo 内部动画也静止。注入只作用于“渲染时”的字符串，复制/下载仍拿原始 demoCode——
+// 覆盖的是纯展示层，不改变 demo 行为逻辑，a11y 优先于极端逐字节洁癖。
+const MOTION_KEY = "uidic…tion";
+const INJECT =
+  "<style>*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}</style>";
+
+export function prefersReduced() {
+  try {
+    if (localStorage.getItem(MOTION_KEY) === "1") return true;
+  } catch { /* 隐私模式忽略 */ }
+  return matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** 按当前偏好，把 demoCode 变成“可渲染”字符串（需要时注入静止样式）。 */
+export function motionAwareSrcdoc(html) {
+  if (!html || !prefersReduced()) return html;
+  return html.includes("</head>") ? html.replace("</head>", INJECT + "</head>") : INJECT + html;
+}
+
+/** 切换偏好：写 localStorage + 挂/摘外壳类 + 广播，供各页重挂 iframe。 */
+export function toggleReducedMotion() {
+  const next = !prefersReduced();
+  try { localStorage.setItem(MOTION_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+  document.documentElement.classList.toggle("reduce-motion", next);
+  window.dispatchEvent(new CustomEvent("ui-dict:motion", { detail: { reduced: next } }));
+  return next;
+}
+
+/** 早期同步应用外壳类（在首帧前调用，避免闪烁）。 */
+export function initMotionClass() {
+  document.documentElement.classList.toggle("reduce-motion", prefersReduced());
+}

@@ -35,16 +35,17 @@ export function assemblePrompt(t, overrides = {}) {
   return lines.join("\n");
 }
 
-/** 整张词条卡 → Markdown（“复制词条卡”按钮；也是喂 AI 的一手料）。 */
-export function termMarkdown(t) {
+/** 整张词条卡 → Markdown（“复制整张词条卡”按钮；也是喂 AI 的一手料）。
+ *  overrides：滑杆当前值（prompt 同步）；demoHtml：改写参数后的 demo 源码。 */
+export function termMarkdown(t, { overrides = {}, demoHtml = null } = {}) {
   const L = [];
   L.push(`# ${t.no} · ${t.nameZh} ${t.nameEn}`);
   if (t.aliases?.length) L.push(`\n别名：${t.aliases.join(" / ")}`);
   L.push(`\n## 定义\n${t.definition}`);
   if (t.anatomy?.length) L.push(`\n## 解剖\n${t.anatomy.map((a) => `- **${a.part}**${a.note ? ` — ${a.note}` : ""}`).join("\n")}`);
   if (t.whenNotToUse?.length) L.push(`\n## 何时不要用\n${t.whenNotToUse.map((s) => `- ${s}`).join("\n")}`);
-  L.push(`\n## Prompt\n\`\`\`text\n${assemblePrompt(t)}\n\`\`\``);
-  L.push(`\n## 实现（零依赖单文件）\n\`\`\`html\n${t.demoCode}\n\`\`\``);
+  L.push(`\n## Prompt\n\`\`\`text\n${assemblePrompt(t, overrides)}\n\`\`\``);
+  L.push(`\n## 实现（零依赖单文件）\n\`\`\`html\n${demoHtml ?? t.demoCode ?? ""}\n\`\`\``);
   if (t.pitfalls?.length) L.push(`\n## 坑\n${t.pitfalls.map((s) => `- ${s}`).join("\n")}`);
   if (t.scenarios?.length) L.push(`\n## 适用场景\n${t.scenarios.map((s) => `- ${s}`).join("\n")}`);
   if (t.refs?.length) L.push(`\n## 规范出处\n${t.refs.map((s) => `- ${s}`).join("\n")}`);

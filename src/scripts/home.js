@@ -1,10 +1,10 @@
 // src/scripts/home.js —— 首页岛：活缩略图挂载 + 描述反查搜索。
 import MiniSearch from "minisearch";
 import { TERMS, DEMOS } from "@/generated/site-data.js";
-import { lazyMountIframes } from "./frame.js";
+import { lazyMountIframes, motionAwareSrcdoc } from "./frame.js";
 
-// ---------- 活 demo 卡片：进视口才挂 iframe（srcdoc = demoCode 本体） ----------
-lazyMountIframes("#wall iframe[data-demo]", (f) => DEMOS[f.dataset.demo] ?? "");
+// ---------- 活 demo 卡片：进视口才挂 iframe（srcdoc = demoCode 本体，尊重减少动效偏好） ----------
+lazyMountIframes("#wall iframe[data-demo]", (f) => motionAwareSrcdoc(DEMOS[f.dataset.demo] ?? ""));
 
 // ---------- 搜索反查 ----------
 // MiniSearch 统一索引。分词：拉丁按词；CJK 产出「单字 + 二字组」。
