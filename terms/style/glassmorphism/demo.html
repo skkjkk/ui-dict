@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>毛玻璃 Glassmorphism · ui-dict S-01</title>
+<style>
+  :root { --blur: 18px; --alpha: 0.14; --border: 0.4; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    /* 关键：必须有可透视的彩色背景，玻璃才有意义（纯色底 = 假玻璃） */
+    background:
+      radial-gradient(60% 60% at 15% 20%, #ff7a59 0%, transparent 55%),
+      radial-gradient(50% 50% at 85% 15%, #6a5cff 0%, transparent 55%),
+      radial-gradient(60% 60% at 80% 85%, #12c2e9 0%, transparent 55%),
+      radial-gradient(50% 50% at 20% 85%, #f9d423 0%, transparent 55%),
+      #2a2350;
+    overflow: hidden;
+  }
+  .glass {
+    width: min(360px, 86vw); padding: 26px 28px; border-radius: 20px;
+    background: rgba(255,255,255,var(--alpha));
+    -webkit-backdrop-filter: blur(var(--blur));   /* Safari 必须带前缀 */
+    backdrop-filter: blur(var(--blur));
+    border: 1px solid rgba(255,255,255,var(--border));   /* 边缘高光 = 玻璃反光 */
+    box-shadow: 0 18px 50px rgba(0,0,0,.28);
+    color: #fff;
+  }
+  .glass h2 { margin: 0 0 6px; font-size: 20px; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .glass p { margin: 0 0 18px; font-size: 13.5px; line-height: 1.7; color: rgba(255,255,255,.92); }
+  .glass .row { display: flex; gap: 10px; }
+  .glass button {
+    flex: 1; padding: 10px; border: 1px solid rgba(255,255,255,.35); border-radius: 12px;
+    background: rgba(255,255,255,.12); color: #fff; font-size: 13px; cursor: pointer;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  .glass button.primary { background: #fff; color: #2a2350; border-color: #fff; font-weight: 600; }
+  .tag { position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+         font-size: 11px; color: rgba(255,255,255,.7); }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .glass { background: #2a2350; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="tag">拖动详情页滑杆改变 blur / 不透明度 / 边框 —— 观察"假玻璃"边界</div>
+  <div class="glass">
+    <h2>控制中心</h2>
+    <p>半透明面板 + 背景模糊 + 高光细边，营造隔着磨砂玻璃的层次与漂浮感。文字保持高对比清晰，不跟随模糊。</p>
+    <div class="row">
+      <button class="primary">连接</button>
+      <button>取消</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "BLUR": 18, "ALPHA": 0.14, "BORDER": 0.4 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  root.setProperty("--blur", PARAMS.BLUR + "px");
+  root.setProperty("--alpha", String(PARAMS.ALPHA));
+  root.setProperty("--border", String(PARAMS.BORDER));
+})();
+</script>
+</body>
+</html>

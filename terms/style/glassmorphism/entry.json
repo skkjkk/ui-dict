@@ -1,0 +1,74 @@
+{
+  "id": "glassmorphism",
+  "no": "S-01",
+  "category": "style",
+  "nameZh": "毛玻璃",
+  "nameEn": "Glassmorphism",
+  "aliases": [
+    "糊了一层玻璃",
+    "磨砂玻璃卡片",
+    "背后模糊的半透明面板",
+    "iOS 控制中心那种",
+    "backdrop-blur 效果",
+    "雾面玻璃质感"
+  ],
+  "definition": "半透明面板 + 背景模糊 + 一道高光细边框，营造'隔着磨砂玻璃看内容'的层次与漂浮感，2020 年前后由 Apple/Figma 带火。与普通半透明卡片的区别：毛玻璃模糊的是面板**背后**的内容（backdrop-filter），且必须有可透视的彩色背景与高光边框才成立——纯底色上放个半透明块只是'变灰'，不是玻璃。",
+  "whenNotToUse": [
+    "面板背后没有可透视内容（纯色/纯白底）→ 玻璃无从体现，退化成半透明灰块",
+    "长文正文、密集可读内容 → 模糊 + 低对比严重伤可读性，正文该用不透明底",
+    "一屏堆十几块玻璃且目标含低端机 → backdrop-filter 逐块模糊会直接掉帧"
+  ],
+  "confusedWith": ["neumorphism", "translucent-overlay"],
+  "anatomy": [
+    { "part": "背景层", "note": "必须是有颜色/渐变/图片的可透视内容，玻璃才有意义" },
+    { "part": "玻璃面板", "note": "backdrop-filter: blur() + 低不透明度填充色，是主体" },
+    { "part": "高光边框", "note": "1px 半透明白边（border + inset 高光），玻璃'边缘反光'的关键" },
+    { "part": "投影", "note": "柔和外阴影制造漂浮层次，与背景拉开" }
+  ],
+  "promptTemplate": {
+    "core": "一个毛玻璃（Glassmorphism）卡片悬浮在彩色渐变背景上：背景用亮色线性/径向渐变（保证有内容可透）。卡片 background 用 rgba(255,255,255,{ALPHA}) 的低不透明度填充，backdrop-filter: blur({BLUR}px) 模糊其背后内容，加 1px 半透明白描边（border: 1px solid rgba(255,255,255,{BORDER})）模拟边缘反光，配柔和外阴影。卡片内标题/正文用高对比深色并保持清晰（正文不跟随模糊）。",
+    "stack": "用 backdrop-filter 实现背后模糊，必须同时写 -webkit-backdrop-filter 兼容 Safari。",
+    "constraints": [
+      "不要在纯色/纯白背景上做毛玻璃——没有可透视内容时 backdrop-filter 视觉上等于没生效，这是最典型的假玻璃",
+      "正文文字不要放进被模糊的层里，也不要压在低对比玻璃上——要么提对比要么给文字块加实底，否则不可读",
+      "不要一屏堆大量 backdrop-filter 元素——低端机逐块模糊会掉帧，玻璃用在少数浮层即可",
+      "别忘了 -webkit-backdrop-filter 前缀，否则 Safari/iOS 上完全不模糊",
+      "必须给 prefers-reduced-transparency 用户降级为不透明实底"
+    ],
+    "verify": [
+      "卡片背后能看到被模糊的彩色渐变，呈现磨砂质感",
+      "卡片边缘有一圈细微的高光描边，像玻璃反光",
+      "卡片内文字清晰可读，与背景有足够对比",
+      "把背景换成纯白后，玻璃效果明显'消失'——印证它依赖可透视背景"
+    ],
+    "reference": "参考气质：macOS 控制中心 / Big Sur 侧栏、iOS 通知中心、Figma 官网浮层。通透、克制、有层次。",
+    "variants": [
+      { "label": "深色玻璃", "delta": "填充改 rgba(20,20,30,.5)、描边 rgba(255,255,255,.12)，配暗背景更 premium" },
+      { "label": "强雾面", "delta": "BLUR 提到 30px、ALPHA 提到 0.25，磨砂感更重" }
+    ]
+  },
+  "params": [
+    { "key": "BLUR", "label": "背景模糊半径 (px)", "def": 18, "min": 4, "max": 40, "step": 2, "hint": "越大越雾面" },
+    { "key": "ALPHA", "label": "面板不透明度", "def": 0.14, "min": 0.05, "max": 0.4, "step": 0.01, "hint": "越大越不透明、对比越高" },
+    { "key": "BORDER", "label": "高光边框强度", "def": 0.4, "min": 0, "max": 0.8, "step": 0.05, "hint": "0=无描边（假玻璃感）" }
+  ],
+  "scenarios": [
+    "浮层类：模态框、下拉菜单、命令面板叠在真实内容上",
+    "导航栏/侧栏的通透吸顶（macOS 风格）",
+    "登录卡、通知卡等少数悬浮元素",
+    "营销页主视觉的氛围层"
+  ],
+  "pitfalls": [
+    "backdrop-filter 模糊的是'元素背后已绘制的像素'，所以它必须有非透明背景内容垫在下面；父级若设了 opacity 或 backdrop-filter 自身在孤立层，模糊基准会失效（层叠上下文坑）",
+    "可读性是头号风险：模糊 + 低不透明度让文字对比骤降，WCAG 常不达标——正文要么提高 ALPHA 要么给文字单独加实底衬，别为通透牺牲无障碍",
+    "性能：每块 backdrop-filter 都要重新采样模糊背后区域，滚动时尤其贵；一屏控制在少数几块，低端安卓/WebGL 页慎用",
+    "Safari 必须 -webkit-backdrop-filter；且早期 Safari 要求元素自身 background 非完全 transparent 才肯触发模糊，纯 transparent 会不生效"
+  ],
+  "related": ["neumorphism", "frosted-glass"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}

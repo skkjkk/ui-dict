@@ -1,0 +1,72 @@
+{
+  "id": "bento-grid",
+  "no": "L-01",
+  "category": "layout",
+  "nameZh": "便当格布局",
+  "nameEn": "Bento Grid",
+  "aliases": [
+    "大小不一的格子墙",
+    "苹果发布会那种宫格",
+    "拼贴卡片布局",
+    "一块大格带几块小格",
+    "模块化网格",
+    "宫格式功能介绍"
+  ],
+  "definition": "源自日本便当盒的模块化网格：用大小不等的矩形格子（1×1、2×1、2×2）拼成一面信息墙，靠格子尺寸差异直接表达信息层级——最大的格子就是最重要的内容。与规整等高网格的区别：bento 故意不等分，格子的面积即权重；与瀑布流（Masonry）的区别：bento 对齐到固定网格轨道，瀑布流由内容高度决定错落。",
+  "whenNotToUse": [
+    "各条目重要性均等时 → 用规整的等高网格，别硬造大小差",
+    "内容太少、凑不满一组跨格 → 会出现刺眼的空洞，退回简单列表",
+    "需要对齐基线的密集数据（表格、榜单）→ bento 的不等分破坏纵向扫读"
+  ],
+  "confusedWith": ["masonry", "card-grid"],
+  "anatomy": [
+    { "part": "Tile 格子", "note": "一个内容单元；跨列/跨行决定其面积" },
+    { "part": "Span 跨度", "note": "grid-column/row: span N，是 bento 的灵魂——hero 通常 2×2" },
+    { "part": "Gap 间隙", "note": "格子间距，统一值；间隙越大越'呼吸'" },
+    { "part": "留白 Padding", "note": "格子内内容到边缘的距离，大小格要一致才显整齐" }
+  ],
+  "promptTemplate": {
+    "core": "一个便当格（Bento Grid）功能介绍墙：CSS Grid，{COLS} 列等宽轨道（grid-template-columns: repeat({COLS}, 1fr)），行用 auto-rows 约 150px，格子间隙 {GAP}px，格子圆角 {RADIUS}px。第一块 hero 占 2×2（grid-column: span 2; grid-row: span 2），其余格子混排 1×1、2×1、1×2 各若干，铺满不留空洞。每格浅底色 + 一个标题 + 一行说明，hero 字号更大。悬停时格子用 transform: translateY(-3px) 轻微抬起并加阴影，不改变布局尺寸。窄屏（<640px）塌缩为单列。",
+    "stack": "用原生 CSS Grid（grid-template + span）实现，不要引入 grid 库或 JS 布局计算。",
+    "constraints": [
+      "不要用 masonry/绝对定位拼——bento 必须对齐到固定网格轨道，否则不是 bento",
+      "跨格组合要保证能整除铺满，别在 2×2 hero 旁留一个填不满的空洞（最常见的翻车）",
+      "悬停抬起只用 transform，不要改 margin/height——会引发整墙重排抖动",
+      "移动端必须塌成单列，否则 2×2 hero 里的文字会被挤到溢出",
+      "格子内 padding 全墙统一，大小格不一致会显得廉价"
+    ],
+    "verify": [
+      "看到一面大小不等的格子墙，左上角有一块明显更大的 2×2 hero",
+      "格子严丝合缝对齐网格，没有空洞或错位",
+      "鼠标悬停某格：该格轻微上浮并加深阴影，周围格子纹丝不动",
+      "把窗口缩到手机宽度：整体塌成单列纵向堆叠"
+    ],
+    "reference": "参考气质：Apple AirPods / Vision Pro 官网的功能特性墙；Linear 首页的能力网格。克制、留白充足、一大带多小。",
+    "variants": [
+      { "label": "深色版", "delta": "格子底 #1a1a1a、描边 rgba(255,255,255,.06)、间隙略大更显质感" },
+      { "label": "圆角胶囊", "delta": "RADIUS 提到 28px，间隙 10px，更亲和的 SaaS 风" }
+    ]
+  },
+  "params": [
+    { "key": "COLS", "label": "网格列数", "def": 4, "min": 3, "max": 6, "step": 1, "hint": "列越多越密，hero 占比越小" },
+    { "key": "GAP", "label": "格子间隙 (px)", "def": 14, "min": 4, "max": 28, "step": 2, "hint": "越大越透气" },
+    { "key": "RADIUS", "label": "格子圆角 (px)", "def": 18, "min": 0, "max": 32, "step": 2 }
+  ],
+  "scenarios": [
+    "产品功能一页概览（官网 feature section）",
+    "个人/团队作品集的能力矩阵",
+    "App 更新日志的图文拼贴",
+    "数据看板的模块总览首屏"
+  ],
+  "pitfalls": [
+    "bento 的'矩形规则'最易翻车：一个 2×2 hero 占了左上角，剩下的 1×1 数量若不能被 (COLS×行数−hero) 整除，右下角必然留空洞——先定格子总数再排布",
+    "hover 抬起若用 top/margin 会触发重排、连累整墙抖动；只用 transform: translateY（合成器动画），阴影变化用 filter 或 box-shadow 过渡",
+    "auto-rows 用固定 px 时，内容超出格子会被裁或撑破——给格子设 overflow:hidden 并让内容自适应字号，或改用 minmax 行高",
+    "响应式不能只是等比缩小：2×2 hero 在单列下应自动降为普通块（media query 里重置 span），否则手机上出现巨大空格"
+  ],
+  "related": ["masonry", "card-grid"],
+  "refs": [],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-24" }
+  ]
+}
