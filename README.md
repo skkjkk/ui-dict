@@ -137,7 +137,7 @@ ui-dict/
 │   ├── scripts/       ← 浏览器岛：frame / home（反查搜索）/ entry（滑杆同步）
 │   ├── styles/        ← global.css（Tailwind v4 + 词典排版层）
 │   └── generated/     ← 构建产物（gitignore）：demos.js · site-data.js
-└── terms/             ← 词条数据：component/bottom-sheet · motion/magnetic-button（各 entry.json + demo.html）
+└── terms/             ← 词条数据：一条一目录（entry.json + demo.html），五类 10 条
 ```
 
 ## 状态
@@ -150,5 +150,7 @@ ui-dict/
 - [x] 技术栈定案：Astro 7 + TS + Tailwind v4 + Shiki + MiniSearch + zod（决策 F）
 - [x] 站点外壳 v0.1（数据管线 + 索引墙 + 详情页 + 浏览器岛）
 - [x] 真实浏览器验证：首页活卡片 / 描述反查（"鼠标吸过去"→磁吸按钮）/ 详情页三态同源 / 滑杆→代码+prompt 同步 8/8 断言通过
-- [ ] 首版剩余 7 条标杆词条入库（现 3 条：C-01 底部弹层、C-02 骨架屏、M-01 磁吸按钮）
-- [ ] 部署上线（GitHub Pages + 独立域名 + 主动归档 Internet Archive）
+- [x] 本地 git 管理（独立仓库，main 分支，LF 统一，构建产物已 ignore）
+- [x] **首版 10 条标杆词条集齐**：C-01 底部弹层 · C-02 骨架屏 · C-03 消息条 · M-01 磁吸按钮 · M-02 微光 · I-01 下拉刷新 · L-01 便当格 · L-02 滚动叙事 · S-01 毛玻璃 · S-02 新粗野主义（五类全覆盖，QA+zod+构建+浏览器实测全绿）
+- [ ] 部署上线（GitHub Pages / Vercel + 独立域名 + 主动归档 Internet Archive）
+- [ ] prompt 回放测试工具化（回填各词条 verifiedWith，兑现出厂自检第二关）
