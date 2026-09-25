@@ -7,17 +7,10 @@ import { fileURLToPath } from "node:url";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { getParams } from "../src/lib/params.mjs";
+import { gateHtml } from "../src/lib/html-gate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TERMS = path.join(ROOT, "terms");
-
-const FORBIDDEN = [
-  { re: /<link[^>]+href=["']https?:/i, why: "外链 CSS（应零网络请求）" },
-  { re: /<script[^>]+src=["']https?:/i, why: "外链 JS 库（应零依赖）" },
-  { re: /@import\s+url\((['"]?)https?:/i, why: "CSS @import 外链字体/样式" },
-  { re: /\bfetch\s*\(\s*["']https?:/i, why: "运行时网络请求" },
-  { re: /\bimport\s+.*from\s+["'](?!data:)/i, why: "ESM import（demo 须自包含）" },
-];
 
 const WARNINGS = [];
 const ERRORS = [];
@@ -58,11 +51,8 @@ for (const cat of await dirs(TERMS)) {
       continue;
     }
 
-    if (!/^<!doctype html>/i.test(demo.trimStart()))
-      ERRORS.push(`${tag}: demo.html 缺少 <!DOCTYPE html>（会落 quirks mode）`);
-    for (const f of FORBIDDEN) {
-      if (f.re.test(demo)) ERRORS.push(`${tag}: 违反单文件铁律 —— ${f.why}`);
-    }
+    // 单文件铁律 + DOCTYPE 检查统一走共享闸（src/lib/html-gate.mjs，与回放测试同一把尺子）
+    for (const err of gateHtml(demo).errors) ERRORS.push(`${tag}: ${err}`);
     const declared = Array.isArray(entry.params) ? entry.params : [];
     const blockParams = declared.length > 0 ? getParams(demo) : null;
     if (declared.length > 0 && !blockParams)

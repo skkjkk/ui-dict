@@ -10,7 +10,11 @@
     "prebuild": "pnpm gen",
     "build": "astro build",
     "preview": "astro preview",
-    "qa": "node scripts/sync-demofiles.mjs && node scripts/qa-demofiles.mjs"
+    "qa": "node scripts/sync-demofiles.mjs && node scripts/qa-demofiles.mjs",
+    "regression": "node scripts/regression-check.mjs",
+    "replay": "node scripts/replay-test.mjs",
+    "replay:dry": "node scripts/replay-test.mjs --all --dry-run",
+    "replay:status": "node scripts/replay-test.mjs --status"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.0.0",

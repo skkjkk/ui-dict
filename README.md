@@ -129,9 +129,9 @@ ui-dict/
 ├── research/          ← 同类产品调研 5 份报告（已完成）
 ├── poc/               ← 早期零构建 POC（srcdoc 同源可行性验证，已完成使命）
 ├── astro.config.mjs   ← Astro + Tailwind + @/ 别名
-├── scripts/           ← 数据管线：sync-demofiles / qa-demofiles / gen-client-data
+├── scripts/           ← 数据管线：sync-demofiles / qa-demofiles / gen-client-data · 回归：regression-check · 回放：replay-test（REPLAY.md）
 ├── src/
-│   ├── lib/           ← params.mjs（参数块契约）· validate.mjs（zod 入库闸）· terms.mjs（加载器）· prompt.mjs（拼装）
+│   ├── lib/           ← params.mjs（参数块契约）· validate.mjs（zod 入库闸）· terms.mjs（加载器）· prompt.mjs（拼装）· html-gate.mjs（单文件铁律共享闸）· browser.mjs（零依赖 CDP 渲染器）
 │   ├── layouts/       ← Base.astro 编辑部外壳
 │   ├── pages/         ← index.astro 索引墙 · term/[slug].astro 详情页
 │   ├── scripts/       ← 浏览器岛：frame / home（反查搜索）/ entry（滑杆同步）
@@ -155,4 +155,4 @@ ui-dict/
 - [x] **词条扩到 20 条**（组件7 · 动效4 · 交互2 · 布局4 · 风格3；写手并行管线二次验证）
 - [x] **首页编辑部词典排版 v0.2**：报头双线 + 罗马数字目录 + 发刊词（引 AI articulation barrier）+ 页边注四步管线 + 分节活词条墙 + 分节搜索收起
 - [ ] 部署上线（GitHub Pages / Vercel + 独立域名 + 主动归档 Internet Archive；决策见 DEPLOY.md）
-- [ ] prompt 回放测试工具化（回填各词条 verifiedWith，兑现出厂自检第二关）
+- [x] **prompt 回放测试工具化**（`pnpm replay`：生成→铁律→真浏览器渲染→回填 verifiedWith；兑现出厂自检第二关，见 [REPLAY.md](REPLAY.md)）——工具就绪，全量回填待按额度分批跑

@@ -6,5 +6,6 @@ src/generated/
 public/demos/
 public/ui-dict.md
 .playwright-cli/
+replay/
 *.log
 .DS_Store
