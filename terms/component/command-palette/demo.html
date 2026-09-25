@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>命令面板 Command Palette · ui-dict C-06</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px; max-width: 640px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .page p { font-size: 13.5px; color: #6b675f; margin: 0 0 16px; line-height: 1.7; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  kbd {
+    display: inline-block; font: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5px;
+    border: 1px solid #d5cfc2; border-bottom-width: 2px; background: #fff; color: #55524b;
+  }
+  #open {
+    border: 1px solid #1a1a1a; background: #fff; padding: 9px 16px; border-radius: 10px;
+    font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 10px;
+  }
+  #open:hover { background: #efeadf; }
+  #open:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  /* 执行反馈：命令面板的「结果」——回车之后发生了一件事的证据 */
+  #did {
+    margin-top: 16px; min-height: 20px; font-size: 13px; color: #0b4f6c;
+    opacity: 0; transition: opacity .2s ease-out;
+  }
+  #did.show { opacity: 1; }
+
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); opacity: 0;
+           pointer-events: none; transition: opacity .18s ease-out; z-index: 20; }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+
+  /* 居中面板：入场 scale(0.97→1)+淡入（Spotlight 的收拢感）；圆角由 JS 按 RADIUS 回写 */
+  #palette {
+    position: fixed; left: 50%; top: 18vh; transform: translate(-50%, 0); z-index: 21;
+    width: min(560px, 92vw); background: #fff; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,.32), 0 2px 10px rgba(0,0,0,.14);
+    opacity: 0; visibility: hidden;
+    transition: opacity .16s ease-out, transform .16s ease-out, visibility 0s linear .16s;
+  }
+  #palette.open {
+    visibility: visible; opacity: 1; transform: translate(-50%, 0) scale(1);
+    transition: opacity .16s ease-out, transform .16s cubic-bezier(.2,.8,.2,1);
+  }
+  /* 非 open 态初始缩放：写在独立选择器里，避免 .open 定义顺序游戏 */
+  #palette:not(.open) { transform: translate(-50%, -6px) scale(.97); }
+
+  #q {
+    display: block; width: 100%; border: 0; outline: 0; padding: 16px 18px;
+    font-size: 15.5px; font-family: inherit; color: #1a1a1a; background: #fff;
+    border-bottom: 1px solid #eee;
+  }
+  #q::placeholder { color: #b3ad9f; }
+  .hints { display: flex; gap: 14px; padding: 8px 18px; font-size: 11.5px; color: #999; border-bottom: 1px solid #f0ede6; }
+  .hints span { display: inline-flex; align-items: center; gap: 4px; }
+
+  /* 列表最大高度 = MAXROWS × 44px，由 JS 计算写入；超出内部滚动而非撑破面板 */
+  #list { max-height: 264px; overflow-y: auto; padding: 6px; }
+  .opt {
+    display: flex; align-items: center; gap: 11px; padding: 0 12px; height: 44px;
+    border-radius: 9px; font-size: 14px; cursor: pointer; color: #2b2823;
+  }
+  .opt .ic { width: 20px; text-align: center; flex: none; opacity: .75; }
+  .opt .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .opt .nm mark { background: none; color: #0b4f6c; font-weight: 700; }   /* 模糊命中高亮 */
+  .opt .sk { font-size: 11px; color: #b3ad9f; white-space: nowrap; }
+  /* 高亮行 = aria-activedescendant 指向项：焦点始终焊在输入框，行本身不可聚焦（见坑 #4） */
+  .opt.active { background: #0b4f6c; color: #fff; }
+  .opt.active .sk { color: rgba(255,255,255,.6); }
+  .opt.active .nm mark { color: #9ecbff; }
+  #empty { padding: 22px 18px; font-size: 13px; color: #999; text-align: center; }
+  .grp { padding: 10px 12px 4px; font-size: 11px; color: #b3ad9f; letter-spacing: .05em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：缩放淡入改即时出现；列表滚动保持 instant（behavior 由 JS 读同一开关） */
+    #palette, #palette.open { transition: none; }
+    .scrim { transition: none; }
+    #did { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>工作区 · ENG-42</h1>
+    <p>演示词条 C-06。按 <kbd>Ctrl</kbd>+<kbd>K</kbd>（Mac <kbd>⌘K</kbd>）或点按钮唤出命令面板。
+       输入任意片段做<strong>子序列模糊过滤</strong>（如「zt」命中「打开设置」的拼音首字母示例见「主题」），
+       <kbd>↑</kbd><kbd>↓</kbd> 移动高亮、<kbd>Enter</kbd> 执行、<kbd>Esc</kbd> 关闭——全程可不碰鼠标。
+       用中文输入法时请试着打「主题」：组合拼音期间列表不动，上屏后才过滤（这是本词条的 IME 坑）。</p>
+    <button id="open" type="button">命令面板 <kbd>⌘K</kbd></button>
+    <div id="did" role="status"></div>
+  </main>
+
+  <div class="scrim" id="scrim"></div>
+
+  <div id="palette" role="dialog" aria-modal="true" aria-label="命令面板">
+    <input id="q" type="text" placeholder="输入命令…" autocomplete="off" spellcheck="false"
+           aria-controls="list" aria-autocomplete="list">
+    <div class="hints">
+      <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span><span><kbd>↵</kbd> 执行</span><span><kbd>esc</kbd> 关闭</span>
+    </div>
+    <div id="list" role="listbox" aria-label="命令列表"></div>
+  </div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "MAXROWS": 6, "RADIUS": 14 };
+  /* ui-dict:params:end */
+
+  const palette = document.getElementById("palette");
+  const scrim = document.getElementById("scrim");
+  const q = document.getElementById("q");
+  const list = document.getElementById("list");
+  const openBtn = document.getElementById("open");
+  const did = document.getElementById("did");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const ROW_H = 44;
+
+  // 两个参数真实消费：RADIUS→面板圆角；MAXROWS→列表 max-height（行数×行高换算）
+  palette.style.borderRadius = PARAMS.RADIUS + "px";
+  list.style.maxHeight = PARAMS.MAXROWS * ROW_H + "px";
+
+  const CMDS = [
+    { g: "导航", ic: "📥", name: "收件箱",        sk: "G I" },
+    { g: "导航", ic: "🗂", name: "所有任务",      sk: "G T" },
+    { g: "导航", ic: "📅", name: "本周日程",      sk: "G C" },
+    { g: "创建", ic: "✚",  name: "新建任务",      sk: "N" },
+    { g: "创建", ic: "📝", name: "新建文档",      sk: "⇧N" },
+    { g: "外观", ic: "◐",  name: "切换主题",      sk: "⌥T" },
+    { g: "外观", ic: "🔤", name: "放大字号",      sk: "⌘+" },
+    { g: "系统", ic: "⚙️", name: "打开设置",      sk: "⌘," },
+    { g: "系统", ic: "👤", name: "账户与订阅",    sk: "" },
+    { g: "系统", ic: "⌨",  name: "键盘快捷键表",  sk: "?" },
+    { g: "系统", ic: "🌐", name: "切换语言",      sk: "" },
+    { g: "系统", ic: "🚪", name: "退出登录",      sk: "" }
+  ];
+
+  let results = [], active = 0, isOpen = false, lastFocus = null, composing = false;
+  let didTimer = null;
+
+  // 子序列匹配：query 的每个字符按顺序在目标里找到即可（'zt'→「主题」的拼音首字母也能命中，
+  // 因为命令名额外携带拼音索引串）；返回命中位置数组用于 <mark> 高亮，零命中返回 null
+  function fuzzy(query, text, pinyin) {
+    const hay = text + " " + (pinyin || "");
+    let qi = 0, hits = [];
+    for (let i = 0; i < hay.length && qi < query.length; i++) {
+      if (hay[i].toLowerCase() === query[qi].toLowerCase()) { hits.push(i); qi++; }
+    }
+    return qi === query.length ? { hits: hits, hay: hay } : null;
+  }
+  // 命令的拼音首字母索引（demo 手工表，生产可用 pinyin-pro 之类离线生成——此处零依赖所以硬编码）
+  const PY = { "收件箱": "sjb", "所有任务": "syrw", "本周日程": "bzrc", "新建任务": "jrjs jxrw",
+    "新建文档": "jxwd", "切换主题": "qhzj qt", "放大字号": "fdxh", "打开设置": "dksz set",
+    "账户与订阅": "zhydy", "键盘快捷键表": "jpskjbb", "切换语言": "qhyj lang", "退出登录": "tcdl" };
+
+  function render() {
+    const query = q.value.trim();
+    results = [];
+    for (const c of CMDS) {
+      if (!query) { results.push({ c: c, hits: null }); continue; }
+      const m = fuzzy(query, c.name, PY[c.name] || "");
+      if (m) results.push({ c: c, hits: m.hits });
+    }
+    list.innerHTML = "";
+    if (!results.length) {                 // 空态：零匹配给一句诚实的兜底，而不是留白让人以为卡死
+      const e = document.createElement("div"); e.id = "empty";
+      e.textContent = '没有匹配「' + query + '」的命令'; list.appendChild(e);
+      q.removeAttribute("aria-activedescendant"); return;
+    }
+    active = Math.min(active, results.length - 1);   // 过滤后结果变短，高亮钳回合法范围
+    let lastG = null;
+    results.forEach(function (r, i) {
+      if (r.c.g !== lastG) {               // 分组头 aria-hidden：它是视觉结构，不是 option
+        const h = document.createElement("div"); h.className = "grp"; h.setAttribute("aria-hidden", "true");
+        h.textContent = r.c.g; list.appendChild(h); lastG = r.c.g;
+      }
+      const row = document.createElement("div");
+      row.className = "opt" + (i === active ? " active" : "");
+      row.id = "opt-" + i; row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", i === active ? "true" : "false");
+      let nm = r.c.name;
+      if (r.hits) {                        // 命中字符包 <mark>；命中在拼音段则只过滤不高亮
+        const inName = r.hits.filter(function (p) { return p < r.c.name.length; });
+        if (inName.length) {
+          const chars = r.c.name.split("");
+          inName.forEach(function (p) { chars[p] = "<mark>" + chars[p] + "</mark>"; });
+          nm = chars.join("");
+        }
+      }
+      row.innerHTML = '<span class="ic" aria-hidden="true">' + r.c.ic + '</span>' +
+                      '<span class="nm">' + nm + '</span>' +
+                      (r.c.sk ? '<span class="sk">' + r.c.sk + '</span>' : '');
+      // 鼠标与键盘同步：hover 改高亮、click 即执行——但焦点始终留在输入框
+      row.addEventListener("mousemove", () => setActive(i, false));
+      row.addEventListener("click", () => execute(i));
+      list.appendChild(row);
+    });
+    scrollActiveIntoView();
+    syncActivedescendant();
+  }
+
+  function setActive(i, scroll) {
+    const rows = list.querySelectorAll(".opt");
+    if (rows[active]) { rows[active].classList.remove("active"); rows[active].setAttribute("aria-selected", "false"); }
+    active = i;
+    if (rows[active]) { rows[active].classList.add("active"); rows[active].setAttribute("aria-selected", "true"); }
+    if (scroll !== false) scrollActiveIntoView();
+    syncActivedescendant();
+  }
+  function syncActivedescendant() {
+    const row = list.querySelector(".opt.active");
+    if (row) q.setAttribute("aria-activedescendant", row.id);   // 读屏靠它播报当前高亮项，
+    else q.removeAttribute("aria-activedescendant");            // 焦点却从不离开输入框
+  }
+  // 高亮必须看得见：循环导航两圈后高亮行早已滚出面板，看不见的高亮=随机执行（坑 #3）
+  function scrollActiveIntoView() {
+    const row = list.querySelector(".opt.active");
+    if (row) row.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+  }
+
+  function execute(i) {
+    const c = results[i] && results[i].c;
+    close();
+    // 执行反馈 = 一条限时文字提示：命令面板的回车之后「发生了一件事」，这事得可见
+    did.textContent = "已执行：" + (c ? c.name : "?");
+    did.classList.add("show");
+    clearTimeout(didTimer);
+    didTimer = setTimeout(() => did.classList.remove("show"), 2000);
+  }
+
+  function open() {
+    if (isOpen) return;
+    isOpen = true;
+    lastFocus = document.activeElement;    // 归还焦点的前提：先记住是谁叫出的面板（坑 #1）
+    q.value = ""; active = 0;
+    scrim.classList.add("show");
+    palette.classList.add("open");
+    render();
+    q.focus();                             // 弹出即聚焦：命令面板假设你要开始打字
+  }
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    scrim.classList.remove("show");
+    palette.classList.remove("open");
+    if (lastFocus && lastFocus.focus) lastFocus.focus();   // 面板摘除后焦点必须有去处
+  }
+
+  openBtn.addEventListener("click", open);
+  scrim.addEventListener("pointerdown", close);   // 点遮罩关闭：与 Drawer/Dialog 同一套契约
+
+  // 全局快捷键：输入框在场也照常响应——命令面板的价值就是随处可唤（坑 #5）
+  addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();                  // 不拦下会撞 Firefox 的查找栏快捷键
+      isOpen ? close() : open();            // 再按一次收起：Toggle 更符合肌肉记忆
+    }
+  });
+
+  q.addEventListener("input", function (e) {
+    // IME 组合中（e.isComposing）绝不重绘列表：拼音串未上屏时逐字母过滤，
+    // 候选列表会抽搐还可能离谱匹配——等 compositionend 一次性过滤（本词条灵魂坑之一）
+    if (composing || e.isComposing) return;
+    active = 0;                            // 换了查询词，高亮回到第一项
+    render();
+  });
+  q.addEventListener("compositionstart", () => { composing = true; });
+  q.addEventListener("compositionend", () => {
+    composing = false;
+    active = 0; render();                  // 上屏提交后才补一次过滤
+  });
+
+  q.addEventListener("keydown", (e) => {
+    if (composing) return;                 // 组合期的 ↑↓ 属于 IME 候选翻页，面板不许抢（灵魂细节）
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!results.length) return;
+      setActive((active + 1) % results.length);          // 循环：末尾回起点
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!results.length) return;
+      setActive((active - 1 + results.length) % results.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (results.length) execute(active);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  });
+})();
+</script>
+</body>
+</html>

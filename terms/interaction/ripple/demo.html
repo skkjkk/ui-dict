@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>涟漪反馈 Ripple · ui-dict I-02</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; gap: 26px; align-content: center;
+    background: #f6f5f2;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .btn {
+    position: relative; border: 0; cursor: pointer;
+    padding: 16px 44px; border-radius: 14px; background: #141414; color: #fff;
+    font-size: 15px; letter-spacing: .06em; overflow: visible;   /* 阴影不被裁：裁剪交给内层 */
+    box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  }
+  .btn.wide { border-radius: 999px; background: #0b4f6c; }
+  /* 独立裁剪层：overflow:hidden 只裁波纹，不碰外层描边与阴影 */
+  .ripple-clip {
+    position: absolute; inset: 0; border-radius: inherit; overflow: hidden;
+    pointer-events: none;                       /* 涟漪层绝不拦截点击 */
+  }
+  .ripple {
+    position: absolute; border-radius: 50%; background: rgba(255,255,255,.5);
+    transform: scale(0); pointer-events: none;
+  }
+  .hint { font-size: 12px; color: #8a857c; }
+</style>
+</head>
+<body>
+  <button class="btn" data-ripple type="button">按下试试 · 波纹从指尖炸出</button>
+  <button class="btn wide" data-ripple type="button">连点 5 次 · 波纹互不打断</button>
+  <div class="hint">涟漪的语义 = “确认按到了这里”，圆心必须是触点而不是按钮中心</div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DUR": 420, "OPACITY": 0.35 };
+  /* ui-dict:params:end */
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  for (const btn of document.querySelectorAll("[data-ripple]")) {
+    // 裁剪层挂进按钮本体（inset:0 + border-radius:inherit），阴影留在外层
+    const clip = document.createElement("span");
+    clip.className = "ripple-clip";
+    btn.appendChild(clip);
+
+    btn.addEventListener("pointerdown", (e) => {
+      // pointerdown 而不是 click：click 要等抬手，涟漪的意义就是按下瞬间的确认
+      const r = btn.getBoundingClientRect();
+      // 触点换算：clientX 是视口坐标，减 rect 原点才是按钮内坐标
+      let cx = e.clientX - r.left, cy = e.clientY - r.top;
+      if (e.pointerType === "touch" || (cx < 0 || cy < 0 || cx > r.width || cy > r.height)) {
+        cx = r.width / 2; cy = r.height / 2;    // 键盘/异常坐标退化为中心
+      }
+      // 直径 ≥ 对角线：保证圆扩到最大时仍能盖满按钮
+      const d = Math.hypot(r.width, r.height) * 2;
+      const el = document.createElement("span");
+      el.className = "ripple";
+      el.style.cssText = `left:${cx - d / 2}px;top:${cy - d / 2}px;width:${d}px;height:${d}px;opacity:${PARAMS.OPACITY}`;
+      clip.appendChild(el);
+
+      if (reduce) {
+        // 降级不是砍反馈：瞬时高亮一下再走，用户仍需“按到了”的确认
+        el.style.transition = "opacity .12s"; el.style.transform = "scale(1)";
+        setTimeout(() => el.remove(), 140);
+        return;
+      }
+      const anim = el.animate(
+        [
+          { transform: "scale(0)", opacity: PARAMS.OPACITY },
+          { transform: "scale(1)", opacity: 0 },
+        ],
+        { duration: PARAMS.DUR, easing: "cubic-bezier(.2,.6,.3,1)" }
+      );
+      anim.onfinish = () => el.remove();        // 动画结束立即摘除：不摘会越积越多
+    });
+  }
+})();
+</script>
+</body>
+</html>

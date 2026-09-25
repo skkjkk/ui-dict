@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手风琴折叠 Accordion · ui-dict C-07</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 80px; max-width: 620px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .page p { font-size: 13.5px; color: #6b675f; margin: 0 0 14px; line-height: 1.7; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  .bar { display: flex; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 16px; }
+  .bar label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  #single { accent-color: #0b4f6c; }
+  .bar a { color: #0b4f6c; margin-left: auto; font-size: 12.5px; }
+
+  /* 条目列表：间距由 PARAMS.GAP 回写的 CSS 变量控制，0=表格感、12+=卡片感 */
+  .acc { display: flex; flex-direction: column; gap: var(--gap, 8px); }
+  .item { border: 1px solid #e5e1d8; border-radius: 10px; background: #fff; overflow: hidden; }
+
+  /* 标题行 = 原生 button：Enter/Space 免费获得，aria-expanded 标在这里——
+     展开状态是控件的属性，读屏聚焦按钮时要听到「已折叠/已展开」 */
+  .head {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    border: 0; background: none; padding: 14px 16px; cursor: pointer;
+    font-size: 14.5px; font-weight: 600; color: #1a1a1a; text-align: left; font-family: inherit;
+  }
+  .head:hover { background: #faf8f4; }
+  .head:focus-visible { outline: 2px solid #0b4f6c; outline-offset: -2px; }
+  .head .chev {
+    margin-left: auto; width: 16px; height: 16px; flex: none; color: #8b857a;
+    transition: transform var(--dur, 280ms) ease;   /* chevron 与展开动画同步翻转 */
+  }
+  .head[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
+  /* ★ 本词条核心：grid-template-rows: 0fr → 1fr 展开技巧。
+     height:auto 不可插值（from 0 to auto 浏览器直接跳过过渡），而 0fr/1fr 是
+     可插值的比例——外层 grid 行高从 0 长到「内容自然高」，永不限高、永不截断，
+     这就是坑 #1 里 max-height 硬编码方案的替代答案。
+     内层 overflow:hidden 写在 CSS 里而不是靠 JS 记得，否则动画期间文字会从行盒漏出去（坑 #5） */
+  .wrap {
+    display: grid; grid-template-rows: 0fr;
+    transition: grid-template-rows var(--dur, 280ms) ease;
+  }
+  .item.open .wrap { grid-template-rows: 1fr; }
+  .panel { min-height: 0; overflow: hidden; }
+  .panel-inner { padding: 2px 16px 16px; font-size: 13.5px; color: #55524b; line-height: 1.8; }
+  .panel-inner a { color: #0b4f6c; }
+  .panel-inner p { margin: 0 0 10px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：时长归零直接落终态——显隐逻辑与 aria 状态完全保留 */
+    .wrap, .head .chev { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>常见问题 · 退款政策</h1>
+    <p>演示词条 C-07。点标题就地展开（<strong>grid-template-rows: 0fr→1fr</strong>，不是 max-height 硬编码——
+       把第三条内容读到完也看不到截断）。展开动画用键盘试：Tab 聚焦标题、Enter 切换。</p>
+    <div class="bar">
+      <label><input type="checkbox" id="single" checked> 单开模式（展开一项自动收起其余）</label>
+      <a href="#" onclick="return false">联系支持</a>
+    </div>
+
+    <div class="acc" id="acc">
+      <div class="item">
+        <button class="head" type="button" id="h1" aria-expanded="false" aria-controls="p1">
+          购买后可以退款吗？
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </button>
+        <div class="wrap"><div class="panel" id="p1" role="region" aria-labelledby="h1"><div class="panel-inner">
+          <p>支持 14 天无理由退款。在「账户 → 订单」里对任意未过期的订阅点「申请退款」，款项原路退回，
+             银行到账另有 1-3 个工作日。已使用超过 30 天的周期不退当期，但可随时取消后续续费。</p>
+        </div></div></div>
+      </div>
+      <div class="item">
+        <button class="head" type="button" id="h2" aria-expanded="false" aria-controls="p2">
+          团队版席位怎么计费？
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </button>
+        <div class="wrap"><div class="panel" id="p2" role="region" aria-labelledby="h2"><div class="panel-inner">
+          <p>按「激活席位」计费：邀请进来但从未登录的成员不计费；席位中途增减按比例折算当期账单。
+             查看 <a href="#" onclick="return false">计费说明全文</a>。</p>
+        </div></div></div>
+      </div>
+      <div class="item">
+        <button class="head" type="button" id="h3" aria-expanded="false" aria-controls="p3">
+          数据可以导出吗？（故意放长：验证不截断）
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </button>
+        <div class="wrap"><div class="panel" id="p3" role="region" aria-labelledby="h3"><div class="panel-inner">
+          <p>可以。所有数据支持 CSV 与 JSON 两种格式全量导出，路径在「设置 → 数据 → 导出」。</p>
+          <p>导出内容包括：任务与子任务全量、评论、附件元数据（附件本体需在 30 天内单独打包）、
+             成员账号与权限快照、审计日志（最近 180 天）。导出请求提交后异步生成，完成后站内信通知你下载链接。</p>
+          <p>这是刻意写长的一段：老式 max-height 方案在这里要么被截断出滚动条、要么动画终点虚高；
+             grid-template-rows: 0fr→1fr 让行高始终等于内容自然高，你怎么改这段文字都完整可见、动画时长恒定。</p>
+        </div></div></div>
+      </div>
+    </div>
+  </main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DUR": 280, "GAP": 8 };
+  /* ui-dict:params:end */
+
+  // 两个参数回写 CSS 变量：DUR 同时喂给行高过渡与 chevron 旋转，GAP 控制条目间距——
+  // 单一来源，滑杆改一次两处同步，不存在「动画和箭头不同步」的第二实现
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--dur", PARAMS.DUR + "ms");
+  rootStyle.setProperty("--gap", PARAMS.GAP + "px");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const items = Array.from(document.querySelectorAll(".item"));
+  const single = document.getElementById("single");
+
+  // 收起的内容「看不见但不该摸得着」：panel 上挂 inert 一次性摘除可聚焦性与可交互性。
+  // 不用 display:none——它会砍掉 grid 行动画的布局盒起点（展开变闪现）；
+  // 也不只靠 hidden——hidden 对 grid 子树的裁剪语义在不同读屏下不一致，inert 是最干净的现代答案（见坑 #3）
+  function setExpanded(item, on) {
+    const head = item.querySelector(".head");
+    const panel = item.querySelector(".panel");
+    head.setAttribute("aria-expanded", String(on));
+    item.classList.toggle("open", on);
+    if (on) {
+      panel.removeAttribute("inert");        // 展开：立即恢复可交互
+    } else {
+      panel.setAttribute("inert", "");       // 收起：inert 与动画同时开始——
+    }                                        // 收起中的内容已经不该被点/Tab 到
+  }
+
+  items.forEach(function (item) {
+    const head = item.querySelector(".head");
+    head.addEventListener("click", function () {
+      const willOpen = !item.classList.contains("open");
+      if (willOpen && single.checked) {
+        // 单开模式：先收起其余条目。若某个被收起的条目正持有焦点，
+        // inert 会让焦点掉回 body——必须显式把焦点送回它自己的标题（坑 #4）
+        items.forEach(function (other) {
+          if (other !== item && other.classList.contains("open")) {
+            if (other.contains(document.activeElement)) other.querySelector(".head").focus();
+            setExpanded(other, false);
+          }
+        });
+      }
+      setExpanded(item, willOpen);
+    });
+  });
+
+  // 初始态：除首条外全部按收起态补 inert——HTML 里不写死，由同一函数落状态，
+  // 保证「收起 ⇒ inert」这条不变式从第一帧就成立，不靠手工同步两份初始值
+  items.forEach(function (item, i) { setExpanded(item, i === 0); });
+})();
+</script>
+</body>
+</html>

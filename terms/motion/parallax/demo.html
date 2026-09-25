@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>视差滚动 Parallax · ui-dict M-03</title>
+<style>
+  :root { --range: 120px; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #0d1b2a; }
+
+  .stage { position: relative; height: 100svh; overflow: hidden; }
+  /* 每层独立合成器层：transform 位移不触发布局重排（用 top 会连累文档流） */
+  .layer { position: absolute; inset: 0; will-change: transform; }
+
+  .sky { background: linear-gradient(#0d1b2a 0%, #1b3a5c 55%, #e8a87c 100%); }
+  .moon {
+    position: absolute; top: 16%; left: 50%; width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 38%, #fff8e7, #f2d49b);
+    box-shadow: 0 0 60px 18px rgba(255, 240, 200, .35);
+  }
+  /* 远山/中景用 clip-path 画轮廓，零图片零网络请求 */
+  .far { background: #24455f; clip-path: polygon(0 62%, 14% 48%, 30% 60%, 46% 42%, 62% 58%, 78% 46%, 100% 60%, 100% 100%, 0 100%); opacity: .9; }
+  .mid { background: #16303f; clip-path: polygon(0 74%, 18% 60%, 34% 72%, 52% 55%, 70% 70%, 86% 58%, 100% 72%, 100% 100%, 0 100%); }
+  .near { background: #0a1c26; clip-path: polygon(0 88%, 22% 76%, 44% 86%, 66% 74%, 88% 84%, 100% 78%, 100% 100%, 0 100%); }
+  .near::after { /* 树剪影点缀 */
+    content: ""; position: absolute; left: 12%; bottom: 12%; width: 26px; height: 60px;
+    background: #05131b; clip-path: polygon(50% 0, 100% 45%, 72% 45%, 100% 100%, 0 100%, 28% 45%, 0 45%);
+    box-shadow: 70px 8px 0 #05131b, 150px -4px 0 #05131b;
+  }
+  .caption { position: absolute; left: 0; right: 0; bottom: 18%; text-align: center; color: #f5efe0; }
+  .caption h1 { margin: 0; font-size: clamp(26px, 6vw, 44px); letter-spacing: .12em; font-weight: 600; }
+  .caption p { margin: 6px 0 0; font-size: 12.5px; letter-spacing: .3em; opacity: .75; }
+
+  .after { min-height: 100svh; display: grid; place-items: center; color: #7d93a8; font-size: 14px; }
+  .after em { color: #e8a87c; font-style: normal; }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="layer sky" data-speed="0.1"><div class="moon"></div></div>
+    <div class="layer far" data-speed="0.25"></div>
+    <div class="layer mid" data-speed="0.55"></div>
+    <div class="layer near" data-speed="0.85" id="near">
+      <div class="caption"><h1>视 差 滚 动</h1><p>PARALLAX · 近快远慢</p></div>
+    </div>
+  </div>
+  <div class="after">继续滚动 —— 各层以 <em>不同速率</em> 位移，纵深由此而来</div>
+  <div class="after" style="min-height:60svh">↓</div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "SPEED": 0.85, "RANGE": 120 };
+  /* ui-dict:params:end */
+
+  document.documentElement.style.setProperty("--range", PARAMS.RANGE + "px");
+
+  const stage = document.getElementById("stage");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) return;                       // 整体关闭位移：视差是晕动症重灾区，减半不算降级
+
+  const layers = Array.from(stage.querySelectorAll(".layer"));
+  // 近景层系数由 PARAMS.SPEED 控制，其余层按固定比例拉开（系数差 = 纵深感）
+  const speeds = layers.map((el) => el.id === "near" ? PARAMS.SPEED : parseFloat(el.dataset.speed));
+
+  let ticking = false;
+  function update() {
+    const y = scrollY;
+    const h = stage.offsetHeight || 1;
+    const p = Math.min(1, Math.max(0, y / h));   // 滚过舞台进度 0→1
+    layers.forEach((el, i) => {
+      // 位移 = 进度 × 最大距离 × (1 - 系数)：系数越小（越远）被拉得越开
+      const t = -PARAMS.RANGE * p * (1 - speeds[i]) * 2.2;
+      el.style.transform = `translate3d(0, ${t.toFixed(2)}px, 0)`;
+    });
+    ticking = false;
+  }
+  addEventListener("scroll", () => {
+    // 关键：scroll 事件频率可超 60Hz，逐事件写 style 必掉帧——rAF 合并，一帧只算一次
+    if (!ticking) { ticking = true; requestAnimationFrame(update); }
+  }, { passive: true });
+  update();
+})();
+</script>
+</body>
+</html>

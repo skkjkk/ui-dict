@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>瀑布流布局 Masonry · ui-dict L-03</title>
+<style>
+  :root { --cols: 3; --gap: 12px; --radius: 12px; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  .hint { font-size: 12.5px; color: #8a857c; margin: 0 0 18px; line-height: 1.6; }
+  .hint b { color: #b4530a; }
+
+  /* 瀑布流：只有列轨道（column-count），行高完全交给内容——错落是天然的 */
+  .wall {
+    column-count: var(--cols);   /* 列数是唯一的硬网格参数 */
+    column-gap: var(--gap);
+  }
+
+  /* break-inside: avoid 必须打在卡片本体（直接参与分列的元素）上，
+     否则卡片会被列边界拦腰切开；外再套一层壳，被切开的就是壳 */
+  .card {
+    break-inside: avoid;
+    margin-bottom: var(--gap);   /* 多列里没有行间隙，纵距只能靠卡片自己的下外边距 */
+    background: #fff; border: 1px solid #eae6dd; border-radius: var(--radius);
+    overflow: hidden;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  /* 悬停只用 transform 上移，不改布局尺寸——改 height/margin 会让整墙重排抖动 */
+  .card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.08); }
+
+  /* 色块占位图：高度在渲染前就写死（等价于真实图片的 aspect-ratio 预占位），
+     否则图片加载完卡片突然撑高，整墙回流跳动、滚动位置被甩走 */
+  .thumb { display: block; }
+  .card .meta { padding: 10px 12px 12px; }
+  .card .meta b { font-size: 13.5px; display: block; }
+  .card .meta small { font-size: 11.5px; color: #9a958b; }
+
+  /* 窄屏降列：不降列的话列宽被挤扁，卡内文字溢出——列数断点比间隙更值钱 */
+  @media (max-width: 760px) { .wall { column-count: 2; } }
+  @media (max-width: 480px) { .wall { column-count: 1; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { transition: none; } .card:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+  <h1>灵感墙 · Masonry</h1>
+  <p class="hint">CSS 多列实现的三列瀑布流。注意阅读顺序：<b>columns 是"先填满一列再换下一列"</b>（先竖后横）——
+     适合无序画廊；内容若按时间排列，这种顺序会读错，需换 JS"最短列分配"。拖动详情页滑杆改列数/间隙/圆角。</p>
+  <main class="wall" id="wall" aria-label="瀑布流卡片墙"></main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "COLS": 3, "GAP": 12, "RADIUS": 12 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  root.setProperty("--cols", String(PARAMS.COLS));
+  root.setProperty("--gap", PARAMS.GAP + "px");
+  root.setProperty("--radius", PARAMS.RADIUS + "px");
+
+  // 确定性数据：色块高度事先张扬地不一致（120–300px），错落来自内容而不是随机数
+  const ITEMS = [
+    { t: "秋日山脊",   h: 210, c: "#f3d9c2" }, { t: "雾中列车",   h: 150, c: "#cfd9ee" },
+    { t: "霓虹街角",   h: 260, c: "#e3d2f0" }, { t: "半熟日报",   h: 180, c: "#f6e7b8" },
+    { t: "苔原清晨",   h: 300, c: "#cfe8d6" }, { t: "十四行",     h: 140, c: "#f2cfd6" },
+    { t: "深海信标",   h: 230, c: "#c8e3e8" }, { t: "纸风船",     h: 170, c: "#e8e0cf" },
+    { t: "无题 · 蓝",  h: 280, c: "#d6ddf2" }, { t: "晚点名",     h: 160, c: "#f0d9c8" },
+    { t: "玻璃温室",   h: 240, c: "#d7ecd0" }, { t: "折纸月亮",   h: 190, c: "#efe3c8" }
+  ];
+  const wall = document.getElementById("wall");
+  ITEMS.forEach(function (it, i) {
+    const card = document.createElement("article");
+    card.className = "card";
+    // 色块高度内联写死 = 尺寸在首帧即已知，这正是"图片先占位后加载"的占位策略
+    card.innerHTML =
+      '<span class="thumb" style="height:' + it.h + 'px;background:' + it.c + '"></span>' +
+      '<div class="meta"><b>' + it.t + '</b><small>#' + (i + 1) + ' · 高 ' + it.h + 'px</small></div>';
+    wall.appendChild(card);
+  });
+})();
+</script>
+</body>
+</html>

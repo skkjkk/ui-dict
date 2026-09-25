@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工具提示 Tooltip · ui-dict C-04</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 140px; max-width: 600px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .page p { font-size: 13.5px; color: #6b675f; margin: 0 0 18px; line-height: 1.7; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #readout { font-size: 12px; color: #999; margin-bottom: 22px; }
+
+  /* 模拟编辑器工具栏：图标按钮是 Tooltip 最典型的宿主——它们没有文字承载 */
+  .toolbar {
+    display: inline-flex; gap: 4px; padding: 6px; background: #fff;
+    border: 1px solid #e5e1d8; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.05);
+    margin-bottom: 26px;
+  }
+  .toolbar button {
+    width: 38px; height: 34px; border: 0; border-radius: 8px; background: none;
+    cursor: pointer; display: grid; place-items: center; color: #3d3a34;
+  }
+  .toolbar button:hover { background: #f1ede4; }
+  .toolbar button:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 1px; }
+  .toolbar svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* 指标术语也是经典宿主：ⓘ 是 span，补 tabindex=0 才能被键盘聚焦到 */
+  .metric { font-size: 14.5px; margin: 0 0 10px; }
+  .info {
+    display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
+    background: #d8d2c6; color: #4a463d; font-size: 11px; font-style: normal; vertical-align: 1px;
+    cursor: help; margin-left: 2px;
+  }
+  .info:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 1px; }
+
+  /* 气泡本体：单例复用，fixed 定位由 JS 写。初始态藏在目标上方 4px 处；
+     退场 transition 里 visibility 延迟 0.09s 翻转——先让 opacity 淡出跑完再消失，
+     否则节点瞬间不可见，淡出动画根本来不及被看见 */
+  #tip {
+    position: fixed; left: 0; top: 0; z-index: 30; max-width: 220px;
+    background: #1f2328; color: #fff; font-size: 12.5px; line-height: 1.5;
+    padding: 5px 10px; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.22);
+    opacity: 0; transform: translateY(4px); visibility: hidden;
+    transition: opacity .09s ease-in, transform .09s ease-in, visibility 0s linear .09s;
+    pointer-events: auto;   /* 热区合并方案：指针移进气泡不算「移出」（见 JS 注释），
+                               代价是气泡绝不能放交互内容——这正是 Tooltip 与 Popover 的分界 */
+  }
+  #tip.show {
+    opacity: 1; transform: translateY(0); visibility: visible;
+    transition: opacity .14s ease-out, transform .14s ease-out;   /* 入场：浮现 + 淡入 140ms */
+  }
+  /* 箭头：旋转 45° 的小方块骑在气泡底缘，横向位置由 JS 按 --ax 对准触发元素中心 */
+  #tip::after {
+    content: ""; position: absolute; bottom: -4px; left: calc(var(--ax, 50%) - 4px);
+    width: 8px; height: 8px; background: #1f2328; transform: rotate(45deg); border-radius: 1px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：保留显隐逻辑与延迟计时（延迟本身不是动效），只去掉位移与淡入淡出 */
+    #tip, #tip.show { transition: none; transform: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>Untitled-1 · 演示页</h1>
+    <p>演示词条 C-04。悬停工具栏图标约 <b>0.4 秒</b>后浮现带箭头的气泡；<b>Tab</b> 聚焦到同一按钮
+       也会触发（键盘用户获得同等说明），按 <code>Esc</code> 或移开即收起。鼠标移进气泡不算移出——
+       但里面永远没有可点的东西，要放链接请改用 Popover。触屏设备（hover:none）不响应悬停。</p>
+    <div id="readout"></div>
+
+    <div class="toolbar" aria-label="格式工具栏">
+      <button type="button" data-tip="撤销 · Ctrl+Z" aria-label="撤销">
+        <svg viewBox="0 0 24 24"><path d="M8 4 4 8l4 4"/><path d="M4 8h10a6 6 0 0 1 0 12h-3"/></svg>
+      </button>
+      <button type="button" data-tip="加粗（标题层级用这个）" aria-label="加粗">
+        <svg viewBox="0 0 24 24"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/></svg>
+      </button>
+      <button type="button" data-tip="复制链接到剪贴板" aria-label="复制">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+      </button>
+      <button type="button" data-tip="共享给团队 · 仅编辑权限可见" aria-label="分享">
+        <svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="17" cy="6" r="2.5"/><circle cx="17" cy="18" r="2.5"/><path d="m8.3 10.8 6.4-3.5M8.3 13.2l6.4 3.5"/></svg>
+      </button>
+    </div>
+
+    <p class="metric">本周 <b>UV</b><i class="info" tabindex="0" role="button" data-tip="UV：独立访客数，同一天内多设备访问按一人计">i</i>
+       较上周 +12.4%</p>
+    <p class="metric">跳出率 <b>38.2%</b><i class="info" tabindex="0" role="button" data-tip="跳出率＝只看了一页就离开的会话占比，口径：GA4">i</i></p>
+  </main>
+
+  <div id="tip" role="tooltip" aria-hidden="true"></div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DELAY": 400, "OFFSET": 10 };
+  /* ui-dict:params:end */
+
+  const tip = document.getElementById("tip");
+  const triggers = Array.from(document.querySelectorAll("[data-tip]"));
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // 触屏判定：(hover:none) 的设备上悬停语义不成立——tap 会留下 ghost hover 粘住气泡，
+  // 所以干脆不绑鼠标事件，说明文案在触屏产品里应改常驻或收进 info 页（见词条坑 #4）
+  const coarse = matchMedia("(hover: none)").matches;
+
+  // OFFSET 单一消费点：JS 定位里决定气泡悬浮高度（见 place()）；DELAY 见 enter() 的 setTimeout。
+  // 二者都由参数块读入，滑杆改 PARAMS 后重开本页即生效，复制代码所见即所得。
+  document.getElementById("readout").textContent =
+    "当前参数：DELAY = " + PARAMS.DELAY + " ms · OFFSET = " + PARAMS.OFFSET + " px";
+
+  let showTimer = null, hideTimer = null, cur = null;
+  const GRACE = 120;   // 离开热区后的宽限：气泡与按钮之间有 OFFSET 的死缝，
+                       // 指针穿越途中必然触发一次 leave，不留宽限气泡会在鼠标底下反复横跳
+
+  function place(trigger) {
+    const r = trigger.getBoundingClientRect();
+    // 先写入文案再量尺寸：内容换了宽高就变，测量必须在定位之前
+    tip.textContent = trigger.dataset.tip;
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = r.left + r.width / 2 - tw / 2;
+    left = Math.max(8, Math.min(left, innerWidth - tw - 8));   // 贴边视口内钳位，气泡不许出屏
+    tip.style.left = left + "px";
+    tip.style.top = (r.top - th - PARAMS.OFFSET) + "px";        // OFFSET 决定悬浮高度
+    tip.style.setProperty("--ax", (r.left + r.width / 2 - left) + "px");  // 钳位后箭头仍对准目标中心
+  }
+
+  function swap(trigger) {
+    clearTimeout(showTimer); clearTimeout(hideTimer);
+    if (cur && cur !== trigger) cur.removeAttribute("aria-describedby");
+    place(trigger);
+    tip.classList.add("show");
+    tip.setAttribute("aria-hidden", "false");
+    // aria-describedby 只在显示期间挂上：常驻挂载会让读屏在「未显示」时也念出气泡内容
+    trigger.setAttribute("aria-describedby", "tip");
+    cur = trigger;
+  }
+
+  function hide() {
+    clearTimeout(showTimer); clearTimeout(hideTimer);
+    tip.classList.remove("show");
+    tip.setAttribute("aria-hidden", "true");
+    if (cur) cur.removeAttribute("aria-describedby");
+    cur = null;
+  }
+
+  function enter(trigger) {
+    clearTimeout(hideTimer);
+    if (cur === trigger) return;
+    // 已在显示中还悬停新目标 → 立即切换不再重新等待（W3C APG 建议：工具栏逐个查看时
+    // 每个都等 400ms 会显得迟钝；首次出现才付延迟的代价）
+    if (cur) swap(trigger);
+    else showTimer = setTimeout(() => swap(trigger), PARAMS.DELAY);
+  }
+  function leave() {
+    clearTimeout(showTimer);              // 还没冒出来就移开：取消计时，绝不闪一下
+    hideTimer = setTimeout(hide, GRACE);
+  }
+
+  for (const t of triggers) {
+    if (!coarse) {
+      t.addEventListener("mouseenter", () => enter(t));
+      t.addEventListener("mouseleave", leave);
+    }
+    t.addEventListener("focus", () => {
+      // :focus-visible 区分键盘聚焦与触屏点按：tap 也会 focus，
+      // 不拦的话「触屏不触发悬停」会被一次点击击穿
+      if (t.matches(":focus-visible")) enter(t);
+    });
+    t.addEventListener("blur", leave);
+  }
+  // 热区合并：指针从按钮滑进气泡，途经缝隙触发按钮的 leave，
+  // 但随即命中气泡的 enter 把 hideTimer 撤销——气泡成为触发元素的延伸
+  tip.addEventListener("mouseenter", () => clearTimeout(hideTimer));
+  tip.addEventListener("mouseleave", leave);
+
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && cur) { e.preventDefault(); hide(); }   // Esc 给键盘用户强制退出口
+  });
+  addEventListener("resize", () => { if (cur) place(cur); });
+  addEventListener("scroll", () => { if (cur) place(cur); }, { passive: true });
+})();
+</script>
+</body>
+</html>

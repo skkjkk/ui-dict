@@ -4,7 +4,7 @@ import { TERMS, DEMOS } from "@/generated/site-data.js";
 import { lazyMountIframes, motionAwareSrcdoc } from "./frame.js";
 
 // ---------- 活 demo 卡片：进视口才挂 iframe（srcdoc = demoCode 本体，尊重减少动效偏好） ----------
-lazyMountIframes("#wall iframe[data-demo]", (f) => motionAwareSrcdoc(DEMOS[f.dataset.demo] ?? ""));
+lazyMountIframes(".wall iframe[data-demo]", (f) => motionAwareSrcdoc(DEMOS[f.dataset.demo] ?? ""));
 
 // ---------- 搜索反查 ----------
 // MiniSearch 统一索引。分词：拉丁按词；CJK 产出「单字 + 二字组」。
@@ -57,7 +57,7 @@ ms.addAll(TERMS.map((t) => ({
 
 const q = document.getElementById("q");
 const noResult = document.getElementById("no-result");
-const cards = Array.from(document.querySelectorAll("#wall .term-card"));
+const cards = Array.from(document.querySelectorAll(".wall .term-card"));
 
 let timer = null;
 q?.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 120); });
@@ -93,5 +93,10 @@ function run() {
     c.style.display = hit ? "" : "none";
     if (hit) { c.style.order = String(100 + order.get(c.dataset.slug)); shown++; }
   }
+  // 分节布局：某节全部卡片被隐藏时，连节标题一起收起，避免空节
+  document.querySelectorAll(".cat-section").forEach((sec) => {
+    const any = [...sec.querySelectorAll(".term-card")].some((c) => c.style.display !== "none");
+    sec.style.display = any ? "" : "none";
+  });
   noResult.classList.toggle("hidden", shown > 0);
 }

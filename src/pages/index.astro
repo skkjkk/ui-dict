@@ -1,36 +1,74 @@
 ---
-// src/pages/index.astro —— 首页：编号词条全索引墙（可被爬虫/AI 直读）+ 客户端活 demo 与反查搜索
-// 数据源：消费构建期产物 src/generated/site-data.js（CLI 读盘生成，SSR 不再碰 fs）。
+// src/pages/index.astro —— 首页 v0.2：编辑部词典排版（报头/发刊词/四步图解/分节词条墙）
+// 数据源：构建期产物 src/generated/site-data.js（CLI 读盘生成，SSR 不碰 fs）。
 import Base from "@/layouts/Base.astro";
 import { TERMS, CATEGORY_LABELS } from "@/generated/site-data.js";
 
 const terms = TERMS;
-const byCat = Object.keys(CATEGORY_LABELS).map((c) => ({
-  key: c, label: CATEGORY_LABELS[c], count: terms.filter((t) => t.category === c).length,
+const cats = Object.keys(CATEGORY_LABELS);
+const byCat = cats.map((c) => ({
+  key: c, label: CATEGORY_LABELS[c],
+  items: terms.filter((t) => t.category === c),
 }));
+const total = terms.length;
+
+// 分节序号（词典卷章感）
+const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
 ---
 <Base>
-  <header class="rule pb-4 mb-3 flex items-end justify-between flex-wrap gap-2">
+  <!-- 报头 -->
+  <header class="rule pb-4 mb-2 flex items-end justify-between flex-wrap gap-2">
     <div>
-      <h1 class="text-[30px] sm:text-[34px] m-0 tracking-wide">
-        UI 词典 <span class="text-[15px]" style="color:var(--color-muted)">UI Lexicon</span>
-      </h1>
-      <p class="m-0 mt-1 text-[13.5px]" style="color:var(--color-muted)">
-        输入你想要的感觉，找到它的<b style="color:var(--color-ink)">名字、提示词和能跑的代码</b>。
+      <h1 class="mast-title m-0">UI 词典 <span class="mast-sub">UI Lexicon</span></h1>
+      <p class="m-0 mt-1.5 text-[13.5px] mast-tagline">
+        输入你想要的感觉，找到它的<b>名字、提示词和能跑的代码</b>。
       </p>
     </div>
     <div class="text-right">
-      <div class="num">{terms.length} 词条收录</div>
-      <div class="text-[11px] mono" style="color:var(--color-muted)">v0.1 · 2026</div>
+      <div class="num">{total} 词条收录</div>
+      <div class="text-[11px] mono" style="color:var(--color-muted)">v0.1 · MMXXVI</div>
     </div>
   </header>
 
-  <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] mono py-3 mb-4" style="color:var(--color-muted)">
-    {byCat.map((c) => <span><b style="color:var(--color-ink)">{c.count}</b> {c.label} {c.key}</span>)}
-  </div>
+  <!-- 目录行：分类计数即导航 -->
+  <nav class="flex flex-wrap gap-x-5 gap-y-1 text-[11.5px] mono py-3 mb-6" style="color:var(--color-muted)">
+    {byCat.map((c, i) => (
+      <a href={`#${c.key}`} class="hover:text-[var(--color-ink)] no-underline">
+        <span class="num" style="margin-right:5px">{ROMAN[i]}</span>
+        <b style="color:var(--color-ink)">{c.items.length}</b> {c.label} {c.key}
+      </a>
+    ))}
+  </nav>
 
-  <!-- 反查搜索（客户端 MiniSearch 增强；无 JS 时原生可滚动浏览） -->
-  <div id="search-root" class="mb-5">
+  <!-- 发刊词 + 四步翻译层（页边注式双栏） -->
+  <section class="grid md:grid-cols-[1.4fr_1fr] gap-x-12 gap-y-6 mb-12 pb-10 border-b hair">
+    <div>
+      <div class="eyebrow mb-3">发刊词 · PREFACE</div>
+      <p class="preface">
+        vibe-coding 时代最真实的断点：脑子里有一个效果——"鼠标靠近就被吸过去"——
+        但叫不出它的名字（磁吸按钮 Magnetic Button），于是无法精确地描述给 AI。
+        Jakob Nielsen 把这个现象命名为 <i>AI articulation barrier</i>。
+      </p>
+      <p class="preface">
+        本词典是一个翻译层，四步同屏：<b>感觉 → 词汇 → prompt → 代码</b>。
+        每条词条的 Live Demo 就是你复制出去的那段代码本身——零依赖单文件，
+        粘进空白 .html 双击就能活。
+      </p>
+    </div>
+    <aside class="margin-note" aria-label="四步翻译层">
+      <div class="eyebrow mb-2">四步 · THE PIPELINE</div>
+      <ol class="m-0 pl-0 list-none steps">
+        <li><span>感觉</span>"鼠标吸过去"</li>
+        <li><span>词汇</span>磁吸按钮 Magnetic Button</li>
+        <li><span>prompt</span>结构化规格，一键复制</li>
+        <li><span>代码</span>零依赖单文件，粘贴即活</li>
+      </ol>
+      <a class="export-link" href="/ui-dict.md">⤓ 全站导出 · 整本喂给 AI</a>
+    </aside>
+  </section>
+
+  <!-- 反查搜索 -->
+  <div id="search-root" class="mb-2">
     <input id="q" type="search" autocomplete="off"
       class="w-full text-[15px] py-2.5 px-3.5 bg-white border hair rounded-sm outline-none"
       style="font-family:var(--font-serif)"
@@ -43,38 +81,47 @@ const byCat = Object.keys(CATEGORY_LABELS).map((c) => ({
     没有命中。试试「淡入」或 Fade，或换个口语说法。
   </div>
 
-  <main id="wall" class="grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(288px,1fr))">
-    {terms.map((t) => (
-      <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug} data-hay={`${t.nameZh} ${t.nameEn} ${t.aliases.join(" ")} ${t.definition} ${t.scenarios.join(" ")}`}>
-        <iframe data-demo={t.slug} sandbox="allow-scripts" title={`${t.nameZh} 实时预览`} loading="lazy"></iframe>
-        <div class="p-3.5 pt-2.5">
-          <div class="num mb-0.5">{t.no} · {CATEGORY_LABELS[t.category]} {t.category}</div>
-          <div class="text-[16.5px] font-semibold">
-            {t.nameZh} <span class="text-[13px] italic font-normal" style="color:var(--color-muted)">{t.nameEn}</span>
-          </div>
-          <div class="text-[12px] mt-0.5 truncate-2" style="color:var(--color-muted)">
-            {t.aliases.slice(0, 3).join(" ／ ")}
-          </div>
-        </div>
-      </a>
-    ))}
-  </main>
+  <!-- 分节词条墙 -->
+  {byCat.map((c, ci) => c.items.length > 0 && (
+    <section class="cat-section mt-10" id={c.key} data-cat={c.key}>
+      <div class="flex items-baseline gap-3 mb-1">
+        <span class="num" style="font-size:13px">{ROMAN[ci]}</span>
+        <h2 class="text-[17px] m-0 tracking-wide">{c.label} <span class="italic font-normal" style="color:var(--color-muted)">{c.key}</span></h2>
+        <span class="mono text-[11px]" style="color:var(--color-muted)">{c.items.length} 条</span>
+        <span class="hair flex-1" style="border-bottom:1px solid var(--color-line)"></span>
+      </div>
+      <div class="wall grid gap-4 mt-4" style={`grid-template-columns:repeat(auto-fill,minmax(288px,1fr))`}>
+        {c.items.map((t) => (
+          <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug}>
+            <iframe data-demo={t.slug} sandbox="allow-scripts" title={`${t.nameZh} 实时预览`} loading="lazy"></iframe>
+            <div class="p-3.5 pt-2.5">
+              <div class="num mb-0.5">{t.no} · {CATEGORY_LABELS[t.category]} {t.category}</div>
+              <div class="text-[16.5px] font-semibold">
+                {t.nameZh} <span class="text-[13px] italic font-normal" style="color:var(--color-muted)">{t.nameEn}</span>
+              </div>
+              <div class="text-[12px] mt-0.5 truncate-2" style="color:var(--color-muted)">
+                {t.aliases.slice(0, 3).join(" ／ ")}
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
 
-  <section class="mt-14 border hair rounded-sm bg-white p-5 sm:p-7">
-    <div class="eyebrow mb-3">词条解剖 · ANATOMY</div>
-    <div class="grid sm:grid-cols-3 gap-5 text-[13.5px]">
-      <div>
-        <div class="font-semibold mb-1">名字 + 别名</div>
-        <p class="m-0" style="color:var(--color-muted)">中英正名，外加一堆口语描述——"鼠标吸过去"这种说法也能搜到。</p>
-      </div>
-      <div>
-        <div class="font-semibold mb-1">Prompt 卡 + Live Demo</div>
-        <p class="m-0" style="color:var(--color-muted)">结构化提示词一键复制；右边的动效就是你复制的那段代码本身。</p>
-      </div>
-      <div>
-        <div class="font-semibold mb-1">零依赖单文件</div>
-        <p class="m-0" style="color:var(--color-muted)">粘进空白 .html 双击就能活。无框架、无网络请求、无构建步骤。</p>
-      </div>
+  <!-- 编者按 -->
+  <section class="mt-14 border hair rounded-sm bg-white p-5 sm:p-7 grid sm:grid-cols-3 gap-5 text-[13.5px]">
+    <div>
+      <div class="eyebrow mb-2">编者按 · 词条解剖</div>
+      <p class="m-0" style="color:var(--color-muted)">名字+口语别名 · 含辨析的定义 · 该用/不该用 · 解剖 · Prompt 卡 · Live Demo · 零依赖代码 · 坑与场景。</p>
+    </div>
+    <div>
+      <div class="eyebrow mb-2">词条工厂</div>
+      <p class="m-0" style="color:var(--color-muted)">AI 按 schema 产词条 → 静态铁律自检 → 人工审校 → 合入即发布。全部词条过同一道闸（QA + zod）。</p>
+    </div>
+    <div>
+      <div class="eyebrow mb-2">开放承诺</div>
+      <p class="m-0" style="color:var(--color-muted)">免登录无墙，内容可被爬虫与 AI 直读；词条代码 MIT，永不追溯变更。</p>
     </div>
   </section>
 
@@ -83,7 +130,24 @@ const byCat = Object.keys(CATEGORY_LABELS).map((c) => ({
   </script>
 </Base>
 <style>
-  .truncate-2 {
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  .mast-title { font-size: 34px; letter-spacing: .02em; }
+  .mast-sub { font-size: 15px; color: var(--color-muted); font-weight: 400; }
+  .mast-tagline { color: var(--color-muted); }
+  .preface { font-size: 15px; max-width: 62ch; margin: 0 0 14px; }
+  .preface b { font-weight: 600; }
+  .margin-note {
+    border-left: 2px solid var(--color-line); padding-left: 18px;
+    font-size: 12.5px; color: var(--color-muted);
   }
+  .steps li { margin: 0 0 9px; padding-left: 0; line-height: 1.5; }
+  .steps li span {
+    display: inline-block; font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: .14em; color: var(--color-accent);
+    border: 1px solid var(--color-line); border-radius: 2px; padding: 0 6px; margin-right: 8px;
+  }
+  .export-link {
+    display: inline-block; margin-top: 10px; font-family: var(--font-mono); font-size: 12px;
+    color: var(--color-accent); text-decoration: underline;
+  }
+  .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>

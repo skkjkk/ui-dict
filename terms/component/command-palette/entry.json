@@ -1,0 +1,78 @@
+{
+  "id": "command-palette",
+  "no": "C-06",
+  "category": "component",
+  "nameZh": "命令面板",
+  "nameEn": "Command Palette",
+  "aliases": [
+    "按 Ctrl K 弹出来的那个搜索框",
+    "⌘K 面板",
+    "命令菜单",
+    "敲几个字跳出操作列表的黑窗口",
+    "开发者工具那个输入斜杠命令的面板",
+    "一键直达所有功能的入口"
+  ],
+  "definition": "居中弹出的面板：一个输入框 + 一份动作列表，输入几个字实时过滤出「你现在可以执行的命令」，回车直达。它源自编辑器的 Command Palette 概念，如今是 Linear、Raycast、Notion 们的主导航。与搜索框的经典辨析：命令面板执行动作（切换主题、跳转页面、新建任务——结果是「发生了一件事」），搜索框检索内容（输入关键词返回文档/商品列表——结果是「看到一批东西」）；两者 UI 长得几乎一样，所以常被互相错认，判据只有一个——回车之后是动作发生了，还是一页结果出现了。",
+  "whenNotToUse": [
+    "要找回的是「一条内容」而非执行一个操作 → 用搜索框，它该连着结果页、支持翻页和筛选",
+    "动作总数 ≤5 且高频 → 放可见按钮，藏进 ⌘K 是给熟练工的加速键，不是给新手的迷宫",
+    "面向不熟键盘的普通消费者 → 命令面板是效率工具，别拿它当唯一导航，保留常规入口",
+    "需要多条件组合检索（日期+价格+地区）→ 结构化筛选表单，自由文本框表达不了组合条件"
+  ],
+  "confusedWith": [],
+  "anatomy": [
+    { "part": "输入框", "note": "面板顶部常驻焦点所在；过滤词从它进来，aria-activedescendant 从它出发指向高亮行" },
+    { "part": "命令列表", "note": "过滤后的动作项，每项带图标+名称+快捷键尾注；最多显示 MAXROWS 行，超出内滚" },
+    { "part": "高亮行", "note": "键盘选中的那一项，始终滚进可视区；↑↓ 移动，也是鼠标 hover 的同步对象" },
+    { "part": "分组头", "note": "可选：「最近使用 / 导航 / 操作」小节标题，帮长列表建立结构" },
+    { "part": "空态", "note": "零匹配时的兜底文案，比一片空白诚实" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个 Command Palette 命令面板：按 Ctrl+K（Mac 显示 ⌘K）或点页面按钮，居中弹出深灰面板（宽 min(560px,92vw)、圆角 {RADIUS}px、顶部内嵌自动聚焦的输入框，placeholder「输入命令…」）。面板下挂命令列表（约 12 条示例：新建任务/切换主题/打开设置…各带快捷键尾注），输入实时做子序列模糊过滤（保留输入字符出现顺序即可，命中片段高亮）。↑↓ 移动高亮行（循环、且高亮变化时滚入可视区），Enter 执行当前项=在面板下方弹一条 2 秒的文字 toast「已执行：xxx」，Esc 或点遮罩关闭并把焦点归还给触发按钮。列表最大高度 = 单行 44px × {MAXROWS} 行，超出内部滚动。输入为 IME 组合中（compositionstart 到 end）不做过滤，等提交再过滤。容器 role=dialog aria-modal，输入框 aria-controls 列表、列表 role=listbox、行 role=option 并以 aria-activedescendant 指向高亮行。",
+    "stack": "原生 CSS + 原生 JS（keydown 全局监听 + listbox 键盘模式）实现过滤与键盘导航，无组件库。",
+    "constraints": [
+      "不要用可聚焦的真 button 逐行承载选项——焦点应当始终留在输入框（aria-activedescendant 模式），让焦点在列表里跑会打断继续输入",
+      "不要在 composition 进行中过滤——拼音未上屏时拿组合字母去模糊匹配，候选列表会随每个字母抽搐",
+      "不要把 Ctrl+K 判定写成 e.key==='k' 不区分大小写——开着大写锁定或按 Shift+K 时 key 是 'K'，会漏触发",
+      "不要关闭时不还焦点——面板销毁后焦点掉回 body，键盘用户从头 Tab 起，整个操作流断崖",
+      "不要省略 prefers-reduced-motion：缩放淡入退化为即时出现"
+    ],
+    "verify": [
+      "按 Ctrl+K（Mac ⌘K）或点按钮，居中面板弹出且光标已在输入框里",
+      "输入「the」能模糊命中「切换主题」，命中字母高亮；↑↓ 移动高亮且始终滚入视野",
+      "Enter 执行后显示「已执行：切换主题」的 toast，面板关闭",
+      "Esc 关闭后，再按 Tab 焦点落在触发按钮上——焦点被归还了",
+      "列表超过 MAXROWS 项时出现内部滚动条，输入框不被顶出面板"
+    ],
+    "reference": "参考气质：Linear 的 ⌘K、Raycast、VS Code 命令面板——弹出即聚焦、纯键盘可完成一切、执行反馈克制。",
+    "variants": [
+      { "label": "结果混合形态", "delta": "列表上方加「最近访问」区，输入后同时搜命令+内容（Notion 式），适合站点内容量大的产品" },
+      { "label": "毛玻璃浮层", "delta": "面板半透明 backdrop-blur + 细边框，贴合 macOS Spotlight 气质" }
+    ]
+  },
+  "params": [
+    { "key": "MAXROWS", "label": "列表最大行数 (行)", "def": 6, "min": 3, "max": 12, "step": 1, "hint": "面板列表高度 = 行数×44px；再多屏幕放不下也看不过来" },
+    { "key": "RADIUS", "label": "面板圆角 (px)", "def": 14, "min": 0, "max": 24, "step": 1, "hint": "0=终端工具的硬朗，20+=macOS 的圆润" }
+  ],
+  "scenarios": [
+    "Linear / Vercel / Stripe 后台：⌘K 直达任意页面与操作",
+    "VS Code / Cursor：命令面板调 IDE 全部能力",
+    "Notion / Obsidian：搜页面 + 执行编辑命令二合一",
+    "Raycast / Alfred / ueli：整个桌面的启动器形态"
+  ],
+  "pitfalls": [
+    "焦点归还常被漏掉，因为面板是从 body 摘掉的——关闭前先把最后焦点存进变量，摘除后显式 trigger.focus()，否则键盘用户按 Tab 从页面最顶重数一遍",
+    "中文/日文 IME 组合中必须暂停过滤（判 compositionstart/end 或 event.isComposing），因为拼音串在未上屏前也是 input 事件流，拿「qiehuan」去匹配命令会让候选列表逐字母抽搐、还可能出现离谱匹配",
+    "↑↓ 高亮行不出现在滚动区外时要用 scrollIntoView({block:'nearest'}) 拉回视野，因为循环导航两圈后高亮已滚出面板，用户对着看不见的行按了回车——看不见的高亮等于随机执行",
+    "把每行做成 tabindex=0 的真按钮会毁掉连续输入体验，因为焦点离开输入框后每敲一个字都先移动高亮而不是写入字符——正确姿势是焦点焊死在输入框 + aria-activedescendant 指明当前项",
+    "全局监听 Ctrl+K 不 preventDefault 的话，在 Firefox 里会撞上「查找栏」快捷键、在页内输入框里按也照常弹窗，因为快捷键冲突从不自动仲裁——命中即 e.preventDefault()，且输入焦点在场时照常响应（命令面板的价值就是随处可唤）"
+  ],
+  "related": ["drawer", "tooltip", "snackbar", "bottom-sheet"],
+  "refs": [
+    "https://www.w3.org/WAI/ARIA/apg/patterns/combobox/",
+    "https://m3.material.io/components/lists/guidelines"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

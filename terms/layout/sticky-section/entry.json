@@ -1,0 +1,74 @@
+{
+  "id": "sticky-section",
+  "no": "L-04",
+  "category": "layout",
+  "nameZh": "粘性分区",
+  "nameEn": "Sticky Section Header",
+  "aliases": [
+    "滚到那儿标题就钉住",
+    "吸顶的分组头",
+    "iOS 通讯录那种",
+    "列表分组的小标题浮在顶上",
+    "滑过去标题赖着不走",
+    "分组头依次顶掉"
+  ],
+  "definition": "长列表按分组排列，每组的标题在滚动中钉在容器顶部，直到下一组的标题滑上来把它顶替——iOS 通讯录/信息、电商订单分组的标配。钉住范围就是它的父分组的盒子：标题只在自己组内\"赖着\"，组滚出视野它跟着走。与 fixed 导航的区别：fixed 永远悬浮在视口上、与内容无关；sticky 的生死随父容器进出，天生就是\"局部的、临时的\"吸附。",
+  "whenNotToUse": [
+    "需要永远在场的元素（顶部导航、购物车悬浮按钮）→ 用 fixed，sticky 到容器底就解脱",
+    "分组极碎（每组一两行）→ 标题频繁顶替变成闪烁，不如不钉",
+    "祖先上叠了 transform / overflow 混杂的滚动容器 → sticky 大概率被杀（见 pitfalls），先确认滚动容器归属再上"
+  ],
+  "confusedWith": ["bento-grid", "scrollytelling"],
+  "anatomy": [
+    { "part": "钉住元素 Pinned header", "note": "position: sticky + top 偏移；钉住时视觉上浮到吸附线，仍占文档流原格" },
+    { "part": "钉住偏移 top", "note": "距吸附边的距离；有吸顶导航时要等于导航高度，让位而不是叠在上面" },
+    { "part": "作用域父容器 Section", "note": "sticky 的活动范围 = 父盒子的下缘；组滚完，标题跟着离开——这就是它与 fixed 的分界" },
+    { "part": "滚动容器 Scrolling ancestor", "note": "真正在滚的那个祖先——sticky 相对它吸附；中间层多余的 overflow 反而是杀手" }
+  ],
+  "promptTemplate": {
+    "core": "一个粘性分区（Sticky Section Header）联系人列表：4 个分组（A/B/C/D），每组结构为 .section > header + ul。header 用 position: sticky; top: {TOP}px 钉在滚动容器顶部，不透明底色盖住从底下穿过的列表行；下一组 header 滑到吸附线时自然顶替上一组（同 top 值、后 DOM 盖前 DOM 即是\"依次推走\"）。header 圆角 {RADIUS}px，组内行 hover 浅底色。TOP 参数模拟\"给吸顶导航让位\"：钉住线永远在导航下缘。窄屏不隐藏标题，只缩小 padding。",
+    "stack": "纯 CSS position: sticky 实现，零 JS 监听 scroll；滚动发生在页面/列表容器自身，不要在祖先加多余 overflow。",
+    "constraints": [
+      "不要在分组容器或其任何祖先上写 overflow: hidden/auto/scroll——最近滚动祖先一变，sticky 就钉到那个看不见的容器上，表现是\"完全失灵\"，这是头号翻车点",
+      "header 背景必须不透明且盖满整行——半透明或不设背景时列表行会从标题底下穿过去，钉住变成\"鬼影叠字\"",
+      "不要在 sticky 元素的祖先上留 transform/filter/will-change——它们创建新包含块，sticky 被限制进那个小盒子，页面级吸附变局部抽搐",
+      "top 偏移必须等于吸顶导航的高度，否则标题钉进导航底下被盖住，用户以为钉错了位置",
+      "分组极碎时（每组一两行）别上 sticky——标题频繁顶替变成闪烁，可读性反而不如普通分组"
+    ],
+    "verify": [
+      "向下滚动：当前分组标题钉在顶部，列表行从它底下穿过并被完全遮住、无叠字",
+      "下一组标题滑到吸附线时把上一组标题顶出视野（依次替换，不是永久叠加）",
+      "整组滚过后标题跟着组一起离开顶部，不会赖在全页顶端——那是 fixed 的行为",
+      "拖动 top 滑杆：吸附线整体上下平移，标题钉到新位置继续工作"
+    ],
+    "reference": "参考气质：iOS 通讯录分组头、macOS 信息 App 日期分隔、电商\"我的订单\"按月分组。安静、可靠、该走就走。",
+    "variants": [
+      { "label": "堆叠式（stacked）", "delta": "每组 top 递增 i×标题高度，标题逐个累积钉住形成叠板——分组少（≤5）才可用，多了顶部全被占满" },
+      { "label": "阴影浮起", "delta": "header 加 box-shadow: 0 6px 12px -8px rgba(0,0,0,.25)，钉住时与滑过内容产生分层漂浮感" }
+    ]
+  },
+  "params": [
+    { "key": "TOP", "label": "钉住偏移 top (px)", "def": 8, "min": 0, "max": 48, "step": 2, "hint": "模拟吸顶导航高度：标题钉在其下缘让位" },
+    { "key": "RADIUS", "label": "标题圆角 (px)", "def": 10, "min": 0, "max": 20, "step": 2 }
+  ],
+  "scenarios": [
+    "通讯录/城市选择器的字母分组索引（iOS 通讯录、12306 选站）",
+    "IM 消息列表的日期分隔头（微信、macOS 信息）",
+    "订单/账单按月分组（电商\"我的订单\"）",
+    "设置页与长文档的功能分区标题（钉住后用户永远知道自己在哪一区）"
+  ],
+  "pitfalls": [
+    "sticky 只相对\"最近滚动祖先\"吸附：分组容器或任何中间祖先一旦写了 overflow: hidden/auto/scroll，吸附就发生在那个不可见容器里，全页看就是失灵——排查 sticky 不生效第一步 grep 全部祖先的 overflow，这是最常见翻车",
+    "sticky 标题必须自带不透明背景：它钉住时内容仍在底下滚动穿行，半透明或无底色会让两组文字叠成不可读鬼影——通透质感在这里是 bug 不是设计",
+    "祖先上的 transform/filter/perspective 会为 sticky 创建新的包含块，把它从\"视口吸附\"降级成\"该祖先内吸附\"，且祖先做动画时吸附范围逐帧变化——给祖先上动效前先确认里面的 sticky 还要不要活",
+    "同 top 的多个 header 在交替瞬间是重叠覆盖而非物理推挤：\"依次顶掉\"观感全靠不透明背景 + 后 DOM 绘制在前 DOM 之上（默认即如此）；真想要挤压动画得逐组递增 top 或上 JS 测距，纯 sticky 给不了推挤物理"
+  ],
+  "related": ["scrollytelling", "bento-grid"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/position",
+    "https://developer.apple.com/design/human-interface-guidelines/lists-and-tables"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

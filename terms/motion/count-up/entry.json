@@ -1,0 +1,70 @@
+{
+  "id": "count-up",
+  "no": "M-04",
+  "category": "motion",
+  "nameZh": "数字翻滚",
+  "nameEn": "Count-Up",
+  "aliases": [
+    "数字从 0 跳到 100",
+    "统计数字滚动",
+    "滚雪球数字",
+    "用户数一直涨的那个",
+    "ticker 数字",
+    "count up 动画"
+  ],
+  "definition": "数值从起点快速滚动到目标值的入场动效，常用于首屏统计数字（用户数 / 营收 / 项目数），用“数字在涨”暗示业务活跃。与里程表（Odometer）的区别：Count-Up 一次性滚到定值即结束，Odometer 是每一位数字独立滚轮的持续装置；与骨架屏的区别：骨架屏占的是“还没来”，数字翻滚演的是“正在来”。",
+  "whenNotToUse": [
+    "数字承载精确语义（价格、余额、倒计时）→ 滚动过程会误读，直接给终值",
+    "页面已有大量动效在抢注意力 → 数字翻滚的“增长暗示”会被稀释成噪音",
+    "数据要等接口且延迟不可控 → 先出骨架屏，数据到达后再滚，别用假目标值预滚"
+  ],
+  "confusedWith": ["skeleton", "shimmer"],
+  "anatomy": [
+    { "part": "目标值 Target", "note": "终点数字；通常配千分位与单位后缀" },
+    { "part": "缓动曲线 Easing", "note": "easeOutExpo 式先快后慢：90% 的增量在前 30% 时间完成" },
+    { "part": "等宽数字 tabular-nums", "note": "font-variant-numeric 保证每位数字同宽，滚动时容器不抖" },
+    { "part": "触发器 Trigger", "note": "进入视口才开滚（IntersectionObserver），且只播一次" }
+  ],
+  "promptTemplate": {
+    "core": "一个统计数字入场动效：页面加载后数字从 0 滚到 {TARGET}，时长 {DUR}ms，缓动用 easeOutExpo（1 - 2^(-10t)），每帧经 requestAnimationFrame 更新并取整、加千分位分隔符；数字容器使用 font-variant-numeric: tabular-nums 固定字宽；触发时机为元素首次进入视口（IntersectionObserver threshold 0.4，触发后 unobserve 保证只播一次）；下方配一行灰色说明文字，数字与文字基线对齐。",
+    "stack": "原生 CSS + 原生 JS（rAF + IntersectionObserver），不引入动画库。",
+    "constraints": [
+      "不要省略 tabular-nums——比例字体下数字宽度不同，滚动时容器左右抖动是最常见的廉价感来源",
+      "不要用 setInterval 固定步长——帧率不稳时动画时长失真，必须用 rAF 按真实经过时间算进度",
+      "不要每次进入视口都重播——回访用户反复看同一数字滚一遍是噪音，触发即 unobserve",
+      "prefers-reduced-motion 下直接渲染终值，跳过滚动"
+    ],
+    "verify": [
+      "滚动到该区域时数字从 0 快速滚起、明显减速停在目标值",
+      "滚动全程数字容器宽度纹丝不动",
+      "滚走再滚回来，数字不再重播",
+      "系统开启减少动效后直接显示终值"
+    ],
+    "reference": "参考气质：Stripe 年度回顾页的增长数字；Apple 发布会 Keynote 的计数器。先快后慢、干脆收尾。",
+    "variants": [
+      { "label": "逐位滚轮", "delta": "每位数字独立 translateY 的 odometer 版，更炫但成本高一个量级" },
+      { "label": "倒计数", "delta": "从目标值滚到 0（倒计时/库存告急），缓动换 easeInCubic" }
+    ]
+  },
+  "params": [
+    { "key": "TARGET", "label": "目标值", "def": 2486, "min": 100, "max": 99999, "step": 1 },
+    { "key": "DUR", "label": "滚动时长 (ms)", "def": 1600, "min": 600, "max": 4000, "step": 100, "hint": "<800ms 来不及看清，>3s 显得磨叽" }
+  ],
+  "scenarios": [
+    "官网首屏社会证明（用户数 / 满意度 / 营收）",
+    "数据看板的指标入场",
+    "年度回顾 / 账单页的叙事数字",
+    "众筹/活动页的进度数值"
+  ],
+  "pitfalls": [
+    "缺 tabular-nums 会抖，因为比例字体里 1 比 8 窄，数字变化时文本宽度逐帧改变——font-variant-numeric 或等宽字体二选一",
+    "每帧 textContent 写入 vs 逐位 transform 的成本差一个量级：前者每帧触发文本重排但实现简单，后者只在位数变化时提交；纯统计数字用前者足够，满屏都是翻滚才值得上 odometer",
+    "IntersectionObserver 触发后不 unobserve 会反复重播，因为回访滚动每次都命中阈值——播完即断是语义要求不是优化",
+    "目标值若来自异步接口，要等数据到达再开滚；先滚到假值再跳真值，用户会记住错的那个数"
+  ],
+  "related": ["skeleton", "shimmer"],
+  "refs": [],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

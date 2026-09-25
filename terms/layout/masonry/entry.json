@@ -1,0 +1,75 @@
+{
+  "id": "masonry",
+  "no": "L-03",
+  "category": "layout",
+  "nameZh": "瀑布流布局",
+  "nameEn": "Masonry",
+  "aliases": [
+    "像 Pinterest 那样错落的图片墙",
+    "一张高一排短的卡片排列",
+    "电商首页猜你喜欢那种排法",
+    "高度不齐的无缝网格",
+    "无缝排列",
+    "Masonry layout"
+  ],
+  "definition": "按列堆叠、卡片高度随内容错落的网格布局——Pinterest 式图片墙的经典形态。masonry 只有列轨道、没有行轨道：每张卡片占多高、落在哪一行由内容决定，错落感是天然产物。与 Bento Grid 的区别：bento 对齐到固定网格轨道，格子面积是设计意图（面积即权重），masonry 不设计面积，内容由自己说话。与 CSS 多列实现的区别：columns 是\"先填满一列再换下一列\"，源码顺序先竖后横；JS 最短列分配或新版 masonry 语法才能做到\"按左到右顺序挑最短列放进去\"——两者观感相同，阅读顺序差之千里。",
+  "whenNotToUse": [
+    "内容必须按时间/序号阅读（信息流、榜单、日程）→ columns 版会把顺序读乱，JS 配平版也牺牲纵向对齐",
+    "卡片高度基本一致 → 瀑布流退化成规整网格，直接用 CSS Grid 省事",
+    "需要横向对比（价格、日期成列对齐）→ 没有行轨道就没有基线可对"
+  ],
+  "confusedWith": ["bento-grid"],
+  "anatomy": [
+    { "part": "列轨道 Column track", "note": "masonry 只有列轨道；列数是唯一的硬网格参数，行完全交给内容" },
+    { "part": "卡片 Item", "note": "高度自决的内容块，break-inside: avoid 防被列边界拦腰切开" },
+    { "part": "间隙 Gap", "note": "列间距用 column-gap、卡片下间距用 margin-bottom，一个参数管两个方向" },
+    { "part": "配平策略 Placement", "note": "决定下一张卡落哪列：columns 先填首列，JS 版塞最短列，原生 masonry 是第三条路" }
+  ],
+  "promptTemplate": {
+    "core": "一个 Pinterest 风瀑布流（Masonry）卡片墙：CSS 多列——容器 columns: {COLS}、column-gap {GAP}px；每张卡片 margin-bottom {GAP}px 并 break-inside: avoid（防被列边界拦腰切开），圆角 {RADIUS}px。卡片内用高度 120–300px 随机错落的色块占位图片，配一行标题与一行尺寸说明。窄屏必须降列：<760px 两列，<480px 单列。悬停只用 transform 上移 2px，不动布局尺寸。",
+    "stack": "用原生 CSS 多列（columns / break-inside）实现，零 JS 布局计算；如需\"最短列分配\"则用 JS 量各列高度追加进最短列，接受每卡一次强制回流的成本。",
+    "constraints": [
+      "不要把 CSS columns 当\"最短列分配\"用：它先填满一列才换下一列，源码顺序是先竖后横，时间序列表会被读乱",
+      "break-inside: avoid 必须声明在卡片自身，否则卡片被列间隙拦腰截断；套在内层元素上救不回来",
+      "真实图片必须用 aspect-ratio 或 width/height 属性预占位，否则加载完成时卡片高度突变、整墙回流跳动",
+      "不要用 grid + grid-auto-rows: 8px 加行 span 计算做伪瀑布流——要预先知道卡高且内容一变就得重算，成本远超观感收益",
+      "窄屏直接降列，不要只缩小间隙硬塞——列宽小于 240px 时文字会挤到溢出"
+    ],
+    "verify": [
+      "看到 {COLS} 列卡片墙：顶端平齐、底边参差，各列之间不存在横向对齐线",
+      "没有任何一张卡片被列边界\"拦腰切开\"",
+      "把窗口缩到 <760px：自动降到 2 列；<480px 变 1 列",
+      "拖动列数滑杆：整墙重新排布且无残影错位"
+    ],
+    "reference": "参考气质：Pinterest 首页、小红书\"猜你喜欢\"、Dribbble 画板。错落由内容驱动，不硬造。",
+    "variants": [
+      { "label": "最短列分配（时间序）", "delta": "换 JS 配平：每张新卡追加进当前最短列，源码顺序保持从左到右横读——为阅读顺序支付手动量高的代价" },
+      { "label": "原生 masonry", "delta": "用 grid-template-rows: masonry（CSS Grid Level 3，支持仍有限，先查 caniuse），保留 columns 版做回退层" }
+    ]
+  },
+  "params": [
+    { "key": "COLS", "label": "列数", "def": 3, "min": 2, "max": 5, "step": 1, "hint": "窄屏 <760px 强制 2 列、<480px 单列" },
+    { "key": "GAP", "label": "间隙 (px)", "def": 12, "min": 4, "max": 28, "step": 2, "hint": "同时管列间距与卡片纵距" },
+    { "key": "RADIUS", "label": "卡片圆角 (px)", "def": 12, "min": 0, "max": 24, "step": 2 }
+  ],
+  "scenarios": [
+    "图片/短视频社区内容墙（Pinterest、Dribbble 画板）",
+    "电商推荐流\"猜你喜欢\"（淘宝、小红书首页）",
+    "摄影集、作品集等图多且宽高比不一的索引页",
+    "书签/稍后读卡片混排（图卡与纯文字卡高度差异大）"
+  ],
+  "pitfalls": [
+    "CSS columns 的源码顺序是\"先竖后横\"（第一列填到底才轮到第二列），信息流/时间表会被读乱——要按时间横读只能换 JS\"塞最短列\"，或者接受它只适合无序画廊",
+    "grid + grid-auto-rows 小单位（如 8px）+ span 计算的伪瀑布流方案很流行，但行跨度要预先知道卡片高度、字体或图片一变就得全部重算，成本是真方案的好几倍——只有既坚持 grid 生态又能控制卡高时才值得",
+    "图片没有固定宽高比占位时，加载完成会突然撑高卡片、整墙回流跳动，用户滚动位置被甩走——用 aspect-ratio 或 width/height 属性把尺寸写死在加载前，错落要\"生来如此\"而不是\"抖出来\"",
+    "break-inside: avoid 只对直接参与分列的元素生效：卡片外面再套一层包装 div，被切开的就是那层壳——把 avoid 声明在卡片最外层本体上，别让内部结构替它受过"
+  ],
+  "related": ["bento-grid", "skeleton"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/column-count",
+    "https://www.w3.org/TR/css-grid-3/"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

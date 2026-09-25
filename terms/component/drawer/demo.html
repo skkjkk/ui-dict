@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抽屉 Drawer · ui-dict C-05</title>
+<style>
+  :root { --scrim: 0.45; }   /* 遮罩浓度，由 PARAMS.SCRIM 回写 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px; max-width: 680px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .page p { font-size: 13.5px; color: #6b675f; margin: 0 0 16px; line-height: 1.7; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #open {
+    border: 1px solid #1a1a1a; background: #fff; padding: 9px 16px; border-radius: 10px;
+    font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  }
+  #open:hover { background: #efeadf; }
+  #open:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  #open .ham { font-size: 15px; }
+  .card { margin-top: 22px; background: #fff; border: 1px solid #e5e1d8; border-radius: 12px;
+          padding: 16px 18px; font-size: 13.5px; color: #55524b; line-height: 1.8; }
+  .card a { color: #0b4f6c; }
+
+  .scrim { position: fixed; inset: 0; background: #000; opacity: 0;
+           pointer-events: none; transition: opacity .28s ease-out; z-index: 10; }
+  .scrim.show { opacity: var(--scrim); pointer-events: auto; }
+
+  /* 抽屉面板：全高贴左缘，滑入全靠 transform: translateX（合成器动画，绝不碰 left/width）。
+     visibility 与 transform 配合：关闭时先播滑出轨迹，过渡结束后再 hidden——
+     若一开始就 display:none 则量不到尺寸、动画闪；若立即 hidden 则看不到滑回过程（见坑 #3） */
+  .drawer {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 320px; z-index: 11;
+    background: #fff; box-shadow: 6px 0 32px rgba(0,0,0,.16);
+    display: flex; flex-direction: column;
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform .28s cubic-bezier(.2,.8,.2,1), visibility 0s linear .28s;
+  }
+  .drawer.open {
+    visibility: visible; transform: translateX(0);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);   /* 打开时 visibility 立即生效 */
+  }
+  .drawer header { padding: 18px 20px 14px; border-bottom: 1px solid #eee;
+                   display: flex; align-items: center; justify-content: space-between; }
+  .drawer header b { font-size: 16px; }
+  #close { border: 0; background: none; font-size: 20px; line-height: 1; cursor: pointer;
+           color: #6b675f; width: 32px; height: 32px; border-radius: 8px; }
+  #close:hover { background: #f1ede4; color: #111; }
+  #close:focus-visible { outline: 2px solid #0b4f6c; outline-offset: -2px; }
+  /* 内容区独立滚动：面板高 100%，只让 nav 溢出滚动，否则底部项出屏够不着（坑 #5） */
+  .drawer nav { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 10px; }
+  .drawer nav a {
+    display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 9px;
+    color: #2b2823; text-decoration: none; font-size: 14px;
+  }
+  .drawer nav a:hover { background: #f1ede4; }
+  .drawer nav a:focus-visible { outline: 2px solid #0b4f6c; outline-offset: -2px; }
+  .drawer nav a .ic { width: 20px; text-align: center; opacity: .7; }
+  .drawer footer { padding: 12px 20px; border-top: 1px solid #eee; font-size: 12px; color: #999; }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：滑动改即时出现（去掉 transform 过渡），scrim 也去掉淡入 */
+    .drawer, .drawer.open { transition: none; }
+    .scrim, .scrim.show { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>工作区 · 收件箱</h1>
+    <p>演示词条 C-05。点下方按钮，抽屉从<strong>左侧</strong>滑入；按 <code>Esc</code>、点暗色遮罩
+       或右上角 × 都可关闭。<strong>Tab 键会在抽屉内循环</strong>，跑到背后页面即为本词条坑 #2 要防的事故。</p>
+    <button id="open" type="button"><span class="ham" aria-hidden="true">☰</span> 打开导航</button>
+    <div class="card">
+      这是抽屉背后被压暗的主内容区。里面有个
+      <a href="#" onclick="return false">页面内链接</a>——抽屉打开时 Tab 应该跳不到它，
+      因为面板语义是「暂时接管屏幕」。这就是 Drawer/Dialog 与 Popover 的共同契约：焦点圈定。
+    </div>
+  </main>
+
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="导航抽屉" tabindex="-1">
+    <header>
+      <b>导航</b>
+      <button id="close" type="button" aria-label="关闭抽屉">×</button>
+    </header>
+    <nav id="nav"></nav>
+    <footer>Esc / 点遮罩关闭 · 宽度由 WIDTH 参数控制</footer>
+  </aside>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "WIDTH": 320, "SCRIM": 0.45 };
+  /* ui-dict:params:end */
+
+  const drawer = document.getElementById("drawer");
+  const scrim = document.getElementById("scrim");
+  const openBtn = document.getElementById("open");
+  const closeBtn = document.getElementById("close");
+  const nav = document.getElementById("nav");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // 两个参数各自回写真实样式：WIDTH→面板宽度，SCRIM→遮罩浓度 CSS 变量
+  drawer.style.width = PARAMS.WIDTH + "px";
+  document.documentElement.style.setProperty("--scrim", String(PARAMS.SCRIM));
+
+  // 造一组导航项（含足够数量演示内部滚动）
+  var items = [["📥","收件箱"],["📤","已发送"],["★","星标"],["🗂","归档"],["🗑","废纸篓"],
+               ["👥","团队空间"],["📅","日程"],["🔖","书签"],["⚙️","设置"],["📊","统计"],["🔔","通知"],["🗒","笔记"]];
+  items.forEach(function (it) {
+    var a = document.createElement("a");
+    a.href = "#"; a.setAttribute("onclick", "return false");
+    a.innerHTML = '<span class="ic" aria-hidden="true">' + it[0] + '</span>' + it[1];
+    nav.appendChild(a);
+  });
+
+  var lastFocus = null, isOpen = false;
+  // 焦点圈定的可聚焦集合：每次实时查询，DOM 变了也不失效
+  function focusables() {
+    return Array.prototype.slice.call(
+      drawer.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')
+    );
+  }
+
+  function openDrawer() {
+    lastFocus = document.activeElement;      // 记住触发按钮，关闭时归还焦点（坑 #4）
+    isOpen = true;
+    scrim.classList.add("show");
+    drawer.classList.add("open");
+    // 焦点移入面板：先聚焦容器本身（tabindex=-1），读屏随即播报 aria-label「导航抽屉」
+    setTimeout(function () { drawer.focus(); }, reduce ? 0 : 60);
+    document.addEventListener("keydown", trapTab, true);
+  }
+
+  function closeDrawer() {
+    if (!isOpen) return;
+    isOpen = false;
+    scrim.classList.remove("show");
+    drawer.classList.remove("open");          // CSS 过渡负责播完整滑出轨迹，280ms 后自动 hidden
+    document.removeEventListener("keydown", trapTab, true);
+    // 归还焦点到触发按钮：不归还的话用户 Tab 序列会从页面顶重新数（见坑 #4）
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  // 双向拦截 Tab 与 Shift+Tab：只拦正向会让用户退一步掉出面板（坑 #2）
+  function trapTab(e) {
+    if (e.key !== "Tab") return;
+    var f = focusables();
+    if (!f.length) { e.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1];
+    if (e.shiftKey) {
+      // 反向：焦点在首元素（或已跑到面板外）时按 Shift+Tab → 绕回末元素
+      if (document.activeElement === first || !drawer.contains(document.activeElement)) {
+        e.preventDefault(); last.focus();
+      }
+    } else {
+      // 正向：焦点在末元素（或已跑到面板外）时按 Tab → 绕回首元素
+      if (document.activeElement === last || !drawer.contains(document.activeElement)) {
+        e.preventDefault(); first.focus();
+      }
+    }
+  }
+
+  openBtn.addEventListener("click", openDrawer);
+  closeBtn.addEventListener("click", closeDrawer);
+  scrim.addEventListener("pointerdown", closeDrawer);   // 点空白关闭：抽屉的第二退路
+  addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && isOpen) { e.preventDefault(); closeDrawer(); }
+  });
+})();
+</script>
+</body>
+</html>

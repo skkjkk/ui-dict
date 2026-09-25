@@ -1,0 +1,77 @@
+{
+  "id": "drawer",
+  "no": "C-05",
+  "category": "component",
+  "nameZh": "抽屉",
+  "nameEn": "Drawer",
+  "aliases": [
+    "从侧面滑出来的面板",
+    "侧边导航栏收起来再拉出来",
+    "点汉堡菜单弹出的那一栏",
+    "左边推出来的菜单",
+    "off-canvas 侧滑面板",
+    "划开看的侧边栏"
+  ],
+  "definition": "从屏幕侧缘（左/右）水平滑入的竖长面板，常驻承载导航、筛选器这类「用了还想回去看内容」的功能，关闭时原路滑回。与 Bottom Sheet 的辨析：同一个「压暗主页面、浮出一层可关闭面板」的家族，分工按屏幕形状走——桌面与横屏用 Drawer 从侧边来（侧缘有整条高度可依托，且视线中央留给内容），移动端用 Bottom Sheet 从底部来（拇指够得着、单手可控）；两者焦点圈定、scrim 关闭的行为规范完全一致。与 Dialog 的区别：Dialog 居中且强迫你做决定，Drawer 贴边、更像一次「侧屋里取个东西」。",
+  "whenNotToUse": [
+    "移动端（竖屏窄屏）→ 改 Bottom Sheet：侧滑面板在手机上要么占满宽度失去「抽屉感」，要么窄到放不下内容",
+    "内容是一次性决定（确认删除/填个表单）→ 用 Dialog，Drawer 的贴边形态暗示「随时可以拉回去」，不适合逼用户表态",
+    "导航项 ≤5 个且永远可见 → 直接放常驻侧栏，别把确定的东西藏进一次点击后面",
+    "宽屏桌面应用主导航 → 常驻 sidebar 比抽屉多一次无谓的开合成本"
+  ],
+  "confusedWith": ["bottom-sheet"],
+  "anatomy": [
+    { "part": "Panel 面板", "note": "贴屏幕侧缘的竖长白色面板，宽 256-480px、全高，transform 滑入滑出" },
+    { "part": "标题栏", "note":"面板顶部，通常带关闭按钮，标明「这是什么抽屉」" },
+    { "part": "内容区", "note":"导航列表/筛选表单主体，超高时内部独立滚动" },
+    { "part": "Scrim 遮罩", "note":"背后压暗层，点击即关闭；浓度与 Bottom Sheet 同一套语言" },
+    { "part": "把手/触发按钮", "note":"页面上的汉堡按钮或边缘擦除手势（edge swipe），抽屉唯一的入口" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个桌面端左侧 Drawer 抽屉：页面顶部放「☰ 打开导航」按钮，点击后宽 {WIDTH}px 的白色面板从左侧滑入（transform translateX(-100%)→0，280ms cubic-bezier(.2,.8,.2,1)），同时 scrim 从透明渐变到 rgba(0,0,0,{SCRIM})。面板含标题栏（名称+关闭按钮）与导航列表。关闭方式：点 scrim、按 Esc、点关闭按钮，均原路滑回；关闭动画跑完前面板不可见但别立即摘节点。打开后焦点移入面板并在内部循环（Tab 不逃到背后页面），关闭后焦点归还触发按钮。role=dialog、aria-modal=true、aria-label 标明用途。面板超高内容区 overflow-y:auto 独立滚动。",
+    "stack": "原生 CSS + 原生 JS（transform 动画 + keydown 监听实现焦点圈定）实现，无组件库。",
+    "constraints": [
+      "不要用 left/margin-left 做滑入——那是逐帧重排；transform 才走合成器，60fps 与省电都靠它",
+      "不要漏掉焦点圈定——抽屉的语义是「暂时接管屏幕」，Tab 跑到背后页面等于把用户关在门外",
+      "不要用 display:none 切换可见性做动画起点——没有起始布局量不到尺寸、动画会闪；用 visibility+transform 组合",
+      "不要 scrim 不拦截指针——点空白关闭是抽屉的第二退路，缺了它键盘以外的用户只剩一个出口",
+      "不要省略 prefers-reduced-motion：滑动退化为淡入淡出或即时出现"
+    ],
+    "verify": [
+      "点按钮后白色面板从左侧推入、背后页面压暗，列表可聚焦可滚动",
+      "Tab 键在面板内循环，永远跑不到背后的页面链接上",
+      "按 Esc 或点暗色遮罩，面板原路滑回、遮罩淡去、焦点回到「打开导航」按钮",
+      "面板宽度随 WIDTH 滑杆变化，滑入动画始终流畅不掉帧"
+    ],
+    "reference": "参考气质：Gmail 桌面版左侧导航抽屉、Material 3 Navigation Drawer——安静地来，完整地回。",
+    "variants": [
+      { "label": "覆盖式→推入式", "delta": "面板滑入时把主内容一起向右推（modal 改 push），适合窄侧栏+宽表格的后台" },
+      { "label": "右侧筛选抽屉", "delta": "改从右侧滑入、承载筛选表单，如携程/Shopify 的列表页筛选器" }
+    ]
+  },
+  "params": [
+    { "key": "WIDTH", "label": "面板宽度 (px)", "def": 320, "min": 240, "max": 480, "step": 8, "hint": "Material 规范 256-360px；再宽就成第二个页面了" },
+    { "key": "SCRIM", "label": "遮罩浓度", "def": 0.45, "min": 0, "max": 0.7, "step": 0.05, "hint": "0=失去「接管屏幕」的暗示，纯靠 Esc 关闭" }
+  ],
+  "scenarios": [
+    "Gmail / Google Drive 桌面版的左侧主导航",
+    "电商列表页的右侧筛选抽屉（淘宝/携程桌面站）",
+    "后台管理系统收起的二级菜单（点汉堡展开）",
+    "移动端官网没做底部导航时的侧边菜单兜底"
+  ],
+  "pitfalls": [
+    "用 left 动画滑入会逐帧重排整条主内容，因为布局引擎每帧都要重算面板的占位——低端机上抽屉一拉就卡成幻灯片；transform 只动合成层，代价是面板「悬空」不挤内容，要推内容得另写一套",
+    "焦点圈定只做 Tab 正向、不做 Shift+Tab 反向，键盘用户从面板第一个元素退一步就掉进背后页面，因为环回到起点需要首尾两个方向的拦截配对",
+    "关闭动画还没跑完就把 visibility 置 hidden（或摘节点），用户看到的是抽屉「跳」回侧边，因为 280ms 的滑出轨迹被腰斩；正确做法是 CSS 过渡跑完再收尾，或 transitionend 后再改状态",
+    "Esc 关闭后不归还焦点，键盘用户的 Tab 序列从页面顶部重新开始，因为他脚下的焦点跟着消失的面板一起没了——关闭函数必须显式 trigger.focus()",
+    "面板内容超过视口高度却没写内部滚动，抽屉整体跟着出屏，底部菜单项永远够不着——固定面板高度 100%，只让内容区 overflow-y:auto"
+  ],
+  "related": ["bottom-sheet", "tooltip", "snackbar"],
+  "refs": [
+    "https://m3.material.io/components/navigation-drawer/guidelines",
+    "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

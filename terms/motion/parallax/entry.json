@@ -1,0 +1,68 @@
+{
+  "id": "parallax",
+  "no": "M-03",
+  "category": "motion",
+  "nameZh": "视差滚动",
+  "nameEn": "Parallax Scrolling",
+  "aliases": [
+    "背景跟着滚但滚得慢",
+    "远近层次滚动的感觉",
+    "纸片层叠拉开的纵深",
+    "滚页面时山和云不同步",
+    "depth scroll"
+  ],
+  "definition": "前景与背景以不同速率随页面滚动位移，制造纵深错觉的滚动动效（源自立体视差：近物位移快、远物位移慢）。与滚动叙事（Scrollytelling）的区别：视差卖的是空间深度感，各层内容本身不随进度改变；滚动叙事卖的是时间节奏，内容按滚动进度被逐段揭示或改变。",
+  "whenNotToUse": [
+    "长文阅读页 → 位移差会干扰逐行扫读，且晕动症用户比例不低",
+    "性能敏感的低端机/长列表页 → 每帧多层 transform 重算，滚动帧率直接掉",
+    "内容本身没有自然分层（纯文字流）→ 硬造远景近景只会显得廉价"
+  ],
+  "confusedWith": ["scrollytelling"],
+  "anatomy": [
+    { "part": "Layer 视差层", "note": "每层一个位移系数（0=不动，1=随滚同速）；层数 2-4 为宜" },
+    { "part": "Speed 系数", "note": "translateY = -scrollTop × (1 - SPEED)，越远的层系数越小" },
+    { "part": "Stage 舞台", "note": "固定高度的容器，层在其内位移，overflow 裁切" }
+  ],
+  "promptTemplate": {
+    "core": "三层视差滚动舞台：远山（SPEED 0.2）、中景树林（SPEED 0.5）、近景标题（SPEED 0.85）叠放在一个 100svh 的 stage 内；页面滚动时各层用 transform: translate3d(0, -scrollTop×(1-SPEED)×RANGE 归一化, 0) 位移，更新经 requestAnimationFrame 合并节流（一帧最多算一次）；层内元素用纯 CSS 渐变/clip-path 绘制，不用图片。滚过舞台后内容区正常滚动。",
+    "stack": "原生 CSS + 原生 JS（scroll + rAF + translate3d），不引入任何视差库。",
+    "constraints": [
+      "不要在 scroll 事件回调里直接改 style——高频事件逐帧重排必掉帧，必须 rAF 节流合并",
+      "不要用 background-attachment: fixed 做视差——iOS Safari 不支持，且每次滚动主线程全量重绘",
+      "位移只用 transform（合成器层），加 will-change: transform 提层；不要动 top/margin",
+      "prefers-reduced-motion 下整体关闭位移（视差是晕动症重灾区），退化为静态分层画面"
+    ],
+    "verify": [
+      "向下滚动：三层以肉眼可见的不同速率移动，近快远慢，纵深感成立",
+      "滚动全程帧率平稳，无阶梯感",
+      "系统开启减少动效后：三层静止，画面仍是一张好看的分层插画",
+      "手机竖屏滚动同样顺滑"
+    ],
+    "reference": "参考气质：Apple AirPods 旧版官网的星空纵深、Gorillaz 网站的纸片层叠。克制在 2-3 层，系数差要明显。",
+    "variants": [
+      { "label": "水平视差", "delta": "位移轴换 translateX，适合横向画廊；原理与节流方式不变" },
+      { "label": "鼠标视差", "delta": "系数乘 pointer 偏移而非 scrollTop，静止也有层次（hover:none 降级）" }
+    ]
+  },
+  "params": [
+    { "key": "SPEED", "label": "近景系数", "def": 0.85, "min": 0.3, "max": 0.95, "step": 0.05, "hint": "与远景系数差越大，纵深越夸张" },
+    { "key": "RANGE", "label": "最大位移 (px)", "def": 120, "min": 40, "max": 300, "step": 10, "hint": "近景滚到底的总位移" }
+  ],
+  "scenarios": [
+    "品牌官网 hero 区的氛围纵深（Apple / Stripe 式）",
+    "游戏/音乐专辑宣传页的叙事舞台",
+    "摄影作品集的封面页",
+    "活动落地页的第一屏"
+  ],
+  "pitfalls": [
+    "scroll 回调里逐事件改 transform 会掉帧，因为滚动事件频率可超过 60Hz 且每次赋值触发样式失效——必须 rAF 合并，一帧只写一次",
+    "background-attachment:fixed 在 iOS Safari 上根本不固定（且触发主线程重绘），桌面 Chrome 也会因合成器策略抖动——统一改 transform 位移独立层",
+    "视差位移用 top 或 margin 会连累文档流重排，用 transform 只动合成器层；忘加 will-change 则每帧提层开销反而更大——只在确认动效开启时挂",
+    "晕动症（前庭功能异常）用户对位移差极敏感，reduced-motion 不是可选项而是必选项，且要整体关位移而不是减半"
+  ],
+  "related": ["scrollytelling", "magnetic-button"],
+  "refs": [],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

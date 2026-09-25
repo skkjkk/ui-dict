@@ -1,0 +1,77 @@
+{
+  "id": "accordion",
+  "no": "C-07",
+  "category": "component",
+  "nameZh": "手风琴折叠",
+  "nameEn": "Accordion",
+  "aliases": [
+    "点开收起的列表",
+    "FAQ 那种展开",
+    "折叠面板",
+    "点标题弹开内容的条目",
+    "一段一段能收起来的说明",
+    "expand 折叠展开组件"
+  ],
+  "definition": "一列「标题 + 可收起内容」的条目，点标题就地展开、再点收起，页面不跳转、位置不跳。适合把长问答、条款、设置分组切成可扫读的块。与 Tabs 的辨析：两者都在收纳成组内容，区别在「同时能看到几块」——Tabs 一次只看一块（切换互斥、标题即导航），Accordion 可以同时展开多块、也方便上下对比；当你发现用户频繁在两栏之间来回跳，说明该用 Accordion 而不是 Tabs。",
+  "whenNotToUse": [
+    "每块内容都很长、同屏展开两三块就挤满 → 用 Tabs 或独立页面，折叠变展开的滚动距离会让用户迷失",
+    "步骤有先后依赖（表单分步填写）→ 用 Stepper，手风琴暗示各段彼此独立",
+    "所有信息都是完成任务必读的 → 全部展开或分页，把必读内容藏进折叠=增加一次无谓点击和「它里面到底有没有我要的」的怀疑",
+    "条目只有 1 个 → 那就是一句话，直接写出来"
+  ],
+  "confusedWith": [],
+  "anatomy": [
+    { "part": "标题行 Trigger", "note": "常驻可见、可点可聚焦的按钮；aria-expanded 挂在它身上，右侧放展开指示（+/chevron 旋转）" },
+    { "part": "内容区 Panel", "note": "role=region 并由 aria-labelledby 指回标题；展开时高度从 0 长到内容自然高" },
+    { "part": "分隔线", "note": "条目间边界，配合 GAP 决定是「表格感」还是「卡片感」" },
+    { "part": "展开指示器", "note": "chevron 旋转 180° 或 +/− 切换：让「这里可点」在内容收起时也可见" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个 Accordion 手风琴组件：一列 3 段 FAQ 条目，每条含标题行按钮与内容区。点标题展开、再点收起，动画用 grid-template-rows: 0fr → 1fr 技巧（外层 display:grid，内容直接子元素 overflow:hidden），时长 {DUR}ms ease，内层高度自动等于内容高、永不限高；chevron 图标同步 rotate(0→180deg)。条目之间留 {GAP}px 间距。提供「单开/多开」开关：单开模式下展开一项自动收起其余。标题按钮带 aria-expanded=true/false、aria-controls 指向内容区 id，内容区 role=region + aria-labelledby 指回标题。支持键盘：Tab 聚焦标题、Enter/Space 切换（原生 button 免费获得）。",
+    "stack": "原生 CSS + 原生 JS 实现展开逻辑与无障碍状态，无组件库。",
+    "constraints": [
+      "不要用 max-height: 500px 这类硬编码值做展开动画——内容一旦超过这个值会被截断，且收起时长虚高、动画起止与真实高度脱节",
+      "不要把内容区 display:none 当作收起态——没有布局盒就没有过渡起点，展开会「闪现」而非生长；用 grid 0fr 方案则天然保留盒子",
+      "不要对 height 写死像素再 transition——内容是多行文本/富媒体时像素值永远算不准；要动就动可插值的 grid-template-rows 或用 ResizeObserver 同步",
+      "不要把 aria-expanded 标在内容区上——展开状态是「控件的属性」，读屏在聚焦按钮时要听到「已折叠 按钮」，标错位置等于把状态藏进没人按的地方",
+      "不要省略 prefers-reduced-motion：动画时长归零、直接落终态"
+    ],
+    "verify": [
+      "三条 FAQ 默认全收起；点任一条标题，内容平滑向下生长展开，chevron 翻转",
+      "展开的内容完整可见——把某条内容改到二十行也不会被截断出滚动条",
+      "开启「单开」后展开第二条，第一条自动收起；关闭后可多条并存展开",
+      "读屏聚焦标题播报「已折叠/已展开 按钮」，Enter 与鼠标点击行为一致",
+      "收起态的内容不出现在 Tab 序列里，也不会被读屏念到"
+    ],
+    "reference": "参考气质：Stripe 帮助中心 FAQ、Apple 开发者文档的折叠块——安静生长，不抢注意力。",
+    "variants": [
+      { "label": "卡片式", "delta": "每条独立圆角卡片+1px 边框，GAP 提到 12px；适合后台设置分组" },
+      { "label": "无边框列表式", "delta": "去掉边框与分隔线，只靠字号与留白分层；适合编辑排版" }
+    ]
+  },
+  "params": [
+    { "key": "DUR", "label": "展开/收起时长 (ms)", "def": 280, "min": 120, "max": 600, "step": 20, "hint": "<150 读不出内容在长大；>450 显得迟钝" },
+    { "key": "GAP", "label": "条目间距 (px)", "def": 8, "min": 0, "max": 20, "step": 1, "hint": "0=表格/列表感，12+=卡片堆叠感" }
+  ],
+  "scenarios": [
+    "SaaS 帮助中心与定价页 FAQ（Stripe、Linear 定价页底部）",
+    "长条款/隐私政策的分节折叠，避免一屏 8000 字劝退",
+    "后台设置分组：「通知 / 安全 / 集成」各自折叠，改哪组开哪组",
+    "订单详情：金额明细、物流轨迹按块展开"
+  ],
+  "pitfalls": [
+    "用 max-height 硬编码（如 500px）做动画，长内容会被截断出一根内部滚动条、短内容的收起又慢半拍——因为 transition 的终点是你写死的数字而不是内容自然高；grid-template-rows 0fr→1fr 让浏览器自己插值「占内容高度的比例」，天然永不限高",
+    "height:auto 不可插值，所以「from 0 to auto」的 transition 会被浏览器直接跳过——这正是 grid-fr 技巧存在的理由：0fr/1fr 是两个可插值的长度比例，auto 的高度由外层 grid 行在动画结束后接管",
+    "grid 0fr 收起的内容仍参与布局，里面的链接输入框照旧在 Tab 序列里——看不见却按得到，键盘用户会莫名焦点丢失；收起开始就补 inert、展开立即解除，因为 inert 整体摘除可聚焦性与可交互性却不动布局和动画，而 display:none 会砍掉过渡起点的布局盒",
+    "单开模式下用 querySelector 收起其他项时，如果被收起的条目正持有焦点（用户 Tab 到它内部链接再点别处），焦点会掉回 body——键盘用户下一次 Tab 从页面顶重数；收起含焦点项时要显式把焦点送回该条标题",
+    "展开动画期间内容 overflow 未裁剪，文字会「漏」出条目边界叠在下一条上——grid 方案要求直接子元素自带 overflow:hidden，这一步写在 CSS 里而不是靠 JS 记得"
+  ],
+  "related": ["bottom-sheet", "drawer", "tooltip", "snackbar", "command-palette"],
+  "refs": [
+    "https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/",
+    "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/details"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

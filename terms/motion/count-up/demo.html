@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数字翻滚 Count-Up · ui-dict M-04</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f6f5f2;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .stat { text-align: center; padding: 40px 20px; }
+  .num {
+    /* 关键：等宽数字。比例字体里 1 比 8 窄，滚动中宽度逐帧变 → 容器左右抖动 */
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(56px, 12vw, 96px); font-weight: 700; color: #141414;
+    letter-spacing: -.02em; line-height: 1;
+  }
+  .num .suffix { font-size: .45em; color: #0b4f6c; margin-left: 4px; }
+  .label { margin-top: 10px; font-size: 13.5px; color: #8a857c; letter-spacing: .18em; }
+  .replay { margin-top: 22px; border: 1px solid #141414; background: #fff; border-radius: 999px;
+            padding: 7px 18px; font-size: 12.5px; cursor: pointer; }
+  .replay:hover { background: #efeadf; }
+</style>
+</head>
+<body>
+  <div class="stat" id="stat">
+    <div class="num"><span id="val">0</span><span class="suffix">+</span></div>
+    <div class="label">设 计 词 条 已 收 录</div>
+    <button class="replay" id="replay" type="button">重播一次</button>
+  </div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "TARGET": 2486, "DUR": 1600 };
+  /* ui-dict:params:end */
+
+  const el = document.getElementById("val");
+  const fmt = (n) => Math.round(n).toLocaleString("en-US");   // 千分位
+
+  function run() {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = fmt(PARAMS.TARGET); return; }
+    const t0 = performance.now(), T = PARAMS.TARGET, D = PARAMS.DUR;
+    (function frame(now) {
+      const p = Math.min(1, (now - t0) / D);
+      // easeOutExpo：90% 的增量在前 30% 时间完成，收尾干脆——“先快后慢”是这动效的气质所在
+      const e = p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
+      el.textContent = fmt(T * e);
+      if (p < 1) requestAnimationFrame(frame);
+    })(t0);
+  }
+
+  // 首次进入视口才开滚，播完即 unobserve：回访反复重播是噪音而非动效
+  const io = new IntersectionObserver((en) => {
+    if (en[0].isIntersecting) { run(); io.disconnect(); }
+  }, { threshold: 0.4 });
+  io.observe(document.getElementById("stat"));
+
+  document.getElementById("replay").addEventListener("click", run);  // 手动重播是明确意图，不受“只播一次”约束
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+{
+  "id": "ripple",
+  "no": "I-02",
+  "category": "interaction",
+  "nameZh": "涟漪反馈",
+  "nameEn": "Ripple",
+  "aliases": [
+    "点一下扩散开的圆",
+    "水波纹点击效果",
+    "Material 那个点击波纹",
+    "从手指底下扩大的圈",
+    "touch ripple"
+  ],
+  "definition": "从触点位置扩散并淡出的圆形反馈，确认\"系统收到了这一次按压、就点这里\"，是 Material Design 的签名手势。与 hover 高亮的区别：高亮确认\"悬停目标\"（桌面语义），涟漪确认\"按压落点\"（触屏语义）——触屏没有 hover，涟漪几乎是移动端唯一可靠的即时按压反馈。",
+  "whenNotToUse": [
+    "高频触发区（画布、地图拖拽、游戏）→ 每次交互都炸一个圆会视觉过载",
+    "纯装饰性容器 → 涟漪语义是\"可按压\"，给不可点的元素加涟漪是撒谎",
+    "列表整行可点但行内有输入框 → 焦点事件冒泡会误触发涟漪，要按 target 过滤"
+  ],
+  "confusedWith": ["magnetic-button"],
+  "anatomy": [
+    { "part": "Origin 触点", "note": "涟漪圆心 = 按压点（不是按钮中心）——\"就这里\"的语义全靠它" },
+    { "part": "Wave 波纹", "note": "直径 ≥ 按钮对角线的圆，scale 0→1 扩散 + opacity 淡出" },
+    { "part": "Clip 裁剪层", "note": "独立 overflow:hidden 层，圆角跟随按钮，不干扰阴影/描边" }
+  ],
+  "promptTemplate": {
+    "core": "给按钮加 Material 式涟漪反馈：pointerdown 时在按钮内生成一个圆，圆心 = 触点坐标减按钮左上角（经 getBoundingClientRect 换算），直径 = 按钮对角线长度；圆以 scale(0)→scale(1) 扩散 {DUR}ms 同时 opacity 从 {OPACITY} 淡出到 0，动画结束立即从 DOM 摘除；涟漪层 absolute inset:0 + overflow:hidden + border-radius 继承按钮；连点不互相打断（每次新建一个圆）；涟漪层 pointer-events:none。",
+    "stack": "原生 CSS + 原生 JS（Web Animations API 或 CSS 动画均可），不引入 Material 库。",
+    "constraints": [
+      "圆心必须用触点换算，不能偷懒放按钮中心——\"确认按在这里\"的语义全在落点上",
+      "不要用 box-shadow 或伪元素 :after 画涟漪——一个元素只有一个 after，连点会互相覆盖，必须动态建节点",
+      "涟漪容器 overflow:hidden 会裁掉外描边/阴影，所以裁剪层必须是独立内层（inset:0），不要设在按钮本体上",
+      "prefers-reduced-motion 下降级为瞬时高亮闪一下，而不是直接砍掉反馈——砍掉=用户以为没点到",
+      "pointerdown 触发而不是 click：click 要等抬手，涟漪的意义就是\"按下瞬间的确认\""
+    ],
+    "verify": [
+      "按下按钮：波纹从指尖/光标正下方扩散开并淡出",
+      "同一位置连点 5 次：波纹叠加互不打断",
+      "按钮有圆角时波纹被整齐裁切，外描边不被裁",
+      "Tab + Enter 触发时波纹从中心扩散（键盘没有落点）"
+    ],
+    "reference": "参考气质：Material Design 规范按钮、Android 原生列表项。扩散 350-500ms、淡出先于扩散完成。",
+    "variants": [
+      { "label": "柔光版", "delta": "OPACITY 降到 0.12、DUR 提到 500ms，适合浅色品牌按钮" },
+      { "label": "整行列表", "delta": "涟漪套在 li 上，直径按行对角线算，长列表性能靠复用单节点" }
+    ]
+  },
+  "params": [
+    { "key": "DUR", "label": "扩散时长 (ms)", "def": 420, "min": 200, "max": 800, "step": 20, "hint": "<300ms 来不及看见，>600ms 拖沓" },
+    { "key": "OPACITY", "label": "波纹初始浓度", "def": 0.35, "min": 0.1, "max": 0.6, "step": 0.05 }
+  ],
+  "scenarios": [
+    "移动端按钮 / 列表项 / 卡片的按压确认",
+    "Material 设计语言产品的标配交互",
+    "桌面端大按钮（提交 / 播放）的点击质感",
+    "触屏优先的后台系统操作列"
+  ],
+  "pitfalls": [
+    "触点换算忘减按钮 rect 原点会让涟漪从错误位置炸出，因为 clientX 是视口坐标、涟漪层要的是按钮内坐标——rect 一减即可；按钮被 CSS transform 缩放过时 rect 与 client 坐标系还会错位，得除以 scale",
+    "涟漪节点动画结束不摘除会越积越多，因为每次点击都新建一个 DOM——animationend 里 remove()，别靠 setTimeout 猜时长",
+    "把 overflow:hidden 直接设到按钮本体会裁掉外描边与阴影，因为裁剪作用于整个盒子的绘制——裁剪必须是独立的内层（inset:0 绝对定位），阴影留给外层",
+    "砍掉 reduced-motion 的涟漪等于砍掉反馈本身，因为用户失去了\"按到了\"的确认——降级成瞬时高亮而不是无反馈"
+  ],
+  "related": ["magnetic-button", "bottom-sheet"],
+  "refs": [
+    "https://m3.material.io/styles/motion/transition-types"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

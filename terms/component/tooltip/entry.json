@@ -1,0 +1,77 @@
+{
+  "id": "tooltip",
+  "no": "C-04",
+  "category": "component",
+  "nameZh": "工具提示",
+  "nameEn": "Tooltip",
+  "aliases": [
+    "鼠标悬停冒出的小黑条",
+    "浮出来的说明",
+    "hover 提示",
+    "问号图标旁的解释气泡",
+    "指着图标跳出来的名字",
+    "悬浮小标签"
+  ],
+  "definition": "悬停或聚焦某个元素一段时间后，紧贴其出现的简短说明气泡：解释这个控件是什么、干什么，纯阅读、不可交互，移开或再按 Esc 即消失。适合给图标按钮这类「无文字承载」的控件补名字，或解释一个陌生术语。与 Popover 的经典辨析：Tooltip 里不能放任何交互内容（链接、按钮、表单）——一旦内容需要被点击，就该升级为 Popover；因为鼠标移向 Tooltip 的途中它就已经消失了，点不到里面任何东西。",
+  "whenNotToUse": [
+    "内容里有链接/按钮/表单 → 用 Popover（Tooltip 不可交互，移开即消失）",
+    "信息是完成任务所必需的（不是补充说明）→ 直接放在界面上，别藏进悬停",
+    "触屏为主的场景 → 没有 hover，Tooltip 根本不会被触发，改做常驻文案或 Info 按钮",
+    "给图片/排版装饰做说明可以，但别把整段帮助文档塞进去——Tooltip 只承载一句话"
+  ],
+  "confusedWith": ["popover", "snackbar"],
+  "anatomy": [
+    { "part": "气泡主体", "note": "承载说明文字的小面板，深色底白字最常见，圆角 6-8px" },
+    { "part": "Arrow 箭头", "note": "指向触发元素的小三角，建立「这条说明属于谁」的视觉绑定" },
+    { "part": "触发区", "note": "被悬停/聚焦的控件本体；Tooltip 的 id 通过 aria-describedby 挂到它身上" },
+    { "part": "延迟计时", "note": "出现前等 DELAY 毫秒——防止鼠标路过时满屏乱冒，这是 Tooltip 体验的命门" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个 Tooltip 工具提示组件：悬停或键盘聚焦触发元素 {DELAY}ms 后，在其上方 {OFFSET}px 处浮现深色气泡（背景 #1f2328、白字 12.5px、圆角 6px、内边距 5px 10px、max-width 220px），底部带 6px 小三角箭头指向触发元素。入场：opacity 0→1 叠 translateY 4px→0，140ms ease-out；退出：opacity 淡出 90ms，并立即取消延迟计时。移出触发区、焦点离开、按 Esc 都关闭。气泡元素 role=tooltip、id 用 aria-describedby 关联触发元素，触发元素本身保持可聚焦（button/a 天然满足，其他元素补 tabindex=0）。鼠标从触发元素直接移向气泡不算移出（气泡是触发的延伸热区），但气泡内永不放可交互内容。触屏（hover:none）不绑定悬停逻辑。",
+    "stack": "原生 CSS + 原生 JS（mouseenter/mouseleave/focus/blur + setTimeout 延迟）实现显隐与定位，无组件库。",
+    "constraints": [
+      "不要在 mouseenter 当帧立即显示——不设延迟的 Tooltip 会在鼠标扫过工具栏时连锁炸开，读都读不过来",
+      "不要把 role=tooltip 的内容同时塞进 title 属性——读屏软件会双播报，二选一",
+      "不要在 Tooltip 里放链接、按钮或任何可点东西——它随指针离开即消失，点不到的交互是幻觉交互，要放就用 Popover",
+      "不要用 display:none 硬切显隐——没有过渡起点动画会闪，用 visibility+opacity 或先挂载再双 rAF",
+      "不要省略 prefers-reduced-motion 与触屏 (hover:none) 降级"
+    ],
+    "verify": [
+      "鼠标悬停图标约 0.4 秒后，上方浮现深色气泡，小三角对准图标",
+      "气泡文字通过 aria-describedby 被读屏关联，自身带 role=tooltip",
+      "移出后气泡立即淡出；再次快速扫过不会残留旧计时",
+      "Tab 聚焦到同一按钮，气泡同样出现——键盘用户获得同等说明",
+      "按 Esc 可强制收起当前气泡"
+    ],
+    "reference": "参考气质：macOS 系统工具提示、shadcn Tooltip——安静、准时、一句话、绝不抢戏。",
+    "variants": [
+      { "label": "更跟手", "delta": "延迟降至 150ms，适合整条工具栏逐个查看的场景（Figma）" },
+      { "label": "浅色主题", "delta": "白底 + 1px 边框 + 投影，深字；适配浅背景产品与底部弹出位" }
+    ]
+  },
+  "params": [
+    { "key": "DELAY", "label": "出现延迟 (ms)", "def": 400, "min": 0, "max": 1000, "step": 50, "hint": "0=扫过即全部炸开；>600 显得迟钝" },
+    { "key": "OFFSET", "label": "气泡与触发元素间距 (px)", "def": 10, "min": 4, "max": 24, "step": 1, "hint": "含箭头高度；太小会挡住触发元素轮廓" }
+  ],
+  "scenarios": [
+    "工具栏纯图标按钮补名字（Figma 画布的撤销/编组按钮）",
+    "表格列头里「?」图标解释指标口径（转化率按 UV 还是 PV）",
+    "被截断的长文本悬停显示全文",
+    "键盘快捷键提示（保存按钮悬停出 Ctrl+S）"
+  ],
+  "pitfalls": [
+    "title 属性与 role=tooltip 并存会让读屏软件双播报，因为系统原生提示和自建气泡被当成了两条独立描述——用 aria-describedby 方案时必须把 title 属性去掉",
+    "不设出现延迟，鼠标沿工具栏横扫时每个按钮都会亮一次气泡，因为触发判定把「路过」也当成了「意图停留」——W3C 建议 300-500ms 起跑，且气泡显示期间扫过兄弟元素应即时切换、不再重新等待",
+    "pointer-events 不关掉气泡本体，鼠标移向气泡的路上会因元素挡住而触发 mouseleave 误判，气泡在指针底下反复横跳——把气泡标 pointer-events:none 或明确热区合并规则，二选一但要写进代码注释",
+    "触屏没有真正的 hover，tap 反而可能让 :hover 粘住不放（ghost hover），因为移动浏览器为兼容桌面站点会模拟悬停态——(hover:none) 下干脆不绑悬停逻辑，说明文案改常驻或收进 info 按钮",
+    "只用鼠标事件不做 focus 触发，键盘用户永远看不到说明，因为他们的焦点移动不产生 pointerenter——focus/blur 必须与 mouseenter/mouseleave 走同一套显隐函数"
+  ],
+  "related": ["snackbar", "bottom-sheet", "drawer"],
+  "refs": [
+    "https://www.w3.org/WAI/ARIA/apg/patterns/tooltip/",
+    "https://developer.apple.com/design/human-interface-guidelines/tooltips"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}
