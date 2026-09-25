@@ -74,5 +74,6 @@
   ],
   "contributors": [
     { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
-  ]
+  ],
+  "verifiedWith": "Qwen3.8-Flash · replay 2026-09-25 · 1/1 生成通过"
 }

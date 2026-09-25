@@ -18,7 +18,8 @@
 
 - [ ] `research/` 移出公开范围（git filter 或新仓）
 - [ ] astro.config `site` 换成真实域名
-- [ ] 全词条 `verifiedWith` 回填（prompt 回放测试工具化后）
+- [x] 全词条 `verifiedWith` 回填（prompt 回放测试工具化后）——2026-09-25 全 20 条经
+      `replay-test --accept` 真生成+真渲染验证回填（Qwen3.8-Flash）
 - [ ] `pnpm build` 产物自检：11+ 页、/demos/*.html 全可直链、/ui-dict.md 可下载
 - [ ] GitHub Actions：on push → pnpm gen && build → deploy-pages
 - [ ] 提交 https://web.archive.org/save 主动存档
