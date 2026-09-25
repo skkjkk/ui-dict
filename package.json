@@ -14,6 +14,7 @@
     "regression": "node scripts/regression-check.mjs",
     "replay": "node scripts/replay-test.mjs",
     "replay:dry": "node scripts/replay-test.mjs --all --dry-run",
+    "replay:judge": "node scripts/replay-test.mjs --judge --all",
     "replay:status": "node scripts/replay-test.mjs --status"
   },
   "dependencies": {

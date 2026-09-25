@@ -155,4 +155,4 @@ ui-dict/
 - [x] **词条扩到 20 条**（组件7 · 动效4 · 交互2 · 布局4 · 风格3；写手并行管线二次验证）
 - [x] **首页编辑部词典排版 v0.2**：报头双线 + 罗马数字目录 + 发刊词（引 AI articulation barrier）+ 页边注四步管线 + 分节活词条墙 + 分节搜索收起
 - [ ] 部署上线（GitHub Pages / Vercel + 独立域名 + 主动归档 Internet Archive；决策见 DEPLOY.md）
-- [x] **prompt 回放测试工具化**（`pnpm replay`：生成→铁律→真浏览器渲染→回填 verifiedWith；兑现出厂自检第二关，见 [REPLAY.md](REPLAY.md)）——**全 20 条已回填**（Qwen3.8-Flash · 2026-09-25，20/20 生成通过）
+- [x] **prompt 回放测试工具化**（`pnpm replay`：生成→铁律→真浏览器渲染→视觉判读→回填 verifiedWith；兑现出厂自检第二关，见 [REPLAY.md](REPLAY.md)）——**全 20 条双关验证回填**（Qwen3.8-Flash · 2026-09-25：20/20 生成通过 + 20/20 视觉还原判读通过）

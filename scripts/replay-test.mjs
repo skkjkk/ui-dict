@@ -16,6 +16,7 @@
 // 用法：
 //   node scripts/replay-test.mjs <slug|no> [--model M] [--out N 次] [--accept] [--dry-run]
 //   node scripts/replay-test.mjs --all [--only-unverified] [--dry-run]
+//   node scripts/replay-test.mjs --judge --all [--judge-model M] [--accept]   # 视觉判读已有截图
 //   node scripts/replay-test.mjs --status
 //
 // 环境变量：
@@ -73,7 +74,7 @@ export function extractHtml(text) {
 /** 流式生成（SSE）：qoder2api 非流式会缓冲到超时，流式首字节 <1s。
  *  reasoning_effort=low：推理模型默认思考会吃掉整个 max_tokens 预算（实测 finish=length），
  *  回放测试要的是「照 prompt 生成代码」，低思考档位既快又足够。REPLAY_REASONING=none 可关。 */
-async function generateOnce(prompt, { model, key, timeoutMs = 240000, idleMs = 60000 }) {
+async function generateOnce(content, { model, key, timeoutMs = 240000, idleMs = 60000, maxTokens = 12000, temperature = 0.7 }) {
   const extra = {};
   const effort = process.env.REPLAY_REASONING ?? "low";
   if (effort !== "none" && effort !== "off") extra.reasoning_effort = effort;
@@ -83,9 +84,9 @@ async function generateOnce(prompt, { model, key, timeoutMs = 240000, idleMs = 6
     headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: Number(process.env.REPLAY_MAX_TOKENS ?? 12000),
-      temperature: 0.7, // 采样温度：多次生成看方差
+      messages: [{ role: "user", content }],
+      max_tokens: Number(process.env.REPLAY_MAX_TOKENS ?? maxTokens),
+      temperature, // 判读用 0 求稳定，生成用 0.7 看方差
       stream: true,
       ...extra,
     }),
@@ -94,7 +95,7 @@ async function generateOnce(prompt, { model, key, timeoutMs = 240000, idleMs = 6
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const rd = res.body.getReader();
   const dec = new TextDecoder();
-  let content = "", reasoning = "", usage = null, finish = "", buf = "", lastByte = Date.now();
+  let text = "", reasoning = "", usage = null, finish = "", buf = "", lastByte = Date.now();
   for (;;) {
     const idle = new Promise((_, rej) =>
       setTimeout(() => rej(new Error(`流空闲 ${idleMs / 1000}s 无新字节（上游可能卡死）`)), idleMs)
@@ -119,14 +120,14 @@ async function generateOnce(prompt, { model, key, timeoutMs = 240000, idleMs = 6
       try {
         const j = JSON.parse(payload);
         const d = j.choices?.[0]?.delta;
-        if (d?.content) content += d.content;
+        if (d?.content) text += d.content;
         if (d?.reasoning_content) reasoning += d.reasoning_content;
         if (j.choices?.[0]?.finish_reason) finish = j.choices[0].finish_reason;
         if (j.usage) usage = j.usage;
       } catch { /* 非 JSON 心跳行 */ }
     }
   }
-  return { content, html: extractHtml(content), reasoningChars: reasoning.length, finish, ms: Date.now() - t0, usage };
+  return { content: text, html: extractHtml(text), reasoningChars: reasoning.length, finish, ms: Date.now() - t0, usage };
 }
 
 // ---------- 渲染断言（机器可判定的验收项） ----------
@@ -144,6 +145,8 @@ async function renderCheck(page, html, settleMs) {
       })()`
     )
     .catch(() => {});
+  // 交互激活：点开「点开才见」的浮层（命令面板/抽屉/弹层），否则静态截图拍不到核心部件
+  const act = await page.activate().catch(() => null);
   const probes = await page
     .eval(
       `(() => ({
@@ -158,7 +161,94 @@ async function renderCheck(page, html, settleMs) {
     ok: !runtimeErrors.length && !!probes && probes.children > 0 && probes.textLen > 0,
     runtimeErrors: runtimeErrors.slice(0, 8),
     failedRequests: r.failed.slice(0, 5),
+    activated: act?.opened ? act.via : null,
     probes,
+  };
+}
+
+// ---------- 视觉判读（第五关：机器过 ≠ 入库，让视觉模型回答审校四问③） ----------
+/** 从模型回复中抽 JSON（剥 ```json 围栏，取首个平衡的 {...}）。 */
+function extractJson(text) {
+  const fence = /```(?:json)?\s*\n?([\s\S]*?)```/i.exec(text);
+  const cand = (fence ? fence[1] : text) ?? "";
+  const start = cand.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < cand.length; i++) {
+    const c = cand[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{") depth++;
+    else if (c === "}") {
+      if (--depth === 0) {
+        try { return JSON.parse(cand.slice(start, i + 1)); } catch { return null; }
+      }
+    }
+  }
+  return null;
+}
+
+const b64png = async (p) => "data:image/png;base64," + (await fs.readFile(p)).toString("base64");
+
+/**
+ * 视觉判读一张生成截图 vs 基准 demo 截图。
+ * 关键诚实点：静态截图判不了动效过程与 hover/click 反馈 —— 明确要求模型把这些
+ * 列入 notJudgeable 而非臆断，判读结论只覆盖「静态视觉可判定」的部分。
+ */
+async function judgeOne(t, report, { model, key }) {
+  const dir = path.join(OUT, t.slug);
+  const baseShot = path.join(dir, "baseline.png");
+  const genRun = report.runs.find((r) => /^生成 #\d+$/.test(r.label) && !r.fail && r.render?.ok);
+  const genShot = path.join(dir, `${/^生成 #(\d+)$/.exec(genRun?.label ?? "")?.[1] ?? "1"}.png`);
+  const genShotFinal = (await fs.stat(genShot).catch(() => null)) ? genShot : path.join(dir, "gen-1.png");
+  if (!(await fs.stat(baseShot).catch(() => null)) || !(await fs.stat(genShotFinal).catch(() => null))) {
+    return { skipped: "缺 baseline.png 或 gen-1.png，无法判读" };
+  }
+  const p = t.promptTemplate;
+  const verify = (p.verify ?? []).map((x, i) => `${i + 1}. ${x}`).join("\n");
+  const instruction =
+    `你是前端设计词条的审校，正在做「prompt 回放测试」的视觉判读。给你两张截图：\n` +
+    `【图一 · 基准 demo】人工编写的参考实现，它定义了这条词条应有的样子。\n` +
+    `【图二 · 模型生成】完全依据下方 prompt 生成的实现。\n\n` +
+    `词条：${t.nameZh}（${t.nameEn}）\n` +
+    `定义：${t.definition}\n` +
+    (t.anatomy?.length ? `解剖部件：${t.anatomy.map((a) => a.part).join("、")}\n` : "") +
+    `\n验收清单（生成结果应满足）：\n${verify}\n\n` +
+    `请判断【图二】是否忠实还原了词条定义与验收清单。规则：\n` +
+    `1. 只依据静态截图**看得见**的东西判断；动效过程、悬停/点击/拖拽反馈、时序等静态图看不出的，` +
+    `一律放进 notJudgeable，不要臆断成缺失或满足；\n` +
+    `2. 布局/配色/组件形态/文案承载 与基准「同类且正确」即可，不要求像素一致（模型自由发挥是正常的）；\n` +
+    `3. 若图二明显没实现定义的核心效果（如该有面板却只有背景、该有骨架却空白），faithful=false。\n\n` +
+    `只输出一个 JSON，不要多余文字：\n` +
+    `{"faithful": true/false, "confidence": "high|medium|low", ` +
+    `"matched": ["图二确实满足的验收项"], "missing": ["静态可见但没做对的项"], ` +
+    `"notJudgeable": ["静态截图无法判定的项"], "verdict": "一句话结论"}`;
+
+  const content = [
+    { type: "text", text: instruction },
+    { type: "text", text: "【图一 · 基准 demo】" },
+    { type: "image_url", image_url: { url: await b64png(baseShot) } },
+    { type: "text", text: "【图二 · 模型生成】" },
+    { type: "image_url", image_url: { url: await b64png(genShotFinal) } },
+  ];
+  const g = await generateOnce(content, { model, key, temperature: 0, maxTokens: 2500 });
+  const j = extractJson(g.content);
+  if (!j || typeof j.faithful !== "boolean") {
+    return { error: "判读回复非结构化 JSON", raw: g.content.slice(0, 400), ms: g.ms };
+  }
+  return {
+    faithful: j.faithful,
+    confidence: j.confidence ?? "?",
+    matched: Array.isArray(j.matched) ? j.matched : [],
+    missing: Array.isArray(j.missing) ? j.missing : [],
+    notJudgeable: Array.isArray(j.notJudgeable) ? j.notJudgeable : [],
+    verdict: j.verdict ?? "",
+    ms: g.ms,
   };
 }
 
@@ -173,11 +263,9 @@ async function writeReport(slug, report) {
 }
 
 /** 只改 verifiedWith 一行，保留 entry.json 其余字节（不重排紧凑数组/对象）。 */
-async function backfillVerifiedWith(t, report) {
+async function writeVerifiedWith(t, value) {
   const file = path.join(ROOT, "terms", t.category, t.slug, "entry.json");
   const raw = await fs.readFile(file, "utf8");
-  const pass = report.runs.filter((r) => r.render?.ok && r.gate?.length === 0).length;
-  const value = `${report.model} · replay ${stamp()} · ${pass}/${report.runs.length} 生成通过`;
   let next;
   if (/^\s*"verifiedWith"\s*:/m.test(raw)) {
     next = raw.replace(/^(\s*)"verifiedWith"\s*:\s*"(?:[^"\\]|\\.)*"/m, (_m, g1) => `${g1}"verifiedWith": ${JSON.stringify(value)}`);
@@ -189,10 +277,20 @@ async function backfillVerifiedWith(t, report) {
     const needsComma = !/[{,]$/.test(trimmed);
     next = trimmed + (needsComma ? "," : "") + `\n  "verifiedWith": ${JSON.stringify(value)}\n}` + raw.slice(i + 1);
   }
-  // 保险：确认改完仍是合法 JSON 且只动了这一处语义
-  JSON.parse(next);
+  JSON.parse(next); // 保险：改完仍是合法 JSON
   await fs.writeFile(file, next);
   return value;
+}
+
+/** 由 report（含可选 judge 块）拼 verifiedWith 文本。 */
+function acceptValue(report) {
+  const pass = report.runs.filter((r) => r.render?.ok && r.gate?.length === 0).length;
+  let v = `${report.model} · replay ${stamp()} · ${pass}/${report.runs.length} 生成通过`;
+  const j = report.judge;
+  if (j && typeof j.faithful === "boolean") {
+    v += j.faithful ? ` · 视觉判读 ${j.confidence}` : " · 视觉判读未过";
+  }
+  return v;
 }
 
 // ---------- 主流程 ----------
@@ -266,8 +364,9 @@ async function runOne(t, { model, key, dryRun, runs, accept, chrome }) {
   report.pass = report.runs.filter((r) => !r.fail && r.render?.ok && !r.gate?.length).length;
   report.total = report.runs.length;
   await writeReport(t.slug, report);
+
   if (accept && !dryRun && report.pass === report.total) {
-    const v = await backfillVerifiedWith(t, report);
+    const v = await writeVerifiedWith(t, acceptValue(report));
     console.log(`  ✓ verifiedWith 已回填：${v}`);
   } else if (accept && !dryRun) {
     console.log(`  ⚠ 未全部通过，拒绝回填 verifiedWith（${report.pass}/${report.total}）`);
@@ -286,6 +385,87 @@ async function main() {
       console.log(`  ${t.verifiedWith ? "✓" : "·"} ${t.no} ${t.nameZh.padEnd(6)} ${t.verifiedWith ?? "未验证"}`);
     }
     return;
+  }
+
+  // ---------- 视觉判读模式：读已有证据截图，只调视觉模型，不重新生成 ----------
+  if (flags.has("--judge")) {
+    const judgeModel = opt("judge-model", opt("model", process.env.REPLAY_MODEL ?? "Qwen3.8-Flash"));
+    const key = await resolveKey();
+    if (!key) { console.error("✗ 找不到 key（REPLAY_API_KEY 或 apikey.txt）"); process.exit(2); }
+    let targets;
+    if (flags.has("--all")) targets = terms;
+    else if (positional.length) targets = positional.map(byKey).filter(Boolean);
+    else { console.error("用法: --judge <slug|no> | --judge --all [--accept] [--recapture] [--judge-model M]"); process.exit(2); }
+
+    // --recapture：从已存的 gen-1.html + demoCode 重渲染 baseline.png/gen-1.png（带交互激活），
+    // 不重新调模型生成 —— 让「点开才见」的词条（命令面板/抽屉/弹层）拍到展开态，判读才有公平证据。
+    const recapture = flags.has("--recapture");
+    console.log(`视觉判读 · ${targets.length} 条 · 判读模型 ${judgeModel}${recapture ? " · 先重捕获证据（含交互激活）" : "（读已有截图）"}`);
+    const chrome = recapture ? await launchChrome() : null;
+    const rows = [];
+    try {
+      for (const t of targets) {
+        let report;
+        try { report = JSON.parse(await fs.readFile(path.join(OUT, t.slug, "report.json"), "utf8")); }
+        catch { console.log(`  · ${t.no} ${t.nameZh}：无 report.json，先跑 replay`); continue; }
+
+        if (recapture) {
+          const genRun = report.runs.find((r) => /^生成 #\d+$/.test(r.label) && !r.fail && r.render?.ok);
+          const genNo = /^生成 #(\d+)$/.exec(genRun?.label ?? "")?.[1] ?? "1";
+          const genHtml = path.join(OUT, t.slug, `gen-${genNo}.html`);
+          const shots = [["baseline", t.demoCode], [`gen-${genNo}`, genHtml]];
+          for (const [name, src] of shots) {
+            let html = src;
+            if (name !== "baseline") { try { html = await fs.readFile(src, "utf8"); } catch { html = null; } }
+            if (!html) continue;
+            const page = await chrome.newPage();
+            try {
+              const rc = await renderCheck(page, html, Number(opt("settle", 2500)));
+              await fs.writeFile(path.join(OUT, t.slug, `${name}.png`), await page.screenshot());
+              if (name !== "baseline" && genRun) genRun.render = rc; // 更新报告里的渲染结论
+            } catch { /* 保留旧截图 */ } finally { await page.close(); }
+          }
+          await writeReport(t.slug, report);
+        }
+
+        process.stdout.write(`  ▶ ${t.no} ${t.nameZh}`);
+        let j;
+        // 幂等：已有结构化判读结论则复用（--re-judge 强制重判；--recapture 改了证据则必重判）
+        if (report.judge && typeof report.judge.faithful === "boolean" && !flags.has("--re-judge") && !recapture) {
+          j = report.judge;
+          console.log(` — ${j.faithful ? "✓ 还原" : "✗ 未还原"} [${j.confidence}]（复用已有判读）`);
+          rows.push({ t, j, report });
+          continue;
+        }
+        try { j = await judgeOne(t, report, { model: judgeModel, key }); }
+        catch (e) { j = { error: e.message }; }
+        report.judge = j;
+        report.judgeModel = judgeModel;
+        await writeReport(t.slug, report);
+        if (j.skipped) console.log(` — 跳过（${j.skipped}）`);
+        else if (j.error) console.log(` — 判读失败：${j.error}`);
+        else console.log(` — ${j.faithful ? "✓ 还原" : "✗ 未还原"} [${j.confidence}] ${j.verdict}`);
+        rows.push({ t, j, report });
+      }
+    } finally {
+      if (chrome) await chrome.close();
+    }
+    // 汇总 + 可选回填（--accept 只回填「生成过 + 判读 faithful=true」的）
+    const judged = rows.filter((r) => typeof r.j.faithful === "boolean");
+    const faithful = judged.filter((r) => r.j.faithful);
+    console.log(`\n══ 判读汇总：${faithful.length}/${judged.length} 条视觉还原通过（共判 ${rows.length} 条）`);
+    const notFaithful = judged.filter((r) => !r.j.faithful);
+    if (notFaithful.length) {
+      console.log("   未还原：");
+      for (const r of notFaithful) console.log(`     ✗ ${r.t.no} ${r.t.nameZh} [${r.j.confidence}] ${r.j.verdict}`);
+    }
+    if (flags.has("--accept")) {
+      for (const r of faithful) {
+        const v = await writeVerifiedWith(r.t, acceptValue(r.report));
+        console.log(`   ✓ ${r.t.no} 回填：${v}`);
+      }
+    }
+    process.exit(notFaithful.length ? 1 : 0);
   }
 
   let targets;

@@ -17,12 +17,13 @@
    ▼
 generated.html（模型产出的代码）
    │ ③ gate：单文件铁律复检（复用 src/lib/html-gate.mjs，与 qa-demofiles 同一把尺子）
-   │ ④ render：headless Chrome（CDP，零依赖）真浏览器渲染 + 滚动遍历 + 控制台/异常收集 + 整页截图
+   │ ④ render：headless Chrome（CDP，零依赖）真浏览器渲染 —— 滚动遍历触发 scroll 动效、
+   │    交互激活点开「点开才见」的浮层（命令面板/抽屉/弹层）、控制台/异常收集、整页截图
    ▼
-报告 replay/<slug>/report.json + gen-*.html + gen-*.png
-   │ ⑤ 人工/模型判读截图，确认行为与验收清单一致
+报告 replay/<slug>/report.json + gen-*.html + baseline.png + gen-*.png
+   │ ⑤ judge：视觉模型（Qwen3.8-Flash 是视觉模型）对照基准截图 + 验收清单，判「生成是否还原定义」
    ▼
---accept 回填 verifiedWith（"Qwen3.8-Flash · replay 2026-09-25 · 1/1 生成通过"）
+--accept 回填 verifiedWith（"Qwen3.8-Flash · replay 2026-09-25 · 1/1 生成通过 · 视觉判读 high"）
 ```
 
 **为什么这算「工具化」而不是又一个测试**：它复用了站点自己的两个纯函数模块
@@ -49,7 +50,33 @@ node scripts/replay-test.mjs --all --only-unverified
 
 # 通过后回填 verifiedWith（只在全过才写，且只改那一行，不重排 entry.json）
 node scripts/replay-test.mjs count-up --accept
+
+# 视觉判读（第五关）：用视觉模型对照基准截图 + 验收清单，判「生成是否还原定义」
+#   读已有截图，不重新生成/渲染；--recapture 先从已存 gen-*.html 重渲染（带交互激活）再判
+node scripts/replay-test.mjs --judge --all
+node scripts/replay-test.mjs --judge command-palette --recapture   # 改了证据必重判
+node scripts/replay-test.mjs --judge --all --accept                # 复用判读结论，回填含「视觉判读 high/medium」
 ```
+
+### 判读模式（`--judge`）
+
+出厂自检第二关的「人眼判读」这一步也交给视觉模型（Qwen3.8-Flash 是视觉模型）：
+把**基准 demo 截图**（图一，定义应有的样子）和**生成截图**（图二）并排喂给模型，
+连同词条定义 + 解剖部件 + 验收清单，要求只输出结构化 JSON：
+`{faithful, confidence, matched[], missing[], notJudgeable[], verdict}`。
+
+- **诚实约束**：静态截图判不了动效过程与 hover/click 反馈 —— prompt 明确要求把这些
+  列入 `notJudgeable` 而非臆断缺失，所以判读结论只覆盖「静态视觉可判定」的部分。
+  这正是它作为**粗筛**的价值：能抓「该有面板却只有背景」这类硬伤，动效细节仍靠渲染闸 + 人眼。
+- **交互激活**（`activate()`）：命令面板/抽屉/弹层这类「点开才见」的词条，
+  初始静态截图只有触发钮，判读会误杀（首轮 C-06 就被误判 ✗）。渲染后自动探测隐藏浮层
+  （`[role=dialog]/.sheet/.palette/…`），点最可能的触发钮、兜底 Ctrl+K 把它打开再截图 ——
+  重捕获后 C-06 翻为 ✓，且是**证据支撑**的翻案（截图里真能看到输入框+列表+高亮+快捷键徽章）。
+- 判读结论写进 `report.json` 的 `judge` 块；`--accept` 折进 `verifiedWith`
+  （`… · 视觉判读 high`）。幂等：已有结论默认复用，`--recapture`/`--re-judge` 强制重判。
+
+**2026-09-25 首轮全量判读**：20/20 视觉还原通过（high 8 / medium 12）。medium 集中在
+「核心是动效、静态图只能判结构」的动效/交互类词条 —— 判读器对此诚实，没有假装能判动效。
 
 ## 环境变量
 
@@ -78,13 +105,16 @@ node scripts/replay-test.mjs count-up --accept
 6. **回填只改一行**：`--accept` 用正则定位 `verifiedWith` 行替换 / 末尾插入，`JSON.parse` 兜底校验，
    绝不 `JSON.stringify(entry,null,2)` 重排整个文件（会毁掉手调的紧凑数组排版，污染 diff）。
 
-## 判读：机器过 ≠ 入库
+## 判读：机器过 ≠ 入库（判读是粗筛，不是终审）
 
-工具给的是**证据**（生成的代码、渲染截图、运行时错误），不是**结论**。铁律 + 渲染「过」只保证
-「模型产出了一个能跑、零依赖、无报错的页面」——它是否**还原了这条词条定义的行为**（磁吸有没有弹簧过冲？
-骨架屏有没有微光循环？）仍需人眼看截图对照 `verify` 清单，或交给视觉模型判读。**审校四问的 ③
-（带着这条 prompt、不带着它，生成结果有肉眼差别吗）是本工具服务但无法替你回答的那一问。**
-`--accept` 只是把「跑过了且你认可」这个人工决定落进 `verifiedWith`，不自动背书。
+工具给的是**证据**（生成的代码、渲染截图、运行时错误），不是**终审结论**。铁律 + 渲染「过」只保证
+「模型产出了一个能跑、零依赖、无报错的页面」——它是否**还原了这条词条定义的行为**，由第五关
+`--judge`（视觉模型对照基准截图 + 验收清单）做**粗筛**：抓「该有面板却只有背景」这类硬伤，
+并把静态可判的解剖部件逐一核对。但动效过程（磁吸过冲、微光循环、吸附时序）静态图天然判不了，
+判读器被明确要求把这些列入 `notJudgeable` 而非臆断 —— 所以 **medium 置信的动效词条，
+审校四问的 ③（带/不带这条 prompt，生成结果有肉眼差别吗）仍需人眼对照 `replay/<slug>/gen-1.png`
+与验收清单**，判读只是把「明显没还原」的先挡在门外。`--accept` 落进 `verifiedWith` 的是
+「生成 + 铁律 + 渲染 + 视觉粗筛」四关的通过记录，不替人背终审的锅。
 
 ## 与既有资产的关系
 

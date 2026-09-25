@@ -222,6 +222,52 @@ export class Page {
       clickCount: type === "mouseMoved" ? 0 : 1,
     });
   }
+  /** 真实点击：move → down → up。 */
+  async click(x, y) {
+    await this.mouse("mouseMoved", x, y);
+    await this.mouse("mousePressed", x, y);
+    await this.mouse("mouseReleased", x, y);
+  }
+  /** 交互激活：仅当页面存在「隐藏的浮层/面板」（dialog/sheet/drawer/palette/tooltip…）时，
+   *  先点最可能的触发钮、再兜底发 Ctrl+K，把它打开。返回 {opened, via, label}；
+   *  无隐藏浮层则返回 null（多数 demo 初始态即代表态，不瞎点）。
+   *  目的：命令面板/抽屉/弹层这类「点开才见」的词条，静态截图必须拍到展开态，否则视觉判读会误杀。 */
+  async activate() {
+    const find = () => this.eval(`(() => {
+      const sel = '[role=dialog],[aria-modal=true],.sheet,.drawer,.palette,.modal,.overlay,.popover,.tooltip,.toast,.snackbar,.cmdk,.panel,.menu';
+      const hidden = [...document.querySelectorAll(sel)].filter((el) => {
+        const s = getComputedStyle(el); const r = el.getBoundingClientRect();
+        return s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0 || r.width < 2 || r.height < 2 || r.top >= innerHeight || r.bottom <= 0;
+      });
+      if (!hidden.length) return { none: true };
+      const kw = /打开|显示|唤起|触发|点开|查看|命令|面板|抽屉|弹|提示|气泡|消息条|试试|open|show|trigger|command|palette|drawer|sheet|tooltip|toast/i;
+      const cands = [...document.querySelectorAll('button,[role=button],a,[tabindex]')].filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+      const trig = cands.find((el) => kw.test((el.innerText || el.getAttribute('aria-label') || el.className || ''))) || cands[0];
+      if (!trig) return { none: false, noTrig: true, hidden: hidden.length };
+      const r = trig.getBoundingClientRect();
+      return { none: false, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), label: (trig.innerText || '').trim().slice(0, 24), hidden: hidden.length };
+    })()`).catch(() => null);
+
+    const before = await find();
+    if (!before || before.none) return null;
+    const settle = async () => { await new Promise((r) => setTimeout(r, 450)); return (await find())?.none ?? false; };
+
+    // 路径 1：点触发钮
+    let via = null;
+    if (!before.noTrig) {
+      await this.click(before.x, before.y);
+      if (await settle()) via = "click";
+    }
+    // 路径 2：兜底 Ctrl+K（命令面板常见快捷键）
+    if (!via) {
+      for (const [key, code, mods] of [["Control","ControlKey"],["k","KeyK"]]) {
+        await this.#send("Input.dispatchKeyEvent", { type: "keyDown", key, code, modifiers: key === "k" ? 2 : 0, windowsVirtualKeyCode: key === "k" ? 75 : 17 });
+        await this.#send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: key === "k" ? 75 : 17 });
+      }
+      if (await settle()) via = "ctrl+k";
+    }
+    return { opened: !!via, via, label: before.label, hiddenOverlays: before.hidden };
+  }
   /** 真实按键事件。 */
   async key(key, code) {
     const vk = code === "Escape" ? 27 : code === "Enter" ? 13 : 0;
