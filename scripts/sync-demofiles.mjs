@@ -48,4 +48,12 @@ await fs.writeFile(
   "// 由 scripts/sync-demofiles.mjs 生成，勿手改。词条 demo.html 逐字节内联。\n" +
     "export default " + JSON.stringify(demos) + ";\n"
 );
-console.log(`✓ sync-demofiles: ${count} 条 demo.html → src/generated/demos.js`);
+
+// 部署友好：每条 demo 同时落为 public/demos/<slug>.html —— 可直链分享、爬虫/AI 可直读、
+// 与 srcdoc 渲染、复制文本逐字节同源（同一份 demos 对象写出）。Astro 自动拷贝 public/ 进 dist。
+const PUB = path.join(ROOT, "public", "demos");
+await fs.mkdir(PUB, { recursive: true });
+for (const [slug, html] of Object.entries(demos)) {
+  await fs.writeFile(path.join(PUB, slug + ".html"), html);
+}
+console.log(`✓ sync-demofiles: ${count} 条 demo.html → demos.js + public/demos/（直链可分享）`);

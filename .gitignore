@@ -3,6 +3,8 @@ dist/
 build/
 .astro/
 src/generated/
+public/demos/
+public/ui-dict.md
 .playwright-cli/
 *.log
 .DS_Store

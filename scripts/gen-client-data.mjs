@@ -45,4 +45,24 @@ const out =
 
 await fs.mkdir(OUT, { recursive: true });
 await fs.writeFile(path.join(OUT, "site-data.js"), out);
-console.log(`✓ gen-client-data: ${terms.length} 条词条 → src/generated/site-data.js`);
+
+// ---------- 全站导出：public/ui-dict.md（喂 AI 的离线资产，index.how skill 同款思路） ----------
+// 收录名字/别名/定义/辨析/prompt 全文；不含代码体（代码走 /demos/<slug>.html 直链，控制体积）。
+const md = [];
+md.push("# UI 词典 · UI Lexicon — 全站词条导出");
+md.push(`\n> 生成于构建期（${new Date().toISOString().slice(0, 10)}），共 ${terms.length} 条。`);
+md.push("> 用法：整份贴进 Cursor / Claude Code / v0 的上下文，让 AI 直接掌握这些设计词汇与规格。\n");
+for (const t of terms) {
+  md.push(`---\n\n## ${t.no} ${t.nameZh}（${t.nameEn}）· ${CATEGORY_LABELS[t.category]}`);
+  if (t.aliases?.length) md.push(`\n**口语别名**：${t.aliases.join(" / ")}`);
+  md.push(`\n**定义**：${t.definition}`);
+  if (t.whenNotToUse?.length) md.push(`\n**何时不要用**：\n${t.whenNotToUse.map((s) => `- ${s}`).join("\n")}`);
+  if (t.confusedWith?.length) md.push(`\n**易混淆**：${t.confusedWith.join(" / ")}`);
+  md.push(`\n**Prompt**：\n\`\`\`text\n${assemblePrompt(t)}\n\`\`\``);
+  md.push(`\n**可运行 demo**：\`/demos/${t.slug}.html\`（零依赖单文件，代码 MIT）`);
+  md.push("");
+}
+await fs.mkdir(path.join(ROOT, "public"), { recursive: true });
+await fs.writeFile(path.join(ROOT, "public", "ui-dict.md"), md.join("\n"));
+
+console.log(`✓ gen-client-data: ${terms.length} 条词条 → site-data.js + public/ui-dict.md`);
