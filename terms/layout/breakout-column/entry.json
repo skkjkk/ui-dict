@@ -1,0 +1,78 @@
+{
+  "id": "breakout-column",
+  "no": "L-06",
+  "category": "layout",
+  "nameZh": "破格长文栏",
+  "nameEn": "Breakout Column",
+  "aliases": [
+    "正文窄窄一条，图突然拉宽",
+    "读着读着旁边冒出个小注",
+    "图比文字宽出一截",
+    "Tufte 那种页边注排版",
+    "文章中间一张大图撑破栏宽",
+    "正文一条道，配图两边溢出去"
+  ],
+  "definition": "破格长文栏（Breakout Column）：长文以约 65ch 的窄栏居中（可读行宽），图片、表格、引用块、代码块可以突破这个栏宽，伸进更宽的\"破格层\"，甚至全出血铺满视口——Tufte CSS / Notion / Medium 的做法。它靠宽度差制造阅读节奏：窄栏是常态，宽块是重音。与便当格（Bento Grid）的区别：bento 是在一个容器内部做网格拼贴、以模块为单位陈列信息；破格栏是以正文行宽为唯一基准、只让个别元素越界，服务的是阅读节奏而不是模块陈列。与普通 max-width 居中容器的区别：破格栏同时存在两套宽度（正文栏 + 破格栏）且能互相嵌套，普通容器只有一套。",
+  "whenNotToUse": [
+    "正文本身不是主角的页面（仪表盘、商品列表、表单）→ 没有\"阅读节奏\"可服务，两套宽度只是多余的复杂度",
+    "元素密度高的技术文档（大量表格与代码）→ 破格太频繁会让页面宽度反复横跳，扫读时眼睛一直在重新找左边界",
+    "移动端为主的阅读场景 → 视口本身就窄，破格层没有伸展空间，强行破格只会挤压正文，不如老实单栏到底"
+  ],
+  "confusedWith": ["bento-grid", "masonry", "sticky-section"],
+  "anatomy": [
+    { "part": "正文栏 Measure", "note": "全篇的可读基准，40–75ch；它是唯一的对齐锚，所有段落左边界都对齐到它" },
+    { "part": "破格层 Breakout", "note": "比正文栏宽的容器，宽度写死为 BREAKOUT px；与正文栏同轴居中，所以两边各溢出 (BREAKOUT − 正文宽)/2" },
+    { "part": "全出血 Full-bleed", "note": "直接铺到视口左右边缘的一层，用于章节分隔色带或大图；它比破格更宽，且不吃页面 padding" },
+    { "part": "页边注 Sidenote", "note": "挂在段落右侧页边的小注；宽屏飘到栏外，窄屏必须降级成内联/脚注——这是最容易漏掉响应式的一处" },
+    { "part": "行宽基准 ch", "note": "用 ch 而不是 px 定义正文栏：字号一变，行宽按字符数自动跟随，可读性基准不会被 FONT 参数破坏" }
+  ],
+  "promptTemplate": {
+    "core": "一个破格长文栏（Breakout Column）文章页：.article 是一个 CSS Grid，列定义为 [full-start] minmax({PAD}px, 1fr) [breakout-start] minmax(0, calc(({BREAKOUT}px - {MEASURE}ch) / 2)) [content-start] min({MEASURE}ch, 100% - 2 * {PAD}px) [content-end] 对称两列 [breakout-end] minmax({PAD}px, 1fr) [full-end]，外层两列吸收剩余空间把中段居中。正文 17px/{FONT}px、行高 1.7，段落默认 grid-column: content。破格元素（引用块、图、表）写 grid-column: breakout，宽度自然等于 {BREAKOUT}px；全出血色带写 grid-column: full。页边注用嵌套 grid：外层 .note-row 跨 content-start 到 breakout-end，内部两列 = 正文宽 + 剩余，段落进第一列、aside 进第二列，宽屏时注飘在右页边。视口窄于 {BREAKOUT}px + 2×PAD 时（media query）把破格列宽置 0、页边注降级为带左边框的内联注。全篇不得出现横向滚动条，破格块额外加 max-width: 100% 兜底。",
+    "stack": "纯 CSS Grid 命名线实现（grid-column: content / breakout / full），零 JS、零网络请求；不需要负 margin 也不需要 overflow-x: hidden。",
+    "constraints": [
+      "绝对不要用 overflow-x: hidden 去\"修\"横向滚动条——它只是把溢出裁掉，真正超宽的元素依然存在（打印、读屏、Ctrl+F 定位、缩放后都会露馅），而且会连带杀死页面里所有 sticky。溢出必须靠 max-width / min() 从源头约束",
+      "破格块的宽度必须由网格列决定，不要手写 width: 980px 再加负 margin：负 margin 一旦算错就溢出，而网格列宽是算出来的，(BREAKOUT − 正文宽)/2 由浏览器保证两侧对称",
+      "正文栏用 ch 定义而不是 px：字号随 FONT 参数变化时，行宽按字符数自动跟随；用 px 会在调大字号后悄悄把行宽推过 75ch 的可读上限",
+      "页边注必须有窄屏降级分支：宽屏时它靠嵌套 grid 飘在栏外，窄屏下那一列宽度会塌成 0 或把正文挤扁——media query 里改成 display: block 的带边框内联注，而不是让它继续飘",
+      "破格块内部的内容（长表格、代码）要自己带 overflow-x: auto，把\"局部可横滚\"限制在块内；整页横向滚动条和块内横滚是两件事，后者才是正解"
+    ],
+    "verify": [
+      "正文是一条居中的窄栏，段落左边界全部对齐，没有一行长到需要转头去读",
+      "引用块/图比正文明显宽出一截，且左右溢出的宽度对称、两边都不越出视口",
+      "把窗口缩窄到手机宽度：破格块收回正文宽度，页边注变成带左边框的内联注，全程没有横向滚动条",
+      "拖动 MEASURE 滑杆：正文栏宽跟着变，破格块宽度不变（两套宽度是独立参数）；拖动 FONT：字号与行高变化而字符数不变",
+      "页面底部读数显示\"横向溢出：无\"，scrollWidth 与 clientWidth 相等"
+    ],
+    "reference": "参考气质：Edward Tufte 的《The Visual Display of Quantitative Information》正文版式、Notion 的宽块、Medium 的大图破格。窄栏是常态，宽块是重音，页边注是耳语。",
+    "variants": [
+      { "label": "双侧页边注", "delta": "grid 左右各留一条 breakout 列，注可左可右；左注必须改成右对齐文字，否则贴栏那一侧的锯齿会打断正文视线" },
+      { "label": "深色全出血章节带", "delta": "把 full-bleed 层用来做章节分隔：底色 #141414、内边距上下各 56px、正文反白，用来切分长篇的幕" }
+    ]
+  },
+  "params": [
+    { "key": "MEASURE", "label": "正文栏宽 (ch)", "def": 65, "min": 40, "max": 90, "step": 1, "hint": "用字符数而非 px 定义行宽；超过 75ch 换行时眼睛容易跳行" },
+    { "key": "BREAKOUT", "label": "破格宽 (px)", "def": 980, "min": 600, "max": 1400, "step": 20, "hint": "引用块/图的宽度；两侧各溢出 (BREAKOUT − 正文宽)/2" },
+    { "key": "FONT", "label": "正文字号 (px)", "def": 17, "min": 14, "max": 22, "step": 1, "hint": "17–18px 配 1.7 行高最稳；字号变大时 ch 行宽会跟着变，可读上限不会被破坏" }
+  ],
+  "scenarios": [
+    "技术博客/设计长文（Tufte CSS 风格的文章页）",
+    "数据新闻的图文长稿（正文窄栏 + 破格图表）",
+    "产品文档的教程页（正文 + 破格代码块/示意图）",
+    "学术随笔与读书笔记（正文 + 页边注做旁批）"
+  ],
+  "pitfalls": [
+    "overflow-x: hidden 是这类布局最流行的假解法：它把超出的像素裁掉，横向滚动条确实没了，但元素实际宽度没变——打印会截断、Ctrl+F 定位会滚到看不见的地方、用户缩放后立刻复现；更糟的是它给整页建了一个滚动容器，页面里所有 position: sticky 当场失灵。破格栏的溢出必须用 min() / max-width 从宽度源头掐掉，而不是用裁切掩盖",
+    "破格宽度用负 margin 硬算时，(BREAKOUT − 正文宽)/2 会随 FONT 参数变化而失效：正文栏是 ch 单位、破格是 px，字号一调两者差值就变，负 margin 写死的值立刻不对称——要么像 demo 一样把破格列宽交给 grid 的 minmax(0, calc((BREAKOUT - MEASUREch)/2)) 由浏览器算，要么在字号变化时用 JS 重算，前者才是正解",
+    "正文栏用 px 定义会在调大字号后悄悄破坏可读性：65ch 在 17px 时约 550px，在 22px 时约 710px，而写死 550px 的 px 栏在 22px 下只剩约 50ch、行尾大量留白显得空旷；反过来写死 700px 在 14px 下是 100ch，眼睛换行时极易串行——行宽基准必须锚在字符数上",
+    "页边注的窄屏降级最容易漏：宽屏下它靠嵌套 grid 的第二列飘在栏外，窄屏时那一列宽度塌成 0，注会叠在正文上或把正文挤成一条窄缝。必须在 media query 里显式改成 display: block 的内联注（带左边框区分），而不是指望网格自己优雅退化",
+    "行宽超过 75ch 后阅读会明显掉速：眼睛从行尾折返行首的定位成本随行宽线性上升，实测超过约 75 个字符后回扫错误率显著抬头——所以 MEASURE 的上限卡在 90ch 只是\"还能用\"，真正的舒适区是 55–70ch"
+  ],
+  "related": ["bento-grid", "sticky-section", "scrollytelling"],
+  "refs": [
+    "https://edwardtufte.github.io/tufte-css/",
+    "https://practicaltypography.com/line-length.html"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拖拽排序 Drag to Reorder · ui-dict I-03</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #141414;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 90px; max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.7; }
+  .lead kbd {
+    background: #ece8e0; border-radius: 4px; padding: 1px 5px;
+    font-size: 12px; font-family: inherit;
+  }
+  #readout { font-size: 12px; color: #999; margin-bottom: 18px; }
+  #hint { font-size: 12.5px; color: #0b4f6c; margin-bottom: 10px; min-height: 18px; }
+
+  /* 列表容器设 relative：幽灵占位（绝对定位）与行的流内位置共用同一套 y 坐标，
+     让位位移的算术才只需要「第几格 × ROW_H」这一条公式 */
+  #list {
+    position: relative; list-style: none; margin: 0; padding: 0;
+    background: #fff; border: 1px solid #e5e1d8; border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.05);
+    /* 这里刻意不用 overflow: hidden 收圆角——它会把抬升行的阴影连同 z-index 一起裁掉，
+       拖起来的那行看着像没抬起来。改成给首尾行各自圆角，让容器不裁剪任何内容 */
+  }
+  .row {
+    position: relative; display: flex; align-items: center; gap: 10px;
+    height: var(--row-h); padding: 0 12px;
+    border-bottom: 1px solid #f1ede4; background: #fff;
+    /* pan-y：触屏从「行体」起拖时把竖直平移让给原生滚动（否则长列表滚不动）；
+       鼠标不受 touch-action 约束，所以桌面端仍可从整行起拖 */
+    touch-action: pan-y;
+    will-change: transform;
+  }
+  /* 圆角不能再用 :first-child——幽灵占位是 ul 的第一个孩子，会顶掉首行的 :first-child；
+     改成用相邻兄弟选择器认「紧跟幽灵之后的那一行」 */
+  #ghost + .row { border-radius: 13px 13px 0 0; }
+  .row:last-child { border-bottom: 0; border-radius: 0 0 13px 13px; }
+  /* 抬升态：z-index 必须显式给——不然阴影会被后面的行按绘制顺序盖掉，
+     看起来就像「拖起来的那行还压在别人下面」 */
+  .row.dragging {
+    z-index: 5; background: #fff;
+    box-shadow: 0 12px 28px rgba(0,0,0,.18);   /* 抬升高度靠阴影表达，不用位移 */
+    cursor: grabbing;
+    border-bottom-color: transparent;          /* 抬起来的一行不该再带分隔线 */
+  }
+  .row.dragging .handle { cursor: grabbing; }
+
+  /* 把手：触屏上的唯一合法起拖区。touch-action: none 把这块区域的平移手势
+     从浏览器手里收回来，否则首次移动就被判成原生滚动、直接 pointercancel 掐断指针流 */
+  .handle {
+    flex: none; width: 30px; height: 30px; border: 0; border-radius: 8px;
+    background: none; color: #b3ada1; cursor: grab;
+    display: grid; place-items: center; font-size: 15px; line-height: 1;
+    touch-action: none;
+  }
+  .handle:hover { background: #f4f1ea; color: #6b675f; }
+  .handle:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 1px; color: #0b4f6c; }
+  .idx {
+    flex: none; width: 20px; text-align: center; font-size: 11.5px;
+    color: #b3ada1; font-variant-numeric: tabular-nums;
+  }
+  .mark {
+    flex: none; width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid #d8d2c6;
+  }
+  .label { flex: 1; min-width: 0; font-size: 14px; }
+  .label small { display: block; font-size: 11.5px; color: #a49e92; margin-top: 1px; }
+  .tag {
+    flex: none; font-size: 11px; color: #6b675f; background: #f1ede4;
+    padding: 2px 7px; border-radius: 99px;
+  }
+
+  /* 幽灵占位：用 transform 而不是 top 来换位——拖动期每一帧都在改它，
+     改 top 会让它每帧参与布局，改 transform 只走合成层 */
+  #ghost {
+    position: absolute; left: 0; right: 0; top: 0; height: var(--row-h);
+    border: 1.5px dashed #0b4f6c; border-radius: 10px;
+    background: rgba(11, 79, 108, .05);
+    opacity: 0; pointer-events: none;
+    transition: transform 200ms cubic-bezier(.2,.8,.2,1), opacity 120ms linear;
+  }
+  #ghost.show { opacity: 1; }
+
+  .foot { font-size: 12.5px; color: #8a8579; margin-top: 16px; line-height: 1.8; }
+  .sr {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：让位与落位不再过渡（无惯性、直接落位），但拖拽/键盘/落点的完整功能链保留 */
+    #ghost { transition: opacity 120ms linear; }
+    .row { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>拖拽排序 · Drag to Reorder</h1>
+    <p class="lead">
+      演示词条 I-03。按住任意一行左侧的 <b>⠿ 把手</b>上下拖（桌面端整行都能起拖）——
+      被拖的行会抬起，<b>其余行滑开让位</b>而不是瞬间跳位，虚线框标出落点，松手吸附进去。
+      键盘：<kbd>Tab</kbd> 聚焦把手后按 <kbd>↑</kbd><kbd>↓</kbd> 与相邻行换位，<kbd>Home</kbd>/<kbd>End</kbd> 移到首尾。
+      触屏请务必从把手起拖——行的正文区域留给页面滚动。
+    </p>
+    <div id="readout"></div>
+    <!-- 视觉提示与读屏播报分成两个节点：#hint 只做眼睛看的文字，
+         播报统一交给下面的 #announce——同一个节点既当视觉提示又当 live region，
+         每帧改文案会被读屏逐条念出来，吵到无法使用 -->
+    <div id="hint"></div>
+
+    <ul id="list" aria-label="待办清单（可拖拽排序）">
+      <!-- 幽灵占位放在 <ul> 内部：它绝对定位于 #list（唯一的 position:relative 祖先），
+           与行的流内位置共用同一套 y 坐标——放到 ul 外面会以视口/别的祖先为基准，落点全错 -->
+      <li id="ghost" aria-hidden="true"></li>
+      <li class="row"><button class="handle" type="button" aria-label="拖拽把手">⠿</button><span class="idx">1</span><span class="mark"></span><span class="label">对齐首页栅格<small>设计 · 今天</small></span><span class="tag">进行中</span></li>
+      <li class="row"><button class="handle" type="button" aria-label="拖拽把手">⠿</button><span class="idx">2</span><span class="mark"></span><span class="label">补全组件状态<small>设计 · 明天</small></span><span class="tag">待办</span></li>
+      <li class="row"><button class="handle" type="button" aria-label="拖拽把手">⠿</button><span class="idx">3</span><span class="mark"></span><span class="label">写词条回放脚本<small>工程 · 周三</small></span><span class="tag">待办</span></li>
+      <li class="row"><button class="handle" type="button" aria-label="拖拽把手">⠿</button><span class="idx">4</span><span class="mark"></span><span class="label">校对中文注释<small>文档 · 周四</small></span><span class="tag">待办</span></li>
+      <li class="row"><button class="handle" type="button" aria-label="拖拽把手">⠿</button><span class="idx">5</span><span class="mark"></span><span class="label">部署预览环境<small>运维 · 周五</small></span><span class="tag">阻塞</span></li>
+      <li class="row"><button class="handle" type="button" aria-label="拖拽把手">⠿</button><span class="idx">6</span><span class="mark"></span><span class="label">整理竞品截图<small>研究 · 下周一</small></span><span class="tag">待办</span></li>
+    </ul>
+
+    <p class="foot">
+      顺序会真实写回 DOM（不是只改视觉），所以刷新后顺序保持；读屏会播报新的位次。
+    </p>
+    <p class="sr" id="announce" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "ROW_H": 56, "DUR": 200, "LIFT": 1.02 };
+  /* ui-dict:params:end */
+
+  const list = document.getElementById("list");
+  const ghost = document.getElementById("ghost");
+  const hint = document.getElementById("hint");
+  const announce = document.getElementById("announce");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // 三个参数各有一个真实消费点：
+  //   ROW_H → 行高（CSS 变量）+ 所有让位/落位位移的算术单位
+  //   DUR   → 让位过渡与落位过渡的时长
+  //   LIFT  → 被拖项起拖时的缩放
+  document.documentElement.style.setProperty("--row-h", PARAMS.ROW_H + "px");
+  ghost.style.transition =
+    "transform " + PARAMS.DUR + "ms cubic-bezier(.2,.8,.2,1), opacity 120ms linear";
+  document.getElementById("readout").textContent =
+    "当前参数：ROW_H = " + PARAMS.ROW_H + " px · DUR = " + PARAMS.DUR +
+    " ms · LIFT = " + PARAMS.LIFT;
+
+  // 触屏提示：hover:none 的设备上"整行可拖"会让页面滚不动，必须显式告诉用户从把手起拖
+  if (matchMedia("(hover: none)").matches) {
+    hint.textContent = "触屏：请从左侧 ⠿ 把手起拖（行体留给页面滚动）";
+  }
+
+  const EASE = "cubic-bezier(.2,.8,.2,1)";   // 快出慢收：让位起步要跟得上手指，收尾要稳
+  const DEAD_ZONE = 4;                       // 移动死区：触屏手指天然抖 2-5px，不设死区会把点击判成拖动
+
+  let rows = Array.from(list.querySelectorAll(".row"));
+  let shift = rows.map(function () { return 0; });   // 每一项当前的让位位移（格数 × ROW_H）
+
+  let dragging = false, from = -1, over = -1;
+  let startY = 0, dy = 0, activeRow = null, activeHandle = null;
+
+  /* ---------- 让位：FLIP（First-Last-Invert-Play） ----------
+     位移量其实是已知的（第几格 × ROW_H），所以这里的 First 不用量 rect，
+     直接读「当前实际渲染出来的 transform」——这样即使上一次让位还在动画中途，
+     也能从真实视觉位置接着走，而不是从上一个"目标值"跳一下。 */
+  function currentShift(row) {
+    const t = getComputedStyle(row).transform;
+    if (!t || t === "none") return 0;
+    const m = t.match(/matrix(?:3d)?\(([^)]+)\)/);
+    if (!m) return 0;
+    const n = m[1].split(",").map(Number);
+    return t.indexOf("matrix3d") === 0 ? n[13] : n[5];
+  }
+
+  // 纯算术的让位规则：被拖项跨过哪些行，那些行就朝它原来的位置挪一格
+  function shiftsFor(f, o) {
+    return rows.map(function (_, i) {
+      if (i === f) return 0;
+      if (f < o && i > f && i <= o) return -PARAMS.ROW_H;
+      if (o < f && i >= o && i < f) return PARAMS.ROW_H;
+      return 0;
+    });
+  }
+
+  function applyShifts(next, animate) {
+    const invert = [], play = [];
+    rows.forEach(function (row, i) {
+      if (i === from) return;
+      if (shift[i] === next[i]) return;
+      invert.push([row, currentShift(row)]);
+      play.push([row, next[i]]);
+    });
+    if (!invert.length) { shift = next; return; }
+
+    // INVERT：先写回「旧视觉位置」，并关掉过渡，让这个值立刻生效
+    invert.forEach(function (p) { p[0].style.transition = "none"; p[0].style.transform = "translateY(" + p[1] + "px)"; });
+    void list.offsetHeight;   // 强制 reflow：不读一次布局，浏览器会把两次写合并，invert 白做
+    // PLAY：过渡到目标位移
+    play.forEach(function (p) {
+      p[0].style.transition = (!animate || reduce) ? "none" : "transform " + PARAMS.DUR + "ms " + EASE;
+      p[0].style.transform = "translateY(" + p[1] + "px)";
+    });
+    shift = next;
+  }
+
+  function resetShifts() {
+    rows.forEach(function (row) {
+      row.style.transition = "none";
+      row.style.transform = "";
+    });
+    shift = rows.map(function () { return 0; });
+  }
+
+  function renumber() {
+    rows.forEach(function (row, i) {
+      row.querySelector(".idx").textContent = i + 1;
+      row.querySelector(".handle").setAttribute("aria-label", "拖拽把手，当前第 " + (i + 1) + " 位");
+    });
+  }
+
+  /* ---------- 拖动 ---------- */
+  function onDown(e) {
+    const row = e.target.closest(".row");
+    if (!row || dragging) return;
+    const handle = e.target.closest(".handle");
+    // 触屏只认把手：整行起拖会让列表/页面滚不动（touch-action: pan-y 已经把竖直平移让出去了，
+    // 这里再兜一层，免得将来有人把 pan-y 改掉后静默退化）
+    if (e.pointerType !== "mouse" && !handle) return;
+
+    from = rows.indexOf(row);
+    over = from;
+    startY = e.clientY;
+    dy = 0;
+    dragging = false;                       // 还没过死区，先不算起拖
+    activeRow = row;
+    activeHandle = handle || row.querySelector(".handle");
+
+    // 指针捕获挂在「起拖的元素」上：capture 之后所有 pointermove 都回这儿，
+    // 指针滑出这一行也不会丢事件；代价是 pointerup / pointercancel 必须都收尾
+    // setPointerCapture 在指针已非活跃时会抛 NotFoundError（例如 pointerdown 与它之间
+    // 指针已被系统取消），不兜住这一下整个起拖逻辑就断在异常里，行永远抬不起来
+    try { activeHandle.setPointerCapture(e.pointerId); } catch (err) {}
+    // 只在「行体起拖」时阻止默认行为（防选中文字）。把手是 <button>，本来就选不中文字，
+    // 而 pointerdown 上 preventDefault 会连带阻止按钮获得焦点——用户点一下把手却聚焦不到它，
+    // 紧接着按方向键全无反应，键盘路径等于白做
+    if (!handle) e.preventDefault();
+  }
+
+  function onMove(e) {
+    if (from < 0 || !activeRow) return;
+    dy = e.clientY - startY;
+
+    if (!dragging) {
+      if (Math.abs(dy) < DEAD_ZONE) return;  // 死区内不抬升，保住"点一下"的语义
+      dragging = true;
+      activeRow.classList.add("dragging");
+      activeRow.style.transition = "none";   // 拖拽期绝不能有过渡：挂了过渡元素会追着指针跑，手感立刻发粘
+      document.body.style.cursor = "grabbing";
+      ghost.classList.add("show");
+      ghost.style.transform = "translateY(" + (from * PARAMS.ROW_H) + "px)";
+      applyShifts(shiftsFor(from, over), false);
+    }
+
+    // 跟手位移 + 抬升缩放：同一句 transform，避免两处样式互相覆盖
+    activeRow.style.transform =
+      "translateY(" + dy + "px) scale(" + PARAMS.LIFT + ")";
+
+    // 落点判定用「被拖项自身的中心点」而不是指针位置：手指按在行的下缘时，
+    // 指针还在上一行范围内、元素却已经压住下一行，用指针会感到落点滞后半行
+    const center = from * PARAMS.ROW_H + dy + PARAMS.ROW_H / 2;
+    let next = Math.floor(center / PARAMS.ROW_H);
+    next = Math.max(0, Math.min(rows.length - 1, next));
+    if (next !== over) {
+      over = next;
+      // 只在位次真的变了时才动让位动画：60fps 的 move 事件无条件重启过渡 = 持续抖动
+      applyShifts(shiftsFor(from, over), true);
+      ghost.style.transform = "translateY(" + (over * PARAMS.ROW_H) + "px)";
+    }
+  }
+
+  function onUp(e) {
+    if (from < 0 || !activeRow) return;
+    const row = activeRow, f = from, o = over, moved = dragging;
+
+    activeRow = null; from = -1; dragging = false;
+    document.body.style.cursor = "";
+    row.classList.remove("dragging");
+    ghost.classList.remove("show");
+    try { activeHandle.releasePointerCapture(e.pointerId); } catch (err) {}
+
+    if (!moved) { resetShifts(); return; }   // 没起拖 = 点击，什么都不改
+
+    // 落位吸附：过渡到「重排之后它本该在的位置」，同时把缩放收回 1
+    row.style.transition = reduce ? "none" : "transform " + PARAMS.DUR + "ms " + EASE;
+    row.style.transform = "translateY(" + ((o - f) * PARAMS.ROW_H) + "px) scale(1)";
+
+    const commit = function () {
+      // 真实重排 DOM：只改 transform 的视觉顺序刷新后就会还原，后续按索引的逻辑也全错
+      const node = rows[f];
+      const ref = o > f ? rows[o].nextSibling : rows[o];
+      list.insertBefore(node, ref);
+      rows.splice(f, 1);
+      rows.splice(o, 0, node);
+      resetShifts();
+      renumber();
+      announce.textContent = "已移动到第 " + (o + 1) + " 位";
+      hint.textContent = "已落位到第 " + (o + 1) + " 位";
+    };
+    // 等落位过渡跑完再重排：重排会清掉内联 transform，提前清就等于把动画掐了
+    if (reduce) commit(); else setTimeout(commit, PARAMS.DUR);
+  }
+
+  function onCancel() {
+    // 系统手势、来电、浏览器抢滚动都会触发 pointercancel：不处理的话被拖项永久悬空
+    if (from < 0 || !activeRow) return;
+    const row = activeRow;
+    activeRow = null; from = -1; dragging = false;
+    document.body.style.cursor = "";
+    row.classList.remove("dragging");
+    ghost.classList.remove("show");
+    row.style.transition = reduce ? "none" : "transform " + PARAMS.DUR + "ms " + EASE;
+    row.style.transform = "";
+    resetShifts();
+  }
+
+  /* ---------- 键盘替代：没有它，键盘与读屏用户完全改不了顺序 ---------- */
+  function keyboardMove(i, j) {
+    if (j < 0 || j >= rows.length) return;
+    resetShifts();
+    // 这一段是"量 rect"版的 FLIP：DOM 顺序要真的换，位移量事先不知道，
+    // 所以必须 First（换前位置）→ Last（换后位置）→ Invert（transform 反向补偿）→ Play
+    const firstTop = new Map();
+    rows.forEach(function (r) { firstTop.set(r, r.getBoundingClientRect().top); });
+
+    const node = rows[i];
+    if (j < i) list.insertBefore(node, rows[j]);
+    else list.insertBefore(rows[j], node);
+    rows.splice(i, 1);
+    rows.splice(j, 0, node);
+
+    rows.forEach(function (r) {
+      const d = firstTop.get(r) - r.getBoundingClientRect().top;
+      if (!d) return;
+      r.style.transition = "none";
+      r.style.transform = "translateY(" + d + "px)";
+    });
+    void list.offsetHeight;
+    rows.forEach(function (r) {
+      if (!r.style.transform) return;
+      r.style.transition = reduce ? "none" : "transform " + PARAMS.DUR + "ms " + EASE;
+      r.style.transform = "";
+    });
+
+    renumber();
+    announce.textContent = "已移动到第 " + (j + 1) + " 位";
+    hint.textContent = "键盘移动：第 " + (j + 1) + " 位";
+    // 重排 DOM 有可能让焦点掉回 body，显式还回把手，用户才能连着按方向键
+    node.querySelector(".handle").focus();
+    setTimeout(function () { rows.forEach(function (r) { r.style.transition = ""; }); }, reduce ? 0 : PARAMS.DUR);
+  }
+
+  list.addEventListener("pointerdown", onDown);
+  list.addEventListener("pointermove", onMove);
+  list.addEventListener("pointerup", onUp);
+  list.addEventListener("pointercancel", onCancel);
+
+  list.addEventListener("keydown", function (e) {
+    const handle = e.target.closest(".handle");
+    if (!handle) return;
+    const i = rows.indexOf(handle.closest(".row"));
+    if (e.key === "ArrowUp") { e.preventDefault(); keyboardMove(i, i - 1); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); keyboardMove(i, i + 1); }
+    else if (e.key === "Home") { e.preventDefault(); keyboardMove(i, 0); }
+    else if (e.key === "End") { e.preventDefault(); keyboardMove(i, rows.length - 1); }
+  });
+
+  // 拖动中若指针滑出窗口（鼠标离开文档），pointerup 收不到 → 用 blur 兜底收尾
+  addEventListener("blur", onCancel);
+  renumber();
+})();
+</script>
+</body>
+</html>

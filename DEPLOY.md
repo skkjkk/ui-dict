@@ -1,6 +1,11 @@
-# DEPLOY.md · 部署决策记录（2026-09-24）
+# DEPLOY.md · 部署决策记录（2026-09-24，2026-09-25 更新）
 
 > 用户拍板：**暂不上传 GitHub，继续本地开发完善后再部署。** 本文档锁定届时的决策，防止遗忘。
+>
+> **2026-09-25 更新**：已建公开仓库并推送（`skkjkk/ui-dict`）。下方「已定决策 1」已执行——
+> `research/` 与 `.research-backup/` 已写入 `.gitignore` 并从公开仓库剔除；发布前做了文件级与
+> 提交历史级的脱敏（真实姓名 → `skkjkk`、本机绝对路径移除、提交作者统一为
+> `skkjkk <skkjkk@users.noreply.github.com>`）。
 
 ## 已定决策
 
@@ -16,7 +21,8 @@
 
 ## 部署前检查清单（届时执行）
 
-- [ ] `research/` 移出公开范围（git filter 或新仓）
+- [x] `research/` 移出公开范围（git filter 或新仓）——2026-09-25 以 `.gitignore` + 历史重写完成
+- [x] 全公开仓库脱敏：真实姓名 / 本机路径 / 提交作者身份——2026-09-25 完成
 - [ ] astro.config `site` 换成真实域名
 - [x] 全词条 `verifiedWith` 回填（prompt 回放测试工具化后）——2026-09-25 全 20 条经
       `replay-test --accept` 真生成+真渲染验证回填（Qwen3.8-Flash）

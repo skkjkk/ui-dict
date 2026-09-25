@@ -1,10 +1,10 @@
 // src/scripts/home.js —— 首页岛：活缩略图挂载 + 描述反查搜索。
 import MiniSearch from "minisearch";
 import { TERMS, DEMOS } from "@/generated/site-data.js";
-import { lazyMountIframes, motionAwareSrcdoc } from "./frame.js";
+import { lazyMountIframes, previewSrcdoc } from "./frame.js";
 
 // ---------- 活 demo 卡片：进视口才挂 iframe（srcdoc = demoCode 本体，尊重减少动效偏好） ----------
-lazyMountIframes(".wall iframe[data-demo]", (f) => motionAwareSrcdoc(DEMOS[f.dataset.demo] ?? ""));
+lazyMountIframes(".wall iframe[data-demo]", (f) => previewSrcdoc(DEMOS[f.dataset.demo] ?? ""));
 
 // ---------- 搜索反查 ----------
 // MiniSearch 统一索引。分词：拉丁按词；CJK 产出「单字 + 二字组」。
@@ -58,17 +58,44 @@ ms.addAll(TERMS.map((t) => ({
 const q = document.getElementById("q");
 const noResult = document.getElementById("no-result");
 const cards = Array.from(document.querySelectorAll(".wall .term-card"));
+const sections = Array.from(document.querySelectorAll(".cat-section"));
+
+// ---------- 分类筛选：点左侧导航，只显示对应分类 ----------
+let activeCat = "all";
+const sideItems = Array.from(document.querySelectorAll("[data-cat-filter]"));
+
+sideItems.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    activeCat = btn.dataset.catFilter;
+    sideItems.forEach((b) => b.classList.toggle("active", b === btn));
+    applyView();
+  });
+});
+
+// 统一视图：分类筛选 × 搜索结果 的交集
+function applyView() {
+  const query = q?.value.trim() ?? "";
+  if (!query) {
+    // 纯分类模式
+    cards.forEach((c) => {
+      c.style.display = activeCat === "all" || c.dataset.cat === activeCat ? "" : "none";
+      c.style.order = "";
+    });
+    sections.forEach((sec) => {
+      sec.style.display = activeCat === "all" || sec.dataset.cat === activeCat ? "" : "none";
+    });
+    noResult?.classList.add("hidden");
+    return;
+  }
+  run(); // 搜索模式：run() 内部叠加分类条件
+}
 
 let timer = null;
-q?.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 120); });
+q?.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(applyView, 120); });
 
 function run() {
   const query = q.value.trim();
-  if (!query) {
-    cards.forEach((c) => { c.style.display = ""; c.style.order = ""; });
-    noResult.classList.add("hidden");
-    return;
-  }
+  if (!query) { applyView(); return; }
   const scores = new Map();
   const tokens = queryTokens(query);
   // 逐 token OR 检索，按累计命中分排序（多命中别名/定义的词条自然靠前）
@@ -89,12 +116,13 @@ function run() {
   const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
   const order = new Map(ranked.map((id, i) => [id, i]));
   for (const c of cards) {
-    const hit = order.has(c.dataset.slug);
+    const hitCat = activeCat === "all" || c.dataset.cat === activeCat;
+    const hit = hitCat && order.has(c.dataset.slug);
     c.style.display = hit ? "" : "none";
     if (hit) { c.style.order = String(100 + order.get(c.dataset.slug)); shown++; }
   }
   // 分节布局：某节全部卡片被隐藏时，连节标题一起收起，避免空节
-  document.querySelectorAll(".cat-section").forEach((sec) => {
+  sections.forEach((sec) => {
     const any = [...sec.querySelectorAll(".term-card")].some((c) => c.style.display !== "none");
     sec.style.display = any ? "" : "none";
   });

@@ -22,41 +22,41 @@ const next = idx < all.length - 1 ? all[idx + 1] : null;
 const promptDefault = assemblePrompt(t);
 ---
 <Base title={`${t.nameZh} ${t.nameEn} · ${t.no} · UI 词典`} desc={`${t.nameZh}：${t.definition.slice(0, 80)}…`}>
-  <nav class="num mb-3">
+  <nav class="num mb-4 text-[14px]">
     <a href="/" class="underline" style="color:var(--color-accent)">索引</a>
     <span class="mx-2" style="color:var(--color-muted)">/</span>
     <span>{CATEGORY_LABELS[t.category]} {t.category}</span>
   </nav>
 
-  <article class="border hair rounded-sm bg-white px-5 py-6 sm:px-8 sm:py-8">
+  <article class="border hair rounded-sm bg-white px-7 py-8 sm:px-10 sm:py-10">
     <!-- ① 页眉：编号 + 中英正名 -->
     <header>
-      <div class="num">No. {t.no} · {CATEGORY_LABELS[t.category]} / {t.category}</div>
-      <h1 class="text-[28px] sm:text-[32px] m-0 mt-1">
-        {t.nameZh}<span class="text-[17px] italic font-normal ml-3" style="color:var(--color-muted)">{t.nameEn}</span>
+      <div class="num" style="font-size:13px">No. {t.no} · {CATEGORY_LABELS[t.category]} / {t.category}</div>
+      <h1 class="text-[38px] sm:text-[46px] m-0 mt-1.5 leading-tight">
+        {t.nameZh}<span class="text-[22px] italic font-normal ml-4" style="color:var(--color-muted)">{t.nameEn}</span>
       </h1>
       {t.aliases?.length > 0 && (
-        <div class="flex flex-wrap gap-1.5 mt-2.5">
+        <div class="flex flex-wrap gap-2 mt-4">
           {t.aliases.map((a) => <span class="chip">{a}</span>)}
         </div>
       )}
     </header>
 
     <!-- ② 定义 -->
-    <p class="text-[15.5px] mt-5 mb-0 max-w-[68ch]">{t.definition}</p>
+    <p class="text-[19px] leading-relaxed mt-6 mb-0 max-w-[74ch]">{t.definition}</p>
 
     <!-- ③ 该用 / 不该用 -->
     {(t.whenNotToUse?.length ?? 0) > 0 && (
-      <section class="mt-6 grid sm:grid-cols-2 gap-4">
-        <div class="border hair rounded-sm p-4">
-          <div class="eyebrow mb-2" style="color:#2e6b3e">该用 · WHEN</div>
-          <ul class="m-0 pl-4 text-[13.5px] space-y-1.5">
+      <section class="mt-8 grid sm:grid-cols-2 gap-5">
+        <div class="border hair rounded-sm p-5">
+          <div class="eyebrow mb-3" style="color:#2e6b3e">该用 · WHEN</div>
+          <ul class="m-0 pl-4 text-[17px] space-y-2">
             {t.scenarios.map((s) => <li>{s}</li>)}
           </ul>
         </div>
-        <div class="border hair rounded-sm p-4">
-          <div class="eyebrow mb-2" style="color:#8a3a2e">不该用 · WHEN NOT</div>
-          <ul class="m-0 pl-4 text-[13.5px] space-y-1.5">
+        <div class="border hair rounded-sm p-5">
+          <div class="eyebrow mb-3" style="color:#8a3a2e">不该用 · WHEN NOT</div>
+          <ul class="m-0 pl-4 text-[17px] space-y-2">
             {t.whenNotToUse.map((s) => <li>{s}</li>)}
           </ul>
         </div>
@@ -65,64 +65,69 @@ const promptDefault = assemblePrompt(t);
 
     <!-- ④ 解剖（组件类） -->
     {t.anatomy?.length > 0 && (
-      <section class="mt-7">
-        <div class="eyebrow mb-2">解剖 · ANATOMY</div>
-        <ol class="m-0 pl-5 text-[13.5px] space-y-1">
+      <section class="mt-9">
+        <div class="eyebrow mb-3">解剖 · ANATOMY</div>
+        <ol class="m-0 pl-5 text-[17px] space-y-1.5">
           {t.anatomy.map((a) => <li><b>{a.part}</b>{a.note ? <span style="color:var(--color-muted)"> — {a.note}</span> : null}</li>)}
         </ol>
       </section>
     )}
 
     <!-- ⑤ 操作三按钮 -->
-    <div id="entry-actions" class="mt-7 flex flex-wrap gap-2.5">
+    <div id="entry-actions" class="mt-9 flex flex-wrap gap-3">
       <button class="btn btn-primary" data-copy="prompt">复制 Prompt</button>
       <button class="btn" data-copy="code">复制代码<span data-live-note>（当前参数）</span></button>
       <button class="btn" data-open-demo>独立页打开 Demo ↗</button>
       <button class="btn" data-copy="card">复制整张词条卡</button>
     </div>
 
-    <!-- ⑥ Live Demo + 参数 + 代码（同源三态） -->
-    <div class="mt-4 grid lg:grid-cols-[1.1fr_0.9fr] gap-5">
-      <div>
-        <div class="eyebrow mb-2 flex items-center justify-between">
+    <!-- ⑥ Live Demo + 参数 + 代码（同源三态；列宽对半，左列预览面板与右列同高） -->
+    <div class="live-grid mt-5 grid lg:grid-cols-2 gap-7">
+      <div class="live-col">
+        <div class="eyebrow mb-3 flex items-center justify-between">
           <span>LIVE DEMO · iframe srcdoc = demoCode 本体</span>
-          <button class="mono text-[11px] underline" data-replay style="color:var(--color-accent)">↺ 重播</button>
+          <button class="mono text-[13px] underline" data-replay style="color:var(--color-accent)">↺ 重播</button>
         </div>
-        <iframe id="live" class="demo-frame" style="height:340px" sandbox="allow-scripts" title={`${t.nameZh} live demo`}></iframe>
-        <div class="mono text-[11px] mt-1.5" style="color:var(--color-muted)">
-          <span data-demo-meta>零依赖单文件 · {Math.round((t.demoCode?.length ?? 0) / 1024 * 10) / 10} KB · 0 网络请求</span>
+        <div class="demo-panel">
+          <iframe id="live" class="demo-frame" sandbox="allow-scripts" title={`${t.nameZh} live demo`}></iframe>
+          <div class="demo-panel-meta mono text-[13px]">
+            <span data-demo-meta>零依赖单文件 · {Math.round((t.demoCode?.length ?? 0) / 1024 * 10) / 10} KB · 0 网络请求</span>
+          </div>
         </div>
       </div>
       <div>
         {t.params?.length > 0 && (
-          <div id="params" class="mb-4">
-            <div class="eyebrow mb-2">调一调 · PARAMS</div>
+          <div id="params" class="mb-5">
+            <div class="eyebrow mb-3">调一调 · PARAMS</div>
             {t.params.map((p) => (
-              <label class="block mb-3">
-                <span class="mono text-[12px] flex justify-between">
+              <label class="block mb-4">
+                <span class="mono text-[14px] flex justify-between">
                   <span>{p.label}</span>
                   <output data-out={p.key}>{String(p.def)}</output>
                 </span>
-                <input type="range" class="mt-1" data-param={p.key}
+                <input type="range" class="mt-1.5" data-param={p.key}
                   min={p.min} max={p.max} step={p.step} value={String(p.def)}>
-                {p.hint && <span class="text-[11px]" style="color:var(--color-muted)">{p.hint}</span>}
+                {p.hint && <span class="text-[13px]" style="color:var(--color-muted)">{p.hint}</span>}
               </label>
             ))}
           </div>
         )}
-        <div class="eyebrow mb-2">代码 · 与左侧 demo 逐字节同源</div>
+        <div class="code-meta mb-3">
+          <span class="eyebrow">代码 · 与左侧 demo 逐字节同源</span>
+          <button class="code-toggle" data-code-toggle type="button" aria-expanded="false">展开全码 ↓</button>
+        </div>
         <div class="code-scroll border hair rounded-sm bg-[#232323] text-[#d8d5cc]">
-          <pre class="p-3.5"><code id="code">{t.demoCode}</code></pre>
+          <pre class="p-4"><code id="code">{t.demoCode}</code></pre>
         </div>
       </div>
     </div>
 
     <!-- ⑦ Prompt 卡 -->
-    <section class="mt-7">
-      <div class="eyebrow mb-2">PROMPT 卡 · 复制丢给任何 AI 编码工具</div>
+    <section class="mt-9">
+      <div class="eyebrow mb-3">PROMPT 卡 · 复制丢给任何 AI 编码工具</div>
       <pre id="prompt" class="prompt-preview">{promptDefault}</pre>
       {t.promptTemplate.variants?.length > 0 && (
-        <div class="mt-2 text-[12px]" style="color:var(--color-muted)">
+        <div class="mt-3 text-[14px]" style="color:var(--color-muted)">
           变体：{t.promptTemplate.variants.map((v) => `${v.label}（${v.delta}）`).join(" · ")}
         </div>
       )}
@@ -130,9 +135,9 @@ const promptDefault = assemblePrompt(t);
 
     <!-- ⑧ 坑 -->
     {t.pitfalls?.length > 0 && (
-      <section class="mt-7">
-        <div class="eyebrow mb-2">常见坑 · PITFALLS</div>
-        <ul class="m-0 pl-5 text-[13.5px] space-y-1.5">
+      <section class="mt-9">
+        <div class="eyebrow mb-3">常见坑 · PITFALLS</div>
+        <ul class="m-0 pl-5 text-[17px] space-y-2">
           {t.pitfalls.map((p) => <li>{p}</li>)}
         </ul>
       </section>
@@ -140,11 +145,11 @@ const promptDefault = assemblePrompt(t);
 
     <!-- ⑨ 易混淆 / 相关 / 规范 -->
     {(t.confusedWith?.length || t.related?.length || t.refs?.length) && (
-      <section class="mt-7 grid sm:grid-cols-3 gap-5 text-[13.5px]">
+      <section class="mt-9 grid sm:grid-cols-3 gap-7 text-[17px]">
         {t.confusedWith?.length > 0 && (
           <div>
-            <div class="eyebrow mb-2">易混淆</div>
-            <div class="flex flex-wrap gap-1.5">
+            <div class="eyebrow mb-3">易混淆</div>
+            <div class="flex flex-wrap gap-2">
               {t.confusedWith.map((id) => known.has(id)
                 ? <a class="chip underline" href={`/term/${known.get(id).slug}`}>{known.get(id).nameZh}</a>
                 : <span class="chip opacity-60">{id}</span>)}
@@ -153,8 +158,8 @@ const promptDefault = assemblePrompt(t);
         )}
         {t.related?.length > 0 && (
           <div>
-            <div class="eyebrow mb-2">相关词条</div>
-            <div class="flex flex-wrap gap-1.5">
+            <div class="eyebrow mb-3">相关词条</div>
+            <div class="flex flex-wrap gap-2">
               {t.related.map((id) => known.has(id)
                 ? <a class="chip underline" href={`/term/${known.get(id).slug}`}>{known.get(id).nameZh}</a>
                 : <span class="chip opacity-60">{id}</span>)}
@@ -163,9 +168,9 @@ const promptDefault = assemblePrompt(t);
         )}
         {t.refs?.length > 0 && (
           <div>
-            <div class="eyebrow mb-2">规范出处</div>
-            <ul class="m-0 pl-4 space-y-1">
-              {t.refs.map((r) => <li class="mono text-[11.5px] break-all"><a class="underline" href={r} rel="noopener">{new URL(r).host}</a></li>)}
+            <div class="eyebrow mb-3">规范出处</div>
+            <ul class="m-0 pl-4 space-y-1.5">
+              {t.refs.map((r) => <li class="mono text-[13.5px] break-all"><a class="underline" href={r} rel="noopener">{new URL(r).host}</a></li>)}
             </ul>
           </div>
         )}
@@ -173,14 +178,14 @@ const promptDefault = assemblePrompt(t);
     )}
 
     <!-- ⑩ 溯源 + Prev/Next -->
-    <footer class="mt-8 pt-3 border-t hair flex flex-wrap gap-x-5 gap-y-1 items-baseline text-[12px]" style="color:var(--color-muted)">
+    <footer class="mt-10 pt-4 border-t hair flex flex-wrap gap-x-5 gap-y-1 items-baseline text-[14px]" style="color:var(--color-muted)">
       {t.contributors.map((c) => <span>生成 {c.generator} · 审校 <b style="color:var(--color-ink)">{c.reviewer}</b> · {c.date}</span>)}
       {t.verifiedWith && <span>prompt 验证 {t.verifiedWith}</span>}
       <span>代码 MIT</span>
     </footer>
   </article>
 
-  <nav class="mt-5 flex justify-between text-[13.5px]">
+  <nav class="mt-6 flex justify-between text-[15px]">
     {prev ? <a class="num underline" href={`/term/${prev.slug}`}>← {prev.no} {prev.nameZh}</a> : <span class="num">← 已是首条</span>}
     {next ? <a class="num underline" href={`/term/${next.slug}`}>{next.no} {next.nameZh} →</a> : <span class="num">末条 →</span>}
   </nav>
@@ -189,3 +194,4 @@ const promptDefault = assemblePrompt(t);
     import "@/scripts/entry.js";
   </script>
 </Base>
+

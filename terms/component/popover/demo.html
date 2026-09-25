@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>气泡卡片 Popover · ui-dict C-08</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 0; max-width: 620px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .page p { font-size: 13.5px; color: #6b675f; margin: 0 0 14px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #readout { font-size: 12px; color: #8f8a80; margin: 0 0 20px; line-height: 1.7; }
+  .step { font-size: 12px; letter-spacing: .12em; color: #a09a8e; margin: 0 0 8px; }
+
+  /* 触发按钮：Popover 的锚点。aria-expanded 挂在这里而不是浮层上——
+     展开状态是「按钮的属性」，读屏聚焦按钮时要先听到「已展开/已折叠」 */
+  .anchor {
+    border: 1px solid #141414; background: #fff; color: #141414;
+    padding: 9px 16px; border-radius: 9px; font-size: 13.5px; cursor: pointer;
+    font-family: inherit; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .anchor:hover { background: #efeadf; }
+  .anchor:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  .anchor[aria-expanded="true"] { background: #141414; color: #fff; border-color: #141414; }
+  .anchor .caret { font-size: 10px; transition: transform .16s ease; }
+  .anchor[aria-expanded="true"] .caret { transform: rotate(180deg); }
+
+  /* 靠右缘的锚点：撑满 body 宽度后钉在右边，专门用来验水平钳位。
+     不能放在 .page（max-width 620）里——那样它在宽屏上离视口右缘还很远，钳位根本不触发 */
+  .edge-row { display: flex; justify-content: flex-end; padding: 26px 8px 0; }
+
+  /* 滚动垫：把最后一个锚点推到视口下缘，翻转逻辑才有机会被看见 */
+  .spacer {
+    height: 46vh; display: grid; place-items: center; text-align: center;
+    font-size: 12.5px; color: #a09a8e; line-height: 1.9;
+  }
+  .bottom-row { padding: 0 20px 14px; max-width: 620px; margin: 0 auto; }
+
+  /* ★ 浮层本体。单例复用：三个锚点共用同一个 #pop，靠 place() 换坐标——
+     多实例会带来「关一个忘一个」的状态泄漏，词典 demo 里没必要付这个成本。
+     初始态 visibility:hidden 而非 display:none：display:none 量不到尺寸（offsetWidth=0），
+     定位会算错，而且没有过渡起点、入场必闪一下 */
+  #pop {
+    position: fixed; left: 0; top: 0; z-index: 40; width: 260px;
+    background: #fff; border: 1px solid #e5e1d8; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+    opacity: 0; transform: translateY(var(--from, -4px)); visibility: hidden;
+    /* 退场：visibility 用 0s + 延迟 var(--dur) 翻转——先让 opacity 淡出跑完再消失。
+       写成 visibility 0s 立即翻转，节点会在淡出第一帧就不可见，动画等于没做 */
+    transition: opacity var(--dur) cubic-bezier(.2,.8,.2,1),
+                transform var(--dur) cubic-bezier(.2,.8,.2,1),
+                visibility 0s linear var(--dur);
+  }
+  #pop.show {
+    opacity: 1; transform: translateY(0); visibility: visible;
+    transition: opacity var(--dur) cubic-bezier(.2,.8,.2,1),
+                transform var(--dur) cubic-bezier(.2,.8,.2,1);
+  }
+  /* 箭头：默认贴浮层上缘朝上指（锚点在浮层下方）；翻转后换成下缘朝下指 */
+  #pop::after {
+    content: ""; position: absolute; width: 9px; height: 9px; background: #fff;
+    left: calc(var(--ax, 50%) - 5px); top: -5px;
+    border-left: 1px solid #e5e1d8; border-top: 1px solid #e5e1d8;
+    transform: rotate(45deg);
+  }
+  #pop.above::after {
+    top: auto; bottom: -5px; border-left: 0; border-top: 0;
+    border-right: 1px solid #e5e1d8; border-bottom: 1px solid #e5e1d8;
+  }
+
+  .pop-head { padding: 11px 14px 9px; border-bottom: 1px solid #f0ece4; font-size: 13px; font-weight: 600; }
+  .pop-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+  .pop-foot { padding: 10px 14px 12px; border-top: 1px solid #f0ece4; display: flex; gap: 8px; align-items: center; }
+  .pop-foot .ok {
+    border: 0; background: #0b4f6c; color: #fff; border-radius: 7px;
+    padding: 7px 14px; font-size: 12.5px; cursor: pointer; font-family: inherit;
+  }
+  .pop-foot .ok:hover { background: #0a4259; }
+
+  /* 开关：role=switch + aria-checked，视觉上是轨道 + 滑块。
+     滑块位移同样用 transform（跟手与省电都靠它），不用 left 逐帧改 */
+  .sw {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    border: 0; background: none; padding: 0; cursor: pointer; font-family: inherit;
+    font-size: 13px; color: #1a1a1a; text-align: left;
+  }
+  .sw:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 3px; border-radius: 6px; }
+  .track {
+    flex: none; width: 36px; height: 20px; border-radius: 999px; background: #d8d2c6;
+    position: relative; transition: background var(--dur) ease;
+  }
+  .track .knob {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+    transform: translateX(0); transition: transform var(--dur) cubic-bezier(.2,.8,.2,1);
+  }
+  .sw[aria-checked="true"] .track { background: #0b4f6c; }
+  .sw[aria-checked="true"] .track .knob { transform: translateX(16px); }
+
+  .pop-body a { color: #0b4f6c; font-size: 12.5px; }
+  .pop-note { font-size: 11.5px; color: #a09a8e; line-height: 1.6; margin: 0; min-height: 18px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：只留显隐，去掉位移与时长。注意 --dur 归零后 visibility 的延迟也自动归零，
+       不会出现「浮层已经不可见却还占着焦点」的中间态 */
+    #pop, #pop.show { transition: none; transform: none; }
+    .track, .track .knob, .anchor .caret { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>视图设置 · Popover 演示</h1>
+    <p>演示词条 C-08，与 C-04 Tooltip 配对：<b>Tooltip 只读、不能点；Popover 能点、必须能退</b>。
+       点下面的按钮开合；浮层里有一个<b>真的能拨的开关</b>和一个链接——
+       点浮层内部<b>不会</b>关闭（最容易写错的一处），按 <code>Esc</code> 或点浮层外才关，关闭后焦点回到按钮。
+       第三个锚点在页面最底部，滚到那儿再点，看浮层<b>翻转</b>到上方。</p>
+    <div id="readout"></div>
+
+    <p class="step">演示一 · 常规锚点</p>
+    <button class="anchor" type="button" data-pop-trigger aria-haspopup="dialog"
+            aria-expanded="false" aria-controls="pop">显示设置 <span class="caret">▾</span></button>
+  </main>
+
+  <div class="edge-row">
+    <button class="anchor" type="button" data-pop-trigger aria-haspopup="dialog"
+            aria-expanded="false" aria-controls="pop">靠右缘的锚点 <span class="caret">▾</span></button>
+  </div>
+  <p class="step" style="max-width:620px;margin:10px auto 0;padding:0 20px">演示二 · 右侧钳位（浮层会被压回视口内，箭头仍指向按钮）</p>
+
+  <div class="spacer">
+    ↓ 继续往下滚<br>把最后一个锚点推到视口下缘，再点它
+  </div>
+
+  <div class="bottom-row">
+    <p class="step">演示三 · 下方空间不足 → 翻转向上</p>
+    <button class="anchor" type="button" data-pop-trigger aria-haspopup="dialog"
+            aria-expanded="false" aria-controls="pop">页脚设置 <span class="caret">▾</span></button>
+  </div>
+
+  <!-- 非模态浮层：role=dialog 但绝不写 aria-modal——写了读屏会以为背后页面不可用，
+       而 Popover 的设计前提恰恰是「背后还能继续用」 -->
+  <div id="pop" role="dialog" aria-label="视图设置" aria-hidden="true">
+    <div class="pop-head">视图设置</div>
+    <div class="pop-body">
+      <button class="sw" type="button" id="sw" role="switch" aria-checked="true">
+        <span class="track" aria-hidden="true"><span class="knob"></span></span>
+        <span>滚动时跟随锚点重算位置</span>
+      </button>
+      <a href="#" id="poplink">查看定位规则说明</a>
+      <p class="pop-note" id="popnote"></p>
+    </div>
+    <div class="pop-foot">
+      <button class="ok" type="button" id="popok">完成</button>
+      <span class="pop-note">Esc 或点外面关闭</span>
+    </div>
+  </div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "GAP": 10, "OFFSET_X": 0, "DUR": 160 };
+  /* ui-dict:params:end */
+
+  const pop = document.getElementById("pop");
+  const note = document.getElementById("popnote");
+  const triggers = Array.from(document.querySelectorAll("[data-pop-trigger]"));
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // 触屏判定：(hover:none) 上悬停语义不成立，而 Popover 本来就该是「点击触发」——
+  // 这里只用它切换文案与热区尺寸，不做「触屏才绑 click」这种半吊子分支
+  const coarse = matchMedia("(hover: none)").matches;
+
+  // 三个参数各有一个消费点：DUR 回写成 CSS 变量喂给浮层过渡与开关滑块（单一来源，
+  // 不存在「浮层动画 160ms、滑块动画却是 220ms」的第二实现）；GAP 与 OFFSET_X 在 place() 里消费
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--dur", PARAMS.DUR + "ms");
+  document.getElementById("readout").innerHTML =
+    "当前参数：GAP = " + PARAMS.GAP + " px · OFFSET_X = " + PARAMS.OFFSET_X + " px · DUR = " + PARAMS.DUR + " ms"
+    + "　|　触发方式：点击（" + (coarse ? "触屏设备 · 无 hover 分支" : "指针设备") + "，减少动效：" + (reduce ? "开" : "关") + "）";
+
+  let cur = null;          // 当前锚点；null = 关闭态
+  let follow = true;       // 由浮层内那个 role=switch 控制，是本 demo 的「真实交互」证据
+
+  function place(trigger) {
+    const r = trigger.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;   // 必须先量后定位：内容换了尺寸就变
+
+    // 垂直：优先下方；下方剩余空间装不下就整体翻到锚点上方。
+    // --from 同时翻符号——浮层从上方长出来时，入场位移方向也得跟着反，
+    // 否则视觉上像从下面「顶」上来，翻转的意义就丢了
+    const below = r.bottom + PARAMS.GAP + ph <= innerHeight - 8;
+    pop.classList.toggle("above", !below);
+    pop.style.setProperty("--from", below ? "-4px" : "4px");
+    const top = below ? r.bottom + PARAMS.GAP : r.top - ph - PARAMS.GAP;
+
+    // 水平：先吃设计师给的 OFFSET_X，再钳进视口。顺序反了 OFFSET_X 会在贴边时被静默吃掉，
+    // 滑杆拖到 60px 却毫无变化——这是「参数看起来没生效」最隐蔽的一种
+    let left = r.left + PARAMS.OFFSET_X;
+    left = Math.max(8, Math.min(left, innerWidth - pw - 8));
+    pop.style.left = left + "px";
+    pop.style.top = Math.max(8, top) + "px";
+
+    // 钳位后锚点中心已不在浮层中线，箭头要按差值重算并夹在浮层内——
+    // 不夹的话贴边时小三角会飞出盒子，指着空气（Tooltip 词条里同一个 --ax 变量）
+    const ax = r.left + r.width / 2 - left;
+    pop.style.setProperty("--ax", Math.max(12, Math.min(ax, pw - 12)) + "px");
+  }
+
+  function open(trigger) {
+    cur = trigger;
+    place(trigger);                       // 先量再显示，避免第一帧落在错误坐标上闪一下
+    pop.classList.add("show");
+    pop.setAttribute("aria-hidden", "false");
+    trigger.setAttribute("aria-expanded", "true");
+    note.textContent = "";
+    // 焦点移进浮层。非模态浮层不做焦点圈定（Tab 允许走出去，这正是它与 Dialog 的分界），
+    // 但「打开后焦点还留在按钮上」会让键盘用户按 Tab 直接跳过整个浮层
+    const first = pop.querySelector("button, a[href], input");
+    if (first) first.focus({ preventScroll: true });
+  }
+
+  function close(returnFocus) {
+    const t = cur;
+    cur = null;
+    pop.classList.remove("show");
+    if (t) {
+      t.setAttribute("aria-expanded", "false");
+      // 先把焦点送回去再隐藏：反过来会出现「焦点还在 aria-hidden 的子树里」的中间态
+      if (returnFocus !== false) t.focus({ preventScroll: true });
+    }
+    pop.setAttribute("aria-hidden", "true");
+  }
+
+  for (const t of triggers) {
+    t.addEventListener("click", function () {
+      if (cur === t) { close(); return; }        // 再点一次触发按钮 = 关闭
+      if (cur) close(false);                     // 换锚点：旧的不用还焦点，焦点马上被新浮层接管
+      open(t);
+    });
+  }
+
+  // 点浮层外关闭。这一条是本词条最容易写错的地方：浮层内部的点击同样会冒泡到 document，
+  // 只判「事件目标不是浮层根节点」是不够的（目标是里面的开关，不是 #pop 本身）——
+  // 必须先做 closest/contains 白名单命中，否则用户永远点不到浮层里的东西
+  addEventListener("pointerdown", function (e) {
+    if (!cur) return;
+    if (pop.contains(e.target)) return;                    // 浮层内部：放行，绝不关闭
+    if (e.target.closest("[data-pop-trigger]")) return;    // 锚点交给它自己的 click 处理开合
+    close();
+  });
+
+  addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && cur) { e.preventDefault(); close(); }   // 键盘用户的强制退出口
+  });
+
+  addEventListener("resize", function () { if (cur) place(cur); });
+  addEventListener("scroll", function () { if (cur && follow) place(cur); }, { passive: true });
+
+  // 浮层内的真实交互之一：开关。点它浮层不关（外点白名单已放行），
+  // 关掉后滚动不再重算坐标 —— 这正是坑 #4 的现场演示，用户能亲手制造浮层脱开锚点
+  const sw = document.getElementById("sw");
+  sw.addEventListener("click", function () {
+    const on = sw.getAttribute("aria-checked") === "true";
+    sw.setAttribute("aria-checked", String(!on));
+    follow = !on;
+    note.textContent = follow ? "已开启：滚动时浮层跟着锚点走" : "已关闭：现在滚动，浮层会留在原地与锚点脱开";
+    if (follow && cur) place(cur);
+  });
+
+  // 真实交互之二：链接。demo 里不真跳转（零网络请求是本站铁律），
+  // 但点它浮层保持打开这件事本身就是「可交互」的证明
+  document.getElementById("poplink").addEventListener("click", function (e) {
+    e.preventDefault();
+    note.textContent = "链接被点击了——浮层没关。Tooltip 做不到这件事";
+  });
+
+  document.getElementById("popok").addEventListener("click", function () { close(); });
+})();
+</script>
+</body>
+</html>

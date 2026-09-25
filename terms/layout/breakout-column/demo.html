@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>破格长文栏 Breakout Column · ui-dict L-06</title>
+<style>
+  /* MEASURE 用无单位数字存，运行时乘 1ch 得到正文栏实宽——
+     锚在字符数上而不是 px 上，字号变了行宽按字符数自动跟随，可读上限不会被 FONT 参数破坏 */
+  :root { --measure: 65; --breakout: 980px; --font: 17px; --pad: 24px; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #f6f5f2; color: #141414;
+    font-family: Georgia, "Songti SC", "SimSun", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- 头部说明（宽度跟正文栏同源，让读者先感受基准） ---- */
+  .masthead {
+    max-width: calc(var(--measure) * 1ch + 2 * var(--pad));
+    margin: 0 auto; padding: 44px var(--pad) 8px;
+  }
+  .masthead h1 { font-size: 22px; margin: 0 0 10px; letter-spacing: .01em; }
+  .masthead p { font-size: 14px; line-height: 1.75; color: #55504a; margin: 0 0 8px; }
+  .masthead p b { color: #141414; }
+  .masthead code, .note code, .readout code {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: #ece8e0; padding: 1px 5px; border-radius: 4px; color: #0b4f6c;
+  }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+  .controls button {
+    font: inherit; font-size: 12.5px; padding: 6px 13px; cursor: pointer;
+    background: #fff; color: #141414; border: 1px solid #ddd8cd; border-radius: 999px;
+  }
+  .controls button:hover { border-color: #0b4f6c; color: #0b4f6c; }
+  .controls button:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  .controls label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #6b6459; cursor: pointer; }
+  .controls input { accent-color: #0b4f6c; }
+
+  /* ---- 破格长文栏本体 ---------------------------------------------------
+     五条命名线：full / breakout / content 三档宽度共用同一套网格。
+     两侧外列写成 minmax(pad, 1fr)：视口宽裕时由它们吸收余量并把中段推到正中，
+     视口不够时它们退回 pad 不再撑宽。破格列的上限是算出来的
+     (BREAKOUT − 正文宽)/2，浏览器保证左右对称，不用负 margin。 */
+  .article {
+    display: grid;
+    grid-template-columns:
+      [full-start] minmax(var(--pad), 1fr)
+      [breakout-start] minmax(0, calc((var(--breakout) - var(--measure) * 1ch) / 2))
+      [content-start] min(var(--measure) * 1ch, 100% - 2 * var(--pad))
+      [content-end] minmax(0, calc((var(--breakout) - var(--measure) * 1ch) / 2))
+      [breakout-end] minmax(var(--pad), 1fr)
+      [full-end];
+    font-size: var(--font);
+    line-height: 1.7;
+    padding: 22px 0 0;
+  }
+  /* 视口比破格还窄时，破格列上限算出来是负数，按规范会被夹成 0，
+     破格层自然塌掉、正文收窄到 100% - 2×pad——不需要为溢出写任何补丁 */
+  .article > * { grid-column: content; min-width: 0; }
+
+  .article p { margin: 0 0 1.15em; }
+  .article h2 { font-size: 1.42em; line-height: 1.35; margin: 1.7em 0 .55em; letter-spacing: .01em; }
+  .article h2:first-child { margin-top: .2em; }
+  .article a { color: #0b4f6c; text-underline-offset: 3px; }
+  .lede { font-size: 1.06em; color: #3c3831; }
+  .lede::first-letter { font-size: 2.6em; float: left; line-height: .92; padding: 4px 8px 0 0; color: #0b4f6c; }
+
+  /* 破格：宽度完全由网格的 breakout 轨道决定（浏览器算 (BREAKOUT − 正文宽)/2），
+     不写负 margin——负 margin 一旦算错就溢出，而轨道宽度是算出来的、两侧天然对称 */
+  .breakout { grid-column: breakout; }
+  .full { grid-column: full; }
+
+  /* 破格引用块 */
+  .pullquote {
+    margin: 2.1em 0;
+    padding: 26px 34px;
+    background: #fff;
+    border-left: 4px solid #0b4f6c;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(20,20,20,.04), 0 22px 46px -38px rgba(20,20,20,.4);
+    font-size: 1.24em; line-height: 1.6; color: #0b4f6c;
+  }
+  .pullquote cite { display: block; margin-top: 12px; font-size: .58em; font-style: normal; color: #8a857c; letter-spacing: .04em; }
+
+  /* 破格"图"：纯 CSS 画的三种行宽对比图，零外链图片。
+     超宽兜底写在块自己身上——把局部横滚限制在块内，而不是让整页出现横向滚动条 */
+  .figure {
+    margin: 2.1em 0;
+    padding: 26px 30px 22px;
+    background: #fff;
+    border: 1px solid #e7e2d8;
+    border-radius: 6px;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .figure figcaption { font-size: .76em; color: #8a857c; margin-top: 16px; line-height: 1.65; }
+  .bars { display: grid; gap: 14px; min-width: 340px; }
+  .bar { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 12px; font-size: .76em; color: #55504a; }
+  .bar .track { height: 30px; border-radius: 3px; background: #f0ece4; position: relative; }
+  .bar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; }
+  .bar:nth-child(1) .fill { width: 47%; background: #b9c8cf; }
+  .bar:nth-child(2) .fill { width: 68%; background: #0b4f6c; }
+  .bar:nth-child(3) .fill { width: 100%; background: #d9c9a8; }
+  .bar .tag { position: absolute; top: 50%; transform: translateY(-50%); left: 10px; font-size: 11px; color: #141414; opacity: .62; }
+
+  /* 破格表格 */
+  .tablewrap { margin: 2.1em 0; max-width: 100%; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .84em; background: #fff; }
+  caption { caption-side: top; text-align: left; font-size: .8em; color: #8a857c; padding-bottom: 9px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid #ece8e0; white-space: nowrap; }
+  th { font-weight: 600; color: #0b4f6c; background: #f7f5f1; }
+
+  /* 全出血章节带：比破格更宽，直接铺到视口左右边缘 */
+  .band { background: #141414; color: #f6f5f2; padding: 52px var(--pad); margin: 2.4em 0; }
+  .band .inner { max-width: 980px; margin: 0 auto; }
+  .band p { font-size: 1.16em; line-height: 1.62; margin: 0; color: #f6f5f2; }
+  .band small { display: block; margin-top: 14px; font-size: .76em; color: rgba(246,245,242,.55); letter-spacing: .06em; }
+
+  /* ---- 页边注 -----------------------------------------------------------
+     嵌套网格：外层跨 content-start → breakout-end，内层两列 = 正文宽 + 剩余。
+     段落进第一列后左边界与全篇正文严丝合缝对齐，注落进右页边那一列 */
+  .note-row {
+    display: grid;
+    grid-column: content-start / breakout-end;
+    grid-template-columns: min(var(--measure) * 1ch, 100%) minmax(0, 1fr);
+    gap: 26px;
+    margin-bottom: 1.15em;
+  }
+  .note-row > p { margin: 0; }
+  .sidenote {
+    font-size: .76em; line-height: 1.62; color: #6b6459;
+    border-top: 1px solid #141414; padding-top: 7px; align-self: start;
+  }
+  .sidenote b { color: #0b4f6c; font-weight: 600; }
+
+  /* 窄屏降级：破格层已经塌了，页边注那一列会缩到 0 把注挤没——
+     必须显式改成内联注（带左边框区分），不能指望网格自己优雅退化 */
+  @media (max-width: 900px) {
+    .note-row { grid-column: content; grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sidenote {
+      border-top: 0; border-left: 3px solid #cfd8dc;
+      padding: 2px 0 2px 12px; margin: 4px 0 1.15em;
+    }
+  }
+
+  .readout {
+    position: fixed; left: 14px; bottom: 14px; z-index: 40;
+    background: rgba(20,20,20,.9); color: #f6f5f2;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: 11.5px; line-height: 1.7; padding: 8px 12px; border-radius: 8px;
+    pointer-events: none; max-width: 66vw;
+  }
+  .readout b { color: #7fc4e0; font-weight: 600; }
+  .readout .bad { color: #ffb4a2; }
+
+  /* 作死试验：写死宽度 + 负 margin（真实项目里最常见的破格写法），
+     一旦 MEASURE 变大、负 margin 就不对称，整页立刻长出横向滚动条 */
+  .article.broken .breakout { width: 1200px; max-width: none; margin-left: -300px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <header class="masthead">
+    <h1>破格长文栏 · Breakout Column（L-06）</h1>
+    <p>正文是一条居中窄栏（默认 <code>65ch</code>），段落左边界全部对齐到它；而引用块、图、表格<b>突破栏宽</b>伸进更宽的破格层，还有一条全出血色带铺满视口。靠宽度差制造阅读节奏：<b>窄栏是常态，宽块是重音，页边注是耳语。</b></p>
+    <p>滚动通读一遍，注意右页边那条小注；再把窗口缩窄到手机宽度，看破格块如何收回、页边注如何降级成内联注。左下角实时读数会告诉你<b>当前有没有横向溢出</b>。</p>
+    <div class="controls">
+      <button id="jump" type="button">跳到破格图 ↓</button>
+      <button id="top" type="button">回到开头</button>
+      <label><input type="checkbox" id="kill"> 作死试验：破格块写死 width:1200px + 负 margin</label>
+    </div>
+  </header>
+
+  <article class="article" id="article">
+    <h2>行宽是排版的隐形地基</h2>
+    <p class="lede">行宽（measure）指的是一行文字从左边到右边的长度，通常用字符数 <code>ch</code> 衡量。它不写在任何一个显眼的属性里，却决定了整篇文章读起来是顺流还是逆流——眼睛在行尾折返行首时，要重新定位下一行的起点，这段"回扫"的距离随行宽线性增长。</p>
+    <p>短行（35–45ch）回扫成本低，适合快速扫读与移动端；中长行（55–70ch）是长文阅读的舒适区，也是本页正文栏的默认取值；一旦越过 75ch，回扫定位开始出错，读者会不自觉地重读同一行，或者跳到下面两行去。这不是审美偏好，是眼球运动的物理约束。</p>
+
+    <div class="note-row">
+      <p>所以破格栏这个布局的核心并不是"让图变宽"这么简单。它先在页面上确立一条稳定的可读基准——也就是正文栏——再把少数元素放出这条基准之外。基准一旦动摇，破格就失去了参照物，页面上只剩下一堆宽度不同的块，读者每翻一段都要重新寻找左边界。</p>
+      <aside class="sidenote"><b>页边注</b>就是"基准之外"的最小单位：它挂在段落右侧的页边，不打断正文的行流。宽屏时飘在栏外，窄屏时必须降级成内联注——这个响应式分支是这类布局最常漏掉的一处。</aside>
+    </div>
+
+    <p>实现上，本文用的是 CSS Grid 的五条命名线：<code>full</code>、<code>breakout</code>、<code>content</code> 三档宽度共用同一套轨道。正文写 <code>grid-column: content</code>，破格块写 <code>grid-column: breakout</code>，全出血色带写 <code>grid-column: full</code>。两侧各留一条对称的溢出轨道，宽度由浏览器算成 <code>(BREAKOUT − 正文宽) / 2</code>，所以无论参数怎么调，破格块左右溢出的量永远相等。</p>
+
+    <blockquote class="pullquote breakout">
+      「读者不该意识到自己在读一行字。行宽合适的时候，文字是透明的；行宽一旦失衡，读者就开始看见排版本身。」
+      <cite>— 关于可读性的一句老话</cite>
+    </blockquote>
+
+    <p>下面这张图本身也是破格块。它是纯 CSS 画的，没有加载任何图片：三条横条分别代表短行、舒适区、过宽行。注意它比正文宽出一大截，而左右溢出的量是对称的——这正是破格层存在的意义，它给"重音"留了空间，却没有让页面失去中轴。</p>
+
+    <figure class="figure breakout" id="fig">
+      <div class="bars">
+        <div class="bar"><span>35–45ch</span><span class="track"><span class="fill"></span><span class="tag">快速扫读</span></span></div>
+        <div class="bar"><span>55–70ch</span><span class="track"><span class="fill"></span><span class="tag">长文舒适区 ← 本页正文</span></span></div>
+        <div class="bar"><span>90ch+</span><span class="track"><span class="fill"></span><span class="tag">回扫开始出错</span></span></div>
+      </div>
+      <figcaption>三种行宽的相对长度（纯 CSS 绘制）。破格块允许比正文宽，但它自己也要有上限：超过 <code>BREAKOUT</code> 就该换行或改成分栏，而不是继续拉长。</figcaption>
+    </figure>
+
+    <h2>两套宽度，不是一套宽度加个例外</h2>
+    <p>很多人把破格理解成"正文容器加一个负 margin 的例外"，这是误解。破格栏天生有两套并存的宽度：正文栏定义可读节奏，破格层定义视觉重音。它们不是主次关系，而是两个平等的层级——正因为平等，破格块才能反过来嵌套：页边注那一段就是外层跨 <code>content-start → breakout-end</code>、内层再切两列的嵌套网格，段落落在内层第一列后，左边界与全篇正文严丝合缝。</p>
+
+    <div class="tablewrap breakout">
+      <table>
+        <caption>三档宽度的职责分工</caption>
+        <thead>
+          <tr><th>层级</th><th>命名线</th><th>典型用途</th><th>宽度来源</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>正文栏</td><td><code>content</code></td><td>段落、标题、列表</td><td><code>MEASURE</code> × 1ch</td></tr>
+          <tr><td>破格层</td><td><code>breakout</code></td><td>引用块、图、表格、代码</td><td><code>BREAKOUT</code> px</td></tr>
+          <tr><td>全出血</td><td><code>full</code></td><td>章节分隔带、大图</td><td>视口宽（不吃页面 padding）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>上面这张表格也是破格块。它内部自带 <code>overflow-x: auto</code>——注意这是"块内可横滚"，和"整页出现横向滚动条"是两件完全不同的事。前者是正解，把可能的溢出关在一个小盒子里；后者是布局已经坏了的症状，必须从宽度源头修。</p>
+
+    <section class="band full">
+      <div class="inner">
+        <p>全出血层比破格层更宽：它直接铺到视口左右边缘，连页面 padding 都不吃。长文用它来切分"幕"——读者滚过一条深色带，就知道上一章结束了。</p>
+        <small>FULL-BLEED · 章节分隔</small>
+      </div>
+    </section>
+
+    <h2>溢出必须从源头掐掉</h2>
+    <p>这类布局最流行的假解法是给 <code>body</code> 加一句 <code>overflow-x: hidden</code>：横向滚动条确实没了，看起来问题解决了。但元素的实际宽度一点没变，它只是被裁掉了——打印会截断、<code>Ctrl+F</code> 定位会滚到看不见的地方、用户缩放页面后立刻复现。更糟的是它给整页建了一个滚动容器，页面里所有 <code>position: sticky</code> 会当场失灵。</p>
+    <p>正解是让宽度从一开始就不可能超：破格轨道的上限用 <code>minmax(0, …)</code> 夹住，正文轨道用 <code>min(MEASURE × 1ch, 100% − 2 × padding)</code> 兜底，破格块自己再加一句 <code>max-width: 100%</code>。三处约束叠加之后，无论视口多窄、参数多大，横向溢出都不会发生——左下角的读数就是这条的实时证据。想看看反例长什么样，勾上顶部那个"作死试验"。</p>
+    <p>最后回到行宽本身：<code>MEASURE</code> 的上限卡在 90ch 只是"还能读"，真正的舒适区是 55–70ch。因为回扫成本随行宽上升，越过约 75 个字符后阅读速度会明显掉下来——这条约束不该被"排版看起来更饱满"的审美需求冲掉。</p>
+  </article>
+
+  <div class="readout" id="readout" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "MEASURE": 65, "BREAKOUT": 980, "FONT": 17 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  // MEASURE 保持无单位：乘 1ch 的动作交给 CSS，字号一变行宽自动跟随字符数
+  root.setProperty("--measure", String(PARAMS.MEASURE));
+  root.setProperty("--breakout", PARAMS.BREAKOUT + "px");
+  root.setProperty("--font", PARAMS.FONT + "px");
+
+  const article = document.getElementById("article");
+  const readout = document.getElementById("readout");
+  const reduceMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const de = document.documentElement;
+
+  function renderReadout() {
+    // 用 scrollWidth / clientWidth 实测溢出：这是"没有横向滚动条"的唯一硬证据，
+    // 靠肉眼看滚动条会被浮动元素与亚像素误差骗过去
+    const overflow = de.scrollWidth - de.clientWidth;
+    // 实测两个宽度：正文栏读段落宽度，破格栏读那张图的宽度——
+    // 两者之差就是"破格"这个动作在屏幕上真实的像素量
+    const contentW = Math.round(document.querySelector(".lede").getBoundingClientRect().width);
+    const figW = Math.round(document.getElementById("fig").getBoundingClientRect().width);
+    readout.innerHTML =
+      "MEASURE <b>" + PARAMS.MEASURE + "</b>ch（实测正文 " + contentW + "px） · " +
+      "BREAKOUT <b>" + PARAMS.BREAKOUT + "</b>px（实测破格 " + figW + "px） · " +
+      "FONT <b>" + PARAMS.FONT + "</b>px · " +
+      "横向溢出：" + (overflow > 1 ? '<span class="bad">' + overflow + "px ✗</span>" : "<b>无 ✓</b>");
+  }
+
+  // resize 里读 scrollWidth 会强制同步布局，但这里只在尺寸变化时跑、且不涉及动画，
+  // 用不着 rAF 节流——真正需要节流的是 scroll 那种高频事件
+  let rt = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(rt);
+    rt = setTimeout(renderReadout, 90);
+  });
+
+  const smooth = function () { return reduceMQ.matches ? "auto" : "smooth"; };
+  document.getElementById("jump").addEventListener("click", function () {
+    document.getElementById("fig").scrollIntoView({ behavior: smooth(), block: "center" });
+  });
+  document.getElementById("top").addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: smooth() });
+  });
+
+  // 作死试验：写死 width:1200px + 负 margin（真实项目里最常见的破格写法）。
+  // 一旦视口不够宽，负 margin 就对称不了，整页立刻长出横向滚动条——
+  // 这正是"溢出要靠 max-width 从源头约束"的反面教材
+  document.getElementById("kill").addEventListener("change", function (e) {
+    article.classList.toggle("broken", e.target.checked);
+    renderReadout();
+  });
+
+  renderReadout();
+})();
+</script>
+</body>
+</html>

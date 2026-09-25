@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>滚动叠卡 Z-Stack Cards · ui-dict L-05</title>
+<style>
+  :root { --sticky-top: 12px; --step: 18px; --scale-step: 0.03; --radius: 18px; }
+  * { box-sizing: border-box; }
+  html { background: #f6f5f2; }
+  body {
+    margin: 0; background: #f6f5f2; color: #141414;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .intro { max-width: 720px; margin: 0 auto; padding: 44px 24px 26px; }
+  .intro h1 { font-size: 21px; margin: 0 0 10px; letter-spacing: .01em; }
+  .intro p { font-size: 14px; line-height: 1.75; color: #55504a; margin: 0 0 6px; }
+  .intro p b { color: #141414; }
+  .intro code {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: #ece8e0; padding: 1px 5px; border-radius: 4px; color: #0b4f6c;
+  }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+  .toolbar button {
+    font: inherit; font-size: 12.5px; padding: 6px 12px; cursor: pointer;
+    background: #fff; color: #141414; border: 1px solid #ddd8cd; border-radius: 999px;
+  }
+  .toolbar button:hover { border-color: #0b4f6c; color: #0b4f6c; }
+  .toolbar button:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  .toolbar label {
+    display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #6b6459; cursor: pointer;
+  }
+  .toolbar input { accent-color: #0b4f6c; }
+  .hint-touch { display: none; }
+  /* 触屏没有 hover 概念，提示文案要换成"点"而不是"悬停"——否则用户找不到入口 */
+  @media (hover: none) {
+    .hint-pointer { display: none; }
+    .hint-touch { display: inline; }
+  }
+
+  /* ---- 叠卡本体 ---------------------------------------------------------
+     .stack 只负责"当滚动容器里的定位父级"，它自己绝不能有 overflow——
+     一旦有，sticky 就改向这个盒子吸附，整叠直接失灵（下面的作死开关演示这一点） */
+  .stack { position: relative; max-width: 720px; margin: 0 auto; padding: 0 24px; }
+  .stack.killed { overflow: hidden; }
+
+  .card {
+    position: sticky;
+    /* 第 i 张的钉住线 = 首张位置 + i×STEP，差值 STEP 就是前一张露出的那条边 */
+    top: calc(var(--sticky-top) + var(--i) * var(--step));
+    min-height: 62vh;
+    margin: 0;
+    padding: 30px 30px 26px;
+    background: #fff;
+    border: 1px solid #e7e2d8;
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(20,20,20,.04), 0 18px 40px -32px rgba(20,20,20,.35);
+    display: flex; flex-direction: column;
+    /* 衰减只用合成器属性（transform/opacity）：动 width/height/font-size 会每帧重排，
+       而且重排会改变卡片高度，反过来让"是否已钉住"的判定自己抖起来 */
+    transform: scale(var(--s, 1));
+    /* origin 必须是 top center：默认在中心，一缩顶边就下移，那条露出的边会逐层变窄直至消失 */
+    transform-origin: top center;
+    opacity: var(--o, 1);
+    transition: transform .22s ease, opacity .22s ease;
+    cursor: pointer;
+  }
+  .card:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 3px; }
+  /* 首张用强调色反白：被压住变淡时明暗层次最清楚，一眼看出"谁盖住了谁" */
+  .card:first-of-type { background: #0b4f6c; border-color: #0b4f6c; color: #fff; }
+  .card:first-of-type .note { color: rgba(255,255,255,.78); }
+  .card:first-of-type .badge { background: rgba(255,255,255,.16); color: #fff; }
+
+  .badge {
+    width: 30px; height: 30px; border-radius: 50%; flex: none;
+    display: grid; place-items: center; font-size: 13px; font-weight: 600;
+    background: #f0ece4; color: #0b4f6c;
+  }
+  .card h2 { font-size: 24px; margin: 18px 0 8px; letter-spacing: .01em; }
+  .card p { font-size: 14.5px; line-height: 1.75; color: #4a453e; margin: 0 0 10px; }
+  .card .note { font-size: 12.5px; line-height: 1.7; color: #8a857c; margin-top: auto; }
+  .card .note code {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12px;
+    background: rgba(11,79,108,.08); padding: 1px 5px; border-radius: 4px; color: #0b4f6c;
+  }
+  .card:first-of-type .note code { background: rgba(255,255,255,.16); color: #fff; }
+
+  /* 收尾行程：最后一张也得有地方滚到自己的钉住线。
+     注意这是"容器末尾的空白"，不是"卡片之间的间隙"——用 margin 撑会把每张卡的
+     静止位一起往下推，钉住线差值被吃掉，最后一叠变成等距错位的一串砖 */
+  .tail { height: 55vh; }
+
+  .outro { max-width: 720px; margin: 0 auto; padding: 8px 24px 60px; }
+  .outro p { font-size: 13px; line-height: 1.8; color: #8a857c; }
+
+  /* 参数读数：固定在左下，不跟顶部钉住线抢位置 */
+  .readout {
+    position: fixed; left: 14px; bottom: 14px; z-index: 40;
+    background: rgba(20,20,20,.9); color: #f6f5f2;
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: 11.5px; line-height: 1.7; padding: 8px 12px; border-radius: 8px;
+    pointer-events: none; max-width: 62vw;
+  }
+  .readout b { color: #7fc4e0; font-weight: 600; }
+
+  @media (max-width: 640px) {
+    .intro { padding: 30px 18px 20px; }
+    .intro h1 { font-size: 18px; }
+    .stack { padding: 0 16px; }
+    .card { min-height: 56vh; padding: 22px 20px; border-radius: 14px; }
+    .card h2 { font-size: 19px; margin-top: 14px; }
+    .readout { font-size: 10.5px; left: 10px; bottom: 10px; }
+  }
+
+  /* 减少动效：去掉缩放与变淡，只留 sticky 堆叠——sticky 是定位不是动画，不该被一起关掉 */
+  @media (prefers-reduced-motion: reduce) {
+    .card { transform: none !important; opacity: 1 !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <header class="intro">
+    <h1>滚动叠卡 · Z-Stack Cards（L-05）</h1>
+    <p>向下滚动：5 张卡片依次被钉住，后一张从下面滑上来<b>盖住</b>前一张，每张只露出前一张顶部约 <code>STEP</code> 高的一条边，被压住的卡逐层缩小、变淡——这就是"盖住"骗出来的 Z 轴纵深。</p>
+    <p><span class="hint-pointer">点任意卡片、或用下面的按钮，会平滑推进到下一张。</span><span class="hint-touch">点任意卡片可以推进到下一张。</span>
+       勾选"作死试验"会给卡片容器加上 <code>overflow:hidden</code>，看整叠如何当场失灵。</p>
+    <div class="toolbar">
+      <button id="prev" type="button">← 上一张</button>
+      <button id="next" type="button">下一张 →</button>
+      <button id="reset" type="button">回到顶部</button>
+      <label><input type="checkbox" id="kill"> 作死试验：给容器加 overflow:hidden</label>
+    </div>
+  </header>
+
+  <section class="stack" id="stack">
+    <article class="card" style="--i:0" tabindex="0" aria-label="第 1 张卡，按回车推进到下一张">
+      <span class="badge">1</span>
+      <h2>一叠卡，先立规矩</h2>
+      <p>整组卡片是同一个容器的直接子元素，每张都 <code>position: sticky</code>，钉住线 <code>top = STICKY_TOP + i × STEP</code>。第 i 张比前一张低 <code>STEP</code>，钉住后正好把前一张的顶边露出一条。</p>
+      <p class="note">关键：卡片之间<b>紧邻排布</b>，滚动行程全部交给容器末尾的空白。用 margin 撑行程会把静止位一起推下去，钉住线差值被吃掉。</p>
+    </article>
+
+    <article class="card" style="--i:1" tabindex="0" aria-label="第 2 张卡，按回车推进到下一张">
+      <span class="badge">2</span>
+      <h2>后来者天然在上</h2>
+      <p>没有写一个 <code>z-index</code>。同 <code>top</code> 区间的定位元素按 DOM 顺序绘制，后面的卡片本来就在前面那张之上——手写 z-index 反而容易把顺序写反，出现"新卡钻到旧卡底下"。</p>
+      <p class="note">现在你看到的这条露出边，宽度就等于参数里的 <code>STEP</code>：拖到 0 会完全盖死、看不出层数，拖到 48 则层层分明。</p>
+    </article>
+
+    <article class="card" style="--i:2" tabindex="0" aria-label="第 3 张卡，按回车推进到下一张">
+      <span class="badge">3</span>
+      <h2>缩小与变淡才是 Z 轴</h2>
+      <p>光靠"盖住"只是平面遮挡，纵深来自衰减：被压住的卡 <code>scale(1 − depth × SCALE_STEP)</code>、透明度同步轻微下降。<code>depth</code> = 压在这张上面的已钉住卡数。</p>
+      <p class="note">衰减只动 <code>transform</code> 与 <code>opacity</code> 两个合成器属性；动宽高或字号会每帧重排，掉帧之外还会改卡片高度，让钉住判定自己抖起来。</p>
+    </article>
+
+    <article class="card" style="--i:3" tabindex="0" aria-label="第 4 张卡，按回车推进到下一张">
+      <span class="badge">4</span>
+      <h2>顶边必须钉死</h2>
+      <p><code>transform-origin: top center</code> 不是可选项。默认原点在中心，一缩放顶边就跟着下移，那条"露出的边"会逐层变窄直至消失——用户看到的是卡片在抖，而不是在摞。</p>
+      <p class="note">钉住深度靠 <code>getBoundingClientRect().top</code> 与钉住线相等来判定，不能用 scrollTop 硬算：钉住区间的边界算不准，衰减会提前触发，整叠看起来一直在抖。</p>
+    </article>
+
+    <article class="card" style="--i:4" tabindex="0" aria-label="第 5 张卡，按回车推进到下一张">
+      <span class="badge">5</span>
+      <h2>收尾：整叠一起走</h2>
+      <p>sticky 的活动范围就是父容器的下缘。滚到容器末尾，这叠卡会<b>一起</b>向上滚走——它不会像 fixed 那样永远赖在视口里。这正是它与 fixed 导航的分界。</p>
+      <p class="note">底部那段空白是<b>收尾行程</b>：没有它，最后一张还没滚到自己的钉住线页面就到底了，叠不成一叠。</p>
+    </article>
+
+    <div class="tail" aria-hidden="true"></div>
+  </section>
+
+  <footer class="outro">
+    <p>对比着看：粘性分区（L-04 Sticky Section）钉住的是<b>标题那条薄边</b>，内容是穿过它滚动的；这里钉住的是<b>整张卡片本体</b>，被后来者覆盖。滚动叙事（L-02 Scrollytelling）用滚动进度驱动"讲到哪一段"，而这叠卡不承载任何叙事语义，纯粹是视觉堆叠。</p>
+  </footer>
+
+  <div class="readout" id="readout" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "STICKY_TOP": 12, "STEP": 18, "SCALE_STEP": 0.03 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  // STICKY_TOP / STEP 直接喂给 CSS：钉住线完全由这两个值算出来，CSS 自己就能堆，JS 不参与定位
+  root.setProperty("--sticky-top", PARAMS.STICKY_TOP + "px");
+  root.setProperty("--step", PARAMS.STEP + "px");
+
+  const stack = document.getElementById("stack");
+  const cards = Array.prototype.slice.call(document.querySelectorAll(".card"));
+  const readout = document.getElementById("readout");
+  const reduceMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function stickyTopOf(i) { return PARAMS.STICKY_TOP + i * PARAMS.STEP; }
+
+  function renderReadout(depth) {
+    readout.innerHTML =
+      "STICKY_TOP <b>" + PARAMS.STICKY_TOP + "</b>px · " +
+      "STEP <b>" + PARAMS.STEP + "</b>px · " +
+      "SCALE_STEP <b>" + PARAMS.SCALE_STEP + "</b> · " +
+      "已叠 <b>" + depth + "</b> 层";
+  }
+
+  function update() {
+    // 减少动效：CSS 已用 !important 锁死 scale/opacity，这里不再写 --s/--o，
+    // 但堆叠关系照旧成立（sticky 是定位，不属于"动画"，不该被一起关掉）
+    if (reduceMQ.matches) { renderReadout(cards.length - 1); return; }
+
+    // 第一遍：判定每张是否已钉住。钉住后 rect.top 恰好等于钉住线，
+    // 所以判据是"top <= 钉住线 + 1px"这个容差，而不是拿 scrollTop 去算区间
+    const stuck = cards.map(function (c, i) {
+      return c.getBoundingClientRect().top <= stickyTopOf(i) + 1;
+    });
+
+    // 第二遍：一张卡被压的层数 = 排在它后面、且已钉住的卡数（那些才盖在它上面）
+    let maxDepth = 0;
+    cards.forEach(function (c, i) {
+      let depth = 0;
+      for (let j = i + 1; j < stuck.length; j++) if (stuck[j]) depth++;
+      if (depth > maxDepth) maxDepth = depth;
+
+      // 写自定义属性只在值真变了的时候做：滚动每帧都写 style 会持续制造样式失效
+      const s = Math.max(0.5, 1 - depth * PARAMS.SCALE_STEP).toFixed(4);
+      const o = Math.max(0.35, 1 - depth * 0.14).toFixed(3);
+      if (c.dataset.s !== s) { c.style.setProperty("--s", s); c.dataset.s = s; }
+      if (c.dataset.o !== o) { c.style.setProperty("--o", o); c.dataset.o = o; }
+    });
+
+    renderReadout(maxDepth);
+  }
+
+  // scroll 事件频率可以超过 60Hz，逐事件读 rect 会强制同步布局——统一 rAF 合并，一帧最多算一次
+  let ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { ticking = false; update(); });
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll);
+
+  // 推进到第 i 张的"刚钉住"位置。
+  // 这里必须用 offsetTop 累加算自然位置，不能用 getBoundingClientRect：
+  // 卡片一旦处于钉住态，rect.top 等于钉住线而不是它的自然位置，
+  // 用它反推目标 scrollY 会算出"原地不动"（往回翻时尤其明显）。
+  function naturalTop(i) { return stack.offsetTop + cards[i].offsetTop; }
+
+  function advanceTo(i) {
+    if (i < 0 || i >= cards.length) return;
+    window.scrollTo({
+      top: Math.max(0, naturalTop(i) - stickyTopOf(i) + 1),
+      behavior: reduceMQ.matches ? "auto" : "smooth"
+    });
+  }
+
+  // 当前"最上面那张"= 最后一个已钉住的卡；没有则算第 0 张之前
+  function frontIndex() {
+    let cur = -1;
+    for (let i = 0; i < cards.length; i++) {
+      if (cards[i].getBoundingClientRect().top <= stickyTopOf(i) + 1) cur = i;
+    }
+    return cur;
+  }
+
+  cards.forEach(function (c, i) {
+    c.addEventListener("click", function () { advanceTo(i + 1); });
+    // 键盘通道：卡片可聚焦，回车/空格推进——纯滚动驱动的布局也得给键盘一条路
+    c.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        advanceTo(i + 1);
+      }
+    });
+  });
+
+  document.getElementById("next").addEventListener("click", function () {
+    advanceTo(frontIndex() + 1);
+  });
+  document.getElementById("prev").addEventListener("click", function () {
+    advanceTo(frontIndex() - 1);
+  });
+  document.getElementById("reset").addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: reduceMQ.matches ? "auto" : "smooth" });
+  });
+
+  // 作死试验：给 sticky 的定位父级加 overflow:hidden，
+  // 吸附改向这个"看不见在滚"的盒子发生 → 整叠当场不再粘
+  document.getElementById("kill").addEventListener("change", function (e) {
+    stack.classList.toggle("killed", e.target.checked);
+    onScroll();
+  });
+
+  if (reduceMQ.addEventListener) reduceMQ.addEventListener("change", onScroll);
+  update();
+})();
+</script>
+</body>
+</html>

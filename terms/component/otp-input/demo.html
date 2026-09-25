@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分格验证码输入 OTP Input · ui-dict C-10</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #141414;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 26px 20px 80px; max-width: 620px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 8px; }
+  .page p { font-size: 13.5px; color: #6b675f; margin: 0 0 16px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #readout { font-size: 12px; color: #999; margin-bottom: 26px; font-variant-numeric: tabular-nums; }
+
+  .card {
+    background: #fff; border: 1px solid #e5e1d8; border-radius: 14px;
+    padding: 26px 20px 22px; box-shadow: 0 2px 10px rgba(0,0,0,.04);
+  }
+  .card h2 { font-size: 14px; margin: 0 0 4px; font-weight: 600; }
+  .card .sub { font-size: 12.5px; color: #8a857c; margin: 0 0 20px; }
+
+  /* 整组用 flex 排格子；间距与尺寸全部走 CSS 变量，这样 PARAMS 只有一个写入点 */
+  .otp {
+    display: flex; align-items: center; justify-content: center; gap: var(--gap);
+    margin-bottom: 18px;
+  }
+  .cell {
+    width: var(--cell); height: var(--cell); border-radius: var(--radius);
+    border: 1.5px solid #d9d3c7; background: #fdfcfa; text-align: center;
+    /* 字号跟着格子走：写死 20px 的话把 CELL 拉到 72 时数字小得缩在中间 */
+    font-size: calc(var(--cell) * 0.42); font-weight: 600; color: #141414;
+    font-variant-numeric: tabular-nums; padding: 0; caret-color: #0b4f6c;
+    transition: border-color .16s ease, background-color .16s ease, transform .24s cubic-bezier(.2,.8,.2,1);
+  }
+  .cell:focus { outline: none; border-color: #0b4f6c; background: #fff; box-shadow: 0 0 0 3px rgba(11,79,108,.12); }
+  /* 键盘用户与鼠标用户焦点圈要一样明显，但触屏点按不该留下持久焦点圈（见 @media hover:none） */
+  .cell:focus-visible { box-shadow: 0 0 0 3px rgba(11,79,108,.22); }
+
+  /* 分隔符：3+3 是银行/支付类验证码的断法，让人不必数格子 */
+  .sep { width: 12px; height: 2px; background: #cfc8ba; border-radius: 2px; flex: none; }
+
+  /* 完成态：整组转主色 + 上浮 2px 后停住。上浮是「收好了」的物理暗示，
+     但位移只有 2px——再大就会把整行推得跳一下 */
+  .otp.ok .cell { border-color: #0b4f6c; background: #f0f6f8; transform: translateY(-2px); }
+  /* 错误态：整组水平抖动 ±4px 递减。注意只抖不清空——清空等于让用户从头再敲一遍 */
+  .otp.err { animation: shake .3s ease-in-out; }
+  .otp.err .cell { border-color: #b3352c; background: #fdf3f2; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); } 40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+  }
+
+  .status { min-height: 20px; text-align: center; font-size: 13px; color: #8a857c; margin-bottom: 18px; }
+  .status.ok { color: #0b4f6c; font-weight: 600; }
+  .status.err { color: #b3352c; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .actions button {
+    border: 1px solid #d9d3c7; background: #fff; border-radius: 8px; padding: 7px 14px;
+    font-size: 12.5px; color: #141414; cursor: pointer; font-family: inherit;
+  }
+  .actions button:hover { background: #f1ede4; }
+  .actions button:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  .actions button.primary { border-color: #141414; background: #141414; color: #fff; }
+  .actions button.primary:hover { background: #2c2c2c; }
+
+  /* 触屏（hover:none）：手指命中精度按 44px 起算，48 已勉强，但 32 的格子必失手——
+     所以这里给 52px 下限兜住，参数怎么调都不会掉到不可点 */
+  @media (hover: none) {
+    .cell { width: max(var(--cell), 52px); height: max(var(--cell), 52px); }
+    .cell:focus { box-shadow: none; }
+    .cell:focus-visible { box-shadow: 0 0 0 3px rgba(11,79,108,.22); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：保留状态变化（边框/底色仍要能看出通过与否），只砍掉位移与抖动 */
+    .cell { transition: border-color .16s ease, background-color .16s ease; }
+    .otp.ok .cell { transform: none; }
+    .otp.err { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>分格验证码输入 OTP Input</h1>
+    <p>演示词条 C-10。直接敲数字会自动前进；按「粘贴 123456」模拟收到短信后整串粘贴
+       （走的是真实的 <code>paste</code> 事件，不是假填空）；退格分两条规则——<b>当前格有值只清当前格，
+       当前格已空才回跳上一格</b>；左右方向键移动、<code>Home</code>/<code>End</code> 跳首尾；填满 6 位即「验证通过」。
+       想看不通过的样子按「模拟校验失败」——整组抖动但<b>内容保留</b>，可以直接改某一位。</p>
+    <div id="readout"></div>
+
+    <section class="card">
+      <h2>输入 6 位验证码</h2>
+      <p class="sub">已发送至 138****6021 · 有效期 5 分钟</p>
+
+      <!-- role=group + 整体 aria-label：6 个独立 input 在无障碍树里本是 6 个无关文本框，
+           包一层组语义并逐格标「第 N 位」，读屏才知道这是一件事、以及自己敲到哪了 -->
+      <div class="otp" id="otp" role="group" aria-label="6 位短信验证码">
+        <input class="cell" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="第 1 位">
+        <input class="cell" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="第 2 位">
+        <input class="cell" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="第 3 位">
+        <span class="sep" aria-hidden="true"></span>
+        <input class="cell" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="第 4 位">
+        <input class="cell" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="第 5 位">
+        <input class="cell" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="第 6 位">
+      </div>
+
+      <div class="status" id="status" role="status" aria-live="polite">等待输入…</div>
+
+      <div class="actions">
+        <button type="button" class="primary" id="btn-paste">粘贴 123456</button>
+        <button type="button" id="btn-fail">模拟校验失败</button>
+        <button type="button" id="btn-reset">重来</button>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "CELL": 48, "GAP": 10, "RADIUS": 10 };
+  /* ui-dict:params:end */
+
+  const otp = document.getElementById("otp");
+  const cells = Array.from(otp.querySelectorAll(".cell"));
+  const status = document.getElementById("status");
+  const N = cells.length;
+
+  // PARAMS 唯一消费点：写进 CSS 变量，格子的尺寸/间距/圆角全由这三个值派生。
+  // 之所以不在 JS 里逐格 style.width，是因为分隔符、抖动、完成态都还要跟着变——
+  // 一个变量管住一整组，比 6 处 inline style 更难写错。
+  otp.style.setProperty("--cell", PARAMS.CELL + "px");
+  otp.style.setProperty("--gap", PARAMS.GAP + "px");
+  otp.style.setProperty("--radius", PARAMS.RADIUS + "px");
+
+  document.getElementById("readout").textContent =
+    "当前参数：CELL = " + PARAMS.CELL + " px · GAP = " + PARAMS.GAP + " px · RADIUS = " + PARAMS.RADIUS + " px" +
+    "　（触屏下格子自动放大到 52px 下限）";
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function setStatus(text, kind) {
+    status.textContent = text;
+    status.className = "status" + (kind ? " " + kind : "");
+  }
+
+  // focus({preventScroll:true}) 是必须的：移动端连填 6 格，默认 focus 会把每格滚到视口中央，
+  // 页面自己跳 6 次，用户的视野被顶得找不到北
+  function focusCell(i) {
+    const k = Math.max(0, Math.min(i, N - 1));
+    cells[k].focus({ preventScroll: true });
+  }
+
+  function value() { return cells.map((c) => c.value).join(""); }
+
+  function clearState() {
+    otp.classList.remove("ok", "err");
+    setStatus("等待输入…");
+  }
+
+  function check() {
+    otp.classList.remove("err");
+    if (cells.every((c) => c.value)) {
+      otp.classList.add("ok");
+      setStatus("验证通过 · 正在跳转…", "ok");
+    } else {
+      otp.classList.remove("ok");
+      const n = cells.filter((c) => c.value).length;
+      setStatus(n ? "已输入 " + n + " / " + N + " 位" : "等待输入…");
+    }
+  }
+
+  // 分发：从 start 位起顺填，填到哪焦点停到哪。
+  // 非数字在入口就被过滤——验证码里混进空格或「您的验证码是」这串汉字是常态
+  function distribute(raw, start) {
+    const digits = String(raw == null ? "" : raw).replace(/\D/g, "");
+    if (!digits) return;
+    let k = Math.max(0, start);
+    for (const ch of digits) {
+      if (k >= N) break;
+      cells[k].value = ch;
+      k++;
+    }
+    focusCell(k);
+    check();
+  }
+
+  cells.forEach((cell, i) => {
+    // ① 敲入：写入后同一帧就前进。等下一帧再 focus 会出现「数字已显示但光标还赖着」的空档，
+    //    手快的人下一个数字就覆盖了刚敲的那一位
+    cell.addEventListener("input", () => {
+      const digits = cell.value.replace(/\D/g, "");
+      // iOS 的短信验证码建议（键盘上方那一条）会把整串塞进当前聚焦的这一格——
+      // 系统只认 autocomplete=one-time-code，不关心你有几个格子，所以这里必须做多字符兜底
+      if (digits.length > 1) { cell.value = ""; distribute(digits, i); return; }
+      if (!digits) { cell.value = ""; check(); return; }   // 输入了非数字：原样清掉，别让汉字留在格子里
+      cell.value = digits;
+      if (i < N - 1) focusCell(i + 1);
+      check();
+    });
+
+    // ② 退格：两条规则必须分开写。无脑「回跳上一格并清空」在「当前格有值」时会一下退两格，
+    //    因为 keydown 阶段浏览器默认删除还没执行、value 仍是旧值——先把值读出来判分支，
+    //    并在两个分支里都 preventDefault，否则「手动清空 + 浏览器再删一次」会叠加
+    cell.addEventListener("keydown", (e) => {
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        if (cell.value) {
+          cell.value = "";                    // 规则一：当前格有值 → 只清当前格，焦点不动
+        } else if (i > 0) {
+          cells[i - 1].value = "";            // 规则二：当前格已空 → 回跳前一格并清空它
+          focusCell(i - 1);
+        }
+        clearState();
+        return;
+      }
+      if (e.key === "Delete") { e.preventDefault(); cell.value = ""; clearState(); return; }
+      if (e.key === "ArrowLeft") { e.preventDefault(); focusCell(i - 1); return; }
+      if (e.key === "ArrowRight") { e.preventDefault(); focusCell(i + 1); return; }
+      if (e.key === "Home") { e.preventDefault(); focusCell(0); return; }
+      if (e.key === "End") { e.preventDefault(); focusCell(N - 1); return; }
+      // 已在格子里还能直接覆盖：不 preventDefault，让字符正常写入再走 input 分支
+    });
+
+    // ③ 粘贴：必须自己监听。maxlength=1 的框收到多字符粘贴会被浏览器直接截成 1 位
+    //    （Chrome 丢弃其余字符、Safari 只留首字符），光写 input 处理函数的话
+    //    用户粘贴整串验证码永远只能填进第一格
+    cell.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const dt = e.clipboardData || window.clipboardData;
+      const raw = dt ? dt.getData("text") : "";
+      const digits = String(raw).replace(/\D/g, "");
+      if (!digits) return;
+      // 够长就从第 1 格重铺（用户是想整串替换），不够长就从当前格顺填
+      distribute(digits, digits.length >= N ? 0 : i);
+    });
+
+    // 触屏点按：没有 hover，但点进某一格时全选内容，让「覆盖改这一位」一步到位
+    cell.addEventListener("focus", () => cell.select());
+  });
+
+  // 演示按钮走的是真实的 paste 事件（构造 ClipboardEvent + DataTransfer），
+  // 不是绕过事件直接填值——否则这个 demo 就演示不了它想演示的那条坑
+  document.getElementById("btn-paste").addEventListener("click", () => {
+    const target = cells.includes(document.activeElement) ? document.activeElement : cells[0];
+    target.focus({ preventScroll: true });
+    let dt = null;
+    try { dt = new DataTransfer(); dt.setData("text/plain", "123456"); } catch (_) { dt = null; }
+    if (dt && typeof ClipboardEvent === "function") {
+      target.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    } else {
+      distribute("123456", 0);   // 老浏览器兜底
+    }
+  });
+
+  document.getElementById("btn-fail").addEventListener("click", () => {
+    if (!cells.every((c) => c.value)) { setStatus("先填满 6 位再看失败态", "err"); return; }
+    otp.classList.remove("ok");
+    // 重启动画的老办法：读一次 offsetWidth 强制重排，否则连续点两次只有第一次抖
+    void otp.offsetWidth;
+    otp.classList.add("err");
+    setStatus("验证码不正确 · 内容已保留，可直接改某一位", "err");
+    if (reduce) return;
+    setTimeout(() => otp.classList.remove("err"), 320);
+  });
+
+  document.getElementById("btn-reset").addEventListener("click", () => {
+    cells.forEach((c) => { c.value = ""; });
+    clearState();
+    focusCell(0);
+  });
+
+  focusCell(0);
+})();
+</script>
+</body>
+</html>

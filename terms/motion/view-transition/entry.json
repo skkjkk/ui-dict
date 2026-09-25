@@ -1,0 +1,81 @@
+{
+  "id": "view-transition",
+  "no": "M-05",
+  "category": "motion",
+  "nameZh": "共享元素过渡",
+  "nameEn": "Shared Element Transition",
+  "aliases": [
+    "小图自己长大成大图",
+    "点开缩略图，那张图滑过去铺满",
+    "前后两屏是同一张图在变形",
+    "图片从格子里飞出来",
+    "像被捏住一角拉开的过渡",
+    "同一个东西从列表挪到详情页"
+  ],
+  "definition": "状态切换的瞬间，把切换前后的两套 DOM 各截一张快照，让其中一个「同名元素」在两张快照之间做位置、尺寸与透明度的插值——列表缩略图点开长成详情大图，靠的就是它。与视差滚动（Parallax）的区别：视差是滚动位置到位移的线性映射、页面内容本身不换；共享元素过渡只在状态切换的那一帧发生，与滚动无关。与普通 FLIP／缩放动画的区别：FLIP 是同一个节点被 transform 移形，节点自始至终没变；共享元素过渡里新元素是重新插入 DOM 的另一个节点，形变发生在浏览器合成的伪元素层上，原作者代码里根本不存在那一帧。",
+  "whenNotToUse": [
+    "同一时刻有多个元素想参与形变（列表里每一张都想配 name）→ 名字必须全局唯一，重复会让整组过渡静默失效，只有被点中的那一个才该临时挂名",
+    "目标浏览器里还有大量不支持该 API 的版本 → 降级分支必须能独立完成导航，别把业务逻辑写进过渡回调里",
+    "高频状态切换（拖拽跟手、输入联想、滚动跟随）→ 每次调用都要截两张全页快照，比 transform 贵一个量级",
+    "只需要「淡一下」的简单切换 → 直接写 CSS transition 更省，杀鸡不用牛刀"
+  ],
+  "confusedWith": ["parallax", "count-up", "flip"],
+  "anatomy": [
+    { "part": "缩略图 Thumbnail", "note": "起始态；点击前一刻才临时挂上 view-transition-name，平时不带名" },
+    { "part": "详情视图 Detail", "note": "结束态；容器插入 DOM 后由其中的大图接过同一个名字" },
+    { "part": "view-transition-name 配对", "note": "两态各有一个同名元素，浏览器据此把它们配成一组、其余部分走整页交叉淡化" },
+    { "part": "伪元素层 ::view-transition-old/new/group(name)", "note": "group 层负责几何形变（位置尺寸插值），old/new 层是两张快照、负责淡出淡入，时长曲线都在这三层上调" },
+    { "part": "降级分支 Fallback", "note": "不支持 startViewTransition 时直接切 DOM——过渡只是增强，功能一点不能少" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个「缩略图 → 详情」的共享元素过渡。触发条件：点击网格中的某张缩略图（或键盘回车）。运动模型：先把 view-transition-name: hero 挂到被点的那张缩略图上，再调用 document.startViewTransition(() => {…})，在回调里把 name 让给详情大图并切换 DOM；几何形变由浏览器对两态快照插值完成，配 ::view-transition-group(hero) 与 ::view-transition-old(hero) 的 {DUR}ms + cubic-bezier(.2,.8,.2,1)，新快照用自定义关键帧从 scale({SCALE_FROM}) 淡入。时长量级：{DUR}ms（低于 200ms 看不清是形变，超过 500ms 像卡了一拍）。结束态：一次性播完即停在详情视图，不回弹、不循环；关闭时反向再跑一遍同规格过渡，图片缩回原来的格子。卡片圆角 {RADIUS}px 全程不变。",
+    "stack": "原生 HTML + CSS + 原生 JS；只用 document.startViewTransition 与 CSS 伪元素 ::view-transition-old/new/group(name)，零依赖、零构建。",
+    "constraints": [
+      "不要给网格里所有缩略图都写 view-transition-name——同名元素在同一时刻只能有一个，重复会让浏览器直接跳过这组过渡（静默失败，只在控制台留一条警告）",
+      "不要把 DOM 切换写在 startViewTransition 外面——必须放在回调里，浏览器要等回调跑完才截新状态快照",
+      "不要省略 if (!document.startViewTransition) 的降级分支——不支持时打开/返回必须照常工作，过渡只能是增强层",
+      "prefers-reduced-motion 下不要调用 startViewTransition，直接切 DOM——截两张全页快照本身也有成本，不动效就不该付",
+      "不要在过渡进行中再次调用 startViewTransition，也不要在回调里 await 异步（图片解码、fetch）——浏览器只等回调返回后的下一帧就截新状态，图还没解码就会截到空白"
+    ],
+    "verify": [
+      "点缩略图：那张图的位置与尺寸平滑长成详情大图的位置与尺寸，旧图淡出、新图淡入，全程没有跳变与白闪",
+      "点返回：同一张图反向缩回它原来所在的格子位置",
+      "手动给两个缩略图都挂上同名（故意改坏）：过渡消失、变成瞬间切换，控制台出现 duplicate view-transition-name 警告",
+      "用不支持该 API 的浏览器或开启减少动效后：点击仍能打开详情、Esc 仍能返回，只是瞬间切换",
+      "把 DUR 拉到 800ms：形变过程能看清圆角与位置都在插值，卡片圆角全程没有跳变"
+    ],
+    "reference": "参考气质：Google Photos 点开一张照片、Airbnb 房源卡进详情页——形变干净、背景同时淡换，主体元素是唯一主角，没有别的元素抢戏。",
+    "variants": [
+      { "label": "跨文档过渡（MPA）", "delta": "两个独立 HTML 之间用 @view-transition { navigation: auto } 交给浏览器接管导航，同一效果不用手写 startViewTransition，代价是必须同源" },
+      { "label": "整组元素归位", "delta": "详情页的标题、价格、按钮各自挂一个 name 一起飞过去，形成一组元素同时落位；名字越多冲突风险越高，要逐个确认唯一" }
+    ]
+  },
+  "params": [
+    { "key": "DUR", "label": "过渡时长 (ms)", "def": 320, "min": 100, "max": 800, "step": 20, "hint": "形变 300–400ms 最舒服；<200ms 看不清是形变，>500ms 像卡了一拍" },
+    { "key": "RADIUS", "label": "卡片圆角 (px)", "def": 14, "min": 0, "max": 32, "step": 1, "hint": "缩略图与详情大图共用同一个圆角变量，形变全程圆角不会跳" },
+    { "key": "SCALE_FROM", "label": "详情图起始缩放", "def": 1, "min": 0.8, "max": 1, "step": 0.05, "hint": "1 = 只靠浏览器的几何形变；调到 0.9 让新快照额外放大一次，收口更有劲，低于 0.85 边缘会先糊后清" }
+  ],
+  "scenarios": [
+    "电商商品列表 → 商品详情大图（淘宝/京东/Shopify 式）",
+    "相册网格 → 单张照片查看（Google Photos / Apple Photos）",
+    "文章列表封面 → 文章头图（Medium 式）",
+    "音乐专辑墙 → 播放页封面（Apple Music / Spotify）",
+    "订单列表 → 订单详情卡片展开"
+  ],
+  "pitfalls": [
+    "给整屏缩略图都挂同一个 view-transition-name 会让过渡整个静默失效，因为浏览器要求同一时刻每个 name 全局唯一，撞名时它选择放弃而不是报错（只在控制台留一行 duplicate view-transition-name）——名字只能在点击那一刻临时挂到被选中的那一个上，过渡结束再摘掉",
+    "view-transition-name 必须在 startViewTransition 之前就挂在旧元素上，因为浏览器是在调用那一瞬间截「旧状态」快照的；写进回调里就晚了，旧快照里没有这个元素，过渡会退化成整页淡入淡出",
+    "回调里不能等异步（await 图片 decode、fetch 数据）再返回，因为浏览器只等回调返回后的下一帧就截新状态；图没解码完就截，快照里是空白——详情图要用已经在缓存里的同一张图，或先 await decode() 再在回调里同步切换",
+    "只写 ::view-transition-old/new 而漏掉 ::view-transition-group 会让时长各走各的，因为几何形变挂在 group 层、old/new 只控制淡入淡出——不改 group 就会出现「位置已经到位、颜色还在淡」的错位感",
+    "一旦自己接管 ::view-transition-new 的 opacity 关键帧，就得同时把 mix-blend-mode 归位，因为浏览器默认用叠加式混合（plus-lighter）做交叉淡化，「自己淡入」与「旧图淡出」相加会闪一次白",
+    "在 prefers-reduced-motion 下仍然调用 startViewTransition 是白付成本，因为截两张全页快照要合成一次整页纹理，而结果又被你自己禁掉了动画——直接切 DOM 才是不动效时的正解"
+  ],
+  "related": ["parallax", "scrollytelling"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API",
+    "https://developer.chrome.com/docs/web-platform/view-transitions"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

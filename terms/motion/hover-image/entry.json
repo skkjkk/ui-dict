@@ -1,0 +1,78 @@
+{
+  "id": "hover-image",
+  "no": "M-07",
+  "category": "motion",
+  "nameZh": "悬停图片预览",
+  "nameEn": "Hover Image",
+  "aliases": [
+    "鼠标跟着一张图走",
+    "悬停行上浮出预览缩略图",
+    "划过项目名弹出跟随图片",
+    "鼠标指哪图跟到哪",
+    "hover 跟随预览图",
+    "作品集划过显图的那个效果"
+  ],
+  "definition": "悬停在列表行（通常是作品集的项目名）上时，一张预览缩略图从无到有放大浮现，并以插值跟随鼠标移动；行间移动时图片栈平滑切换到对应项目。它的动感全部来自「跟随」而非「出现」：预览图不吸附在任何锚点旁，而是滞后半拍地追着指针走。与磁吸按钮（Magnetic Button）的辨析：磁吸是元素被指针吸走（元素动、指针是目标），悬停预览是缩略图追着指针跑（图动、跟随指针）——两者共用 lerp 插值跟手模型，方向相反。与 Tooltip 的辨析：Tooltip 跟随的是纯文字说明、无图、不做平滑跟随；悬停预览的主角永远是图。",
+  "whenNotToUse": [
+    "列表项本身就是图片/卡片（信息已可见）→ 预览图是重复信息，用 hover 直接放大原图即可",
+    "触屏为主的页面（hover:none）→ 无悬停语义，跟随层整个退场，此效果在手机上不存在",
+    "列表行很密、每行高度 < 32px → 指针扫过时换图频率过高，图片栈闪成一团",
+    "图片又大又多、首屏就要用 → 跟随层再省也是额外合成层，长列表用懒加载网格更干净"
+  ],
+  "confusedWith": ["magnetic-button", "tooltip"],
+  "anatomy": [
+    { "part": "Trigger List 触发行列表", "note": "一列项目名；每行挂 data-index，mouseenter 时通知图片栈换图" },
+    { "part": "Thumbnail 跟随缩略图", "note": "position:fixed + pointer-events:none 的浮层，translate 定位到指针视口坐标；可点的话会自己截胡 mousemove" },
+    { "part": "Image Stack 图片栈", "note": "所有预览图纵向堆叠，translateY(-100% × index) 切换；每张高度严格等于容器，切换才不露缝" },
+    { "part": "Lerp 插值器", "note": "rAF 循环里 x += (tx - x) × 系数；平滑度的唯一来源是插值系数，与 mousemove 触发频率无关" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个「悬停图片预览（Hover Image）」动效：一列 4 行项目名（标题 + 副标签，行间 1px 分隔线），鼠标悬停在某行时，一张 {SIZE}px 宽（高按 0.62 比例）的圆角预览缩略图以 scale 0→1 浮现，并跟随鼠标移动；行间移动时预览图切换为对应项目的图片。跟随模型：mousemove 只更新目标坐标（clientX/Y，配 position:fixed），rAF 循环里做 lerp 指数趋近 x += (tx - x) × {LERP}，静止后停掉 rAF 不常驻；缩略图 pointer-events:none、translate(-50%,-50%) 居中于指针。切图：所有图纵向堆在一个溢出隐藏容器里，换图 = translateY(-100% × index)，{LERP} 用 .38s cubic-bezier(.2,.8,.2,1) 过渡。移出列表：scale→0 缩没（0.3s power-out）。行本身：hover 时透明度降到 .45、标题反向位移 ±10px 制造让位感。触屏（hover:none）不渲染跟随层。",
+    "stack": "原生 CSS + 原生 JS（mousemove + rAF lerp + transform），零依赖——原版用 GSAP quickTo 实现，此处等价替换为手写插值循环。",
+    "constraints": [
+      "跟随层不要用 pageX 定位——pageX 是文档坐标，页面一滚动 fixed 定位的跟随层就对不上指针，必须 clientX/Y 配 position:fixed",
+      "跟随缩略图不要省 pointer-events:none——它悬在指针正下方，可点的话会截胡 mousemove，跟随立刻卡死",
+      "不要在 mousemove 里直接改 transform——高频事件逐帧写样式，插值交给 rAF 循环统一计算，事件只更新目标点",
+      "图片栈切换不要用 display 换图——没有过渡，换图是硬切；纵向堆叠 + translateY 百分比切换才有滑动感",
+      "lerp 循环静止后要停掉 rAF——跟随层常驻 rAF 是纯烧电池，与磁吸按钮同一纪律",
+      "prefers-reduced-motion 下插值系数取 1（直达目标），触屏（hover:none）整个跟随层不渲染"
+    ],
+    "verify": [
+      "悬停任意行：缩略图从指针位置附近 scale 0→1 浮现，松开鼠标移开时缩没",
+      "按住鼠标在列表内画圈：缩略图平滑追着指针走，有明显的半拍滞后而不是贴死",
+      "行间移动：预览图纵向滑动切换到对应图片，不是硬切",
+      "移出列表区域：缩略图整体缩没；再移回任意行重新浮现",
+      "系统开启减少动效后：跟随仍然工作但无滞后（瞬时到达），过渡动画取消"
+    ],
+    "reference": "参考气质： Dennissnellenberg.com 个人站的项目列表、Basement Studio 首页——图追着手走，慢半拍才高级。",
+    "variants": [
+      { "label": "isContained 容器内跟随", "delta": "跟随层改挂容器内 absolute 定位，坐标减容器 rect 偏移；用于网格预览等无法全屏跟随的嵌套场景" },
+      { "label": "compact 紧凑版", "delta": "缩略图缩到 160×100px、行距与字号同步收窄；嵌入文档站预览位" }
+    ]
+  },
+  "params": [
+    { "key": "LERP", "label": "跟随插值系数", "def": 0.12, "min": 0.04, "max": 0.4, "step": 0.02, "hint": "越小滞后越重越「高级」，<0.06 会懒到像卡顿；>0.25 贴死指针失去跟随感" },
+    { "key": "SIZE", "label": "缩略图宽 (px)", "def": 160, "min": 100, "max": 260, "step": 10, "hint": "高按 0.62 比例联动；>220 会盖住列表文字" }
+  ],
+  "scenarios": [
+    "设计师/工作室个人站的作品列表（Dennissnellenberg 式）",
+    "创意机构首页的服务清单 hover 显案例图",
+    "博客归档列表划过显示文章头图",
+    "产品目录页划过型号显示渲染图"
+  ],
+  "pitfalls": [
+    "跟随层用 pageX 而不是 clientX 定位，是「页面一滚跟随就错位」的直接原因：pageX 是文档坐标、包含滚动偏移，而 position:fixed 的层以视口为基准——两套坐标系相减出的差值就是滚动距离，要么全程 clientX/Y，要么把 fixed 改 absolute 并显式加回 scrollY",
+    "省略 pointer-events:none 的跟随层会在指针正下方截胡 mousemove：跟随层永远是视口里离指针最近的元素，事件目标变成它自己之后列表再也收不到 mousemove，视觉表现为「图抖一下就卡死」",
+    "lerp 写在 mousemove 回调里而不是 rAF 循环里，跟随速度会随鼠标移动频率波动：高分屏/高回报率鼠标下事件频率翻倍，同一系数看起来快一倍——事件只更新目标坐标，插值必须在 rAF 里按帧统一算",
+    "图片栈用 display:none 换图会让「行间滑动切换」退化成硬切，因为 display 变更不产生过渡；纵向堆叠后用 translateY(-100%×index) 才有相邻两图接力滑过的连续感——这也是堆叠容器每张图必须严格等高的原因",
+    "触屏设备上保留跟随层会得到一个永远停在屏幕左上角的幽灵图块：hover:none 环境下 mousemove 不触发、mouseleave 也不会来，scale 永远停在最后一次的值——媒体查询里直接不渲染"
+  ],
+  "related": ["magnetic-button", "tooltip", "shimmer"],
+  "refs": [
+    "https://gsap.com/docs/v3/Plugins/quickTo/",
+    "https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/clientX"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

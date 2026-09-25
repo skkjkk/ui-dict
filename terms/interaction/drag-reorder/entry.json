@@ -1,0 +1,84 @@
+{
+  "id": "drag-reorder",
+  "no": "I-03",
+  "category": "interaction",
+  "nameZh": "拖拽排序",
+  "nameEn": "Drag to Reorder",
+  "aliases": [
+    "按住把手把这条往上挪一位",
+    "拽起来的时候别的行自己滑开让个位",
+    "抓着这一行像拎起来再放下",
+    "松手它自己吸进那个缝里",
+    "拖过去时列表像拉链一样让开",
+    "整行跟着手指走、后面排队跟着挪"
+  ],
+  "definition": "在有序列表里按住某一行（或它的拖拽把手）把它拎起来，其余项用位移动画滑开腾出空位，松手后按被拖项中心点落位、列表顺序真实改写。它的语义核心是'序列里插到第几位'——必须同时存在让位动画与位置占位（Ghost），否则用户无法预判落点。与拖放（Drag & Drop / 文件投递）的区别：拖放关心'落到哪个容器'（投递语义），落点是一个区域，松手即触发一次投递动作、列表顺序不变；拖拽排序关心'在序列里插到第几位'（顺序语义），落点是一个索引，松手只改顺序、不产生任何业务动作。与滑动行操作（Swipe Actions）的区别：后者是单行水平手势揭示动作，不改变顺序。",
+  "whenNotToUse": [
+    "列表项超过 30 条且没有搜索 → 拖动跨屏要自动滚动，用户很难把第 3 项精确拖到第 28 项，此时用「移动到…」菜单或上下移按钮更可靠",
+    "顺序本身有强语义（优先级 1/2/3、步骤 1/2/3）→ 拖动改序会让编号与语义脱钩，应改为编辑优先级字段",
+    "表格里可排序的列头 → 那是「排序（Sort）」，点击切换升降序，不是改变数据自身的排列顺序，别把两者做成同一个交互",
+    "移动端长列表里的整行拖动 → 与页面滚动直接抢手势，除非像本词条一样限定只能从把手起拖并声明 touch-action: none"
+  ],
+  "confusedWith": ["swipe-actions", "pull-to-refresh", "sortable-list"],
+  "anatomy": [
+    { "part": "Drag Handle 拖拽把手", "note": "行内一个明确的起拖区（⠿ 图标或整行）。有把手时只有把手起拖，列表滚动不受影响——这是移动端能同时保住滚动与排序的关键" },
+    { "part": "Dragged Item 被拖项", "note": "抬升态：scale 1.02 + 阴影 0 12px 28px rgba(0,0,0,.18) + cursor: grabbing。用 transform 位移跟随指针，绝不改 top/left（那会逐帧触发布局）" },
+    { "part": "Ghost 幽灵占位", "note": "被拖项原位置上留出的空槽，通常是一条虚线边框或浅色底。它告诉用户'松开后这里会空出来'，也让让位位移有唯一确定的终态" },
+    { "part": "Displacement 让位位移", "note": "其余项用 FLIP 平滑滑动一格（180–220ms + cubic-bezier(.2,.8,.2,1)），而不是瞬间跳到新位置。没有这一段，用户看到的就是'列表抽搐'" },
+    { "part": "Snap 落位吸附", "note": "松手后被拖项从浮空位置过渡到目标行位，同时移除抬升缩放与阴影——落位动画与被拖项自身的 transform 共用一个通道，所以要等过渡结束再清样式" }
+  ],
+  "promptTemplate": {
+    "core": "一个拖拽排序（Drag to Reorder）交互，动效四要素：\n- 触发：pointerdown 落在行把手（或整行，视实现）上即进入候选态；pointermove 超过 4px 才真正起拖（死区过滤，避免把点击误判成拖动），并立即 setPointerCapture 把后续指针事件锁在该元素上。起拖瞬间被拖项加 scale {LIFT}、阴影 0 12px 28px rgba(0,0,0,.18)、cursor: grabbing，原位置插入等高的 Ghost 虚线占位。\n- 运动：被拖项 transform: translate3d(0, 指针位移, 0) 跟手，无过渡（transition: none，拖拽期任何过渡都会产生'手感粘滞'）；其余项走 FLIP——起拖时记录每项首位置，插入位变化后记录末位置，先写 transform: translateY(首-末) 再强制 reflow，然后过渡到 translateY(0)，时长 {DUR}ms、曲线 cubic-bezier(.2,.8,.2,1)。插入位判定用被拖项中心点与被覆盖行中线的比较，不是用指针位置。\n- 时长：让位位移 {DUR}ms（180–220ms 量级，短于 150ms 显得跳、长于 250ms 会拖沓）；松手落位 {DUR}ms 同一曲线。\n- 结束态：被拖项从浮空位移过渡回 0、移除 scale 与阴影、Ghost 移除、DOM 顺序真实重排（不能只改视觉顺序，否则刷新后顺序还原），并播报 aria-live 提示'已移动到第 N 位'。键盘替代：行内把手可聚焦，↑/↓ 方向键把该行与相邻行交换并立即播报新位次，Home/End 移到首尾。",
+    "stack": "原生 CSS transform + 原生 JS Pointer Events（pointerdown/move/up/cancel + setPointerCapture），零依赖零网络请求。",
+    "constraints": [
+      "让位必须用 transform 而不是 top/height：改 top 会触发逐帧重排（layout thrashing），6 行还行、60 行直接掉帧；transform 只走合成层，代价是必须自己算首末位置差（FLIP 的全部复杂度都在这儿）",
+      "拖拽期被拖项必须 transition: none：跟手位移一旦挂了过渡，指针停下时元素还在追，手感立刻变'粘滞'；只有让位项和落位那一刻才该有过渡",
+      "容器必须声明 touch-action: none（或只在把手上声明）：否则浏览器在首次平移时就判定这是原生滚动，直接发 pointercancel 掐断指针流，拖到一半元素原地弹回",
+      "落位后必须真实重排 DOM：只改 transform 的视觉顺序会让刷新、复制、后续操作全部错位；重排完记得清掉残留的内联 transform，否则会和 CSS 类打架",
+      "指针中断（pointercancel）必须当作取消处理：来电话、系统手势、浏览器抢滚动都会触发它，不处理的话被拖项会永久悬空在浮空位置",
+      "键盘路径不是可选项：没有 ↑/↓ 移动的排序列表，键盘与读屏用户完全无法改变顺序；同时要 aria-live 播报新位次，否则改完了也听不到结果"
+    ],
+    "verify": [
+      "按住某行把手往下拖：该行抬起（略放大 + 阴影 + grabbing 光标），原位置留出一条虚线空槽，其余行平滑滑开一格而不是瞬间跳位",
+      "拖到第 3 行与第 4 行之间时松手：被拖项吸附到第 4 位、缩放与阴影消失，列表顺序真实改变（读屏播报'已移动到第 4 位'）",
+      "起拖后不移动直接松手（< 4px）：视为点击，不改变顺序、不出现抬升态",
+      "Tab 聚焦到某行把手后按 ↑：该行与上一行交换位置并播报；按 End 直接移到末位",
+      "触屏上从行把手向下拖：列表不滚动、元素跟手；从行的正文区域拖：列表正常滚动（touch-action 只锁在把手上）",
+      "系统减少动效开启时：让位与落位瞬间完成（无过渡），功能链完整"
+    ],
+    "reference": "参考气质：iOS 提醒事项的编辑模式 / Notion 数据库行拖动 / Trello 卡片——抬升明确、让位干净、落位一次到位不抖。",
+    "variants": [
+      { "label": "更紧凑", "delta": "ROW_H 48px、DUR 140ms、LIFT 1.0（只靠阴影表达抬升，适合密集表格）" },
+      { "label": "更戏剧", "delta": "DUR 260ms + 落位换成弹簧（stiffness 260 / damping 24），被拖项在落位时轻微压扁一下" },
+      { "label": "多列网格", "delta": "插入位判定从一维中线改为二维（先算行、再算列），让位位移变成 translate(x,y) 二维 FLIP" }
+    ]
+  },
+  "params": [
+    { "key": "ROW_H", "label": "行高 (px)", "def": 56, "min": 40, "max": 80, "step": 2, "hint": "FLIP 让位位移的基准单位：让位一格 = 一个 ROW_H" },
+    { "key": "DUR", "label": "让位时长 (ms)", "def": 200, "min": 0, "max": 500, "step": 20, "hint": "180–220ms 手感最好；0 即瞬间跳位（退化成没有让位动画的拖放）" },
+    { "key": "LIFT", "label": "抬升缩放", "def": 1.02, "min": 1, "max": 1.08, "step": 0.01, "hint": "1 = 只靠阴影表达抬升；超过 1.05 在密集列表里会与相邻行重叠" }
+  ],
+  "scenarios": [
+    "待办清单 / 提醒事项的排序（iOS 提醒事项编辑模式）",
+    "看板卡片在同列内上下调序（Trello、Linear 的 Backlog 排序）",
+    "表单搭建器里字段顺序调整（金数据、Typeform 的字段列表）",
+    "播放列表歌曲排序（网易云音乐、Spotify 的队列拖拽）",
+    "后台导航菜单项排序（WordPress 菜单、Shopify 导航编辑器）"
+  ],
+  "pitfalls": [
+    "让位用 top/height 逐帧改是这条交互最大的性能陷阱：每改一次 top 浏览器都要重新计算该行之后所有兄弟节点的布局（reflow），6 行看不出、60 行拖动时直接掉到 20fps；用 transform 只走合成层不触发重排——代价是位移量得自己算，这正是 FLIP（First-Last-Invert-Play）三个额外步骤存在的唯一理由：先量首位置、插入位变了再量末位置、用 transform 反向补偿回原位，下一帧才过渡到 0。",
+    "起拖时不 setPointerCapture，指针一滑出被拖项元素，pointermove 就全落到别的元素上，拖拽当场断在半路；而 capture 的代价是该元素会吞掉后续所有指针事件，所以 pointerup 与 pointercancel 必须都监听并做同一套收尾——否则来一通电话触发 pointercancel，被拖项就永久悬空在浮空位置上，用户只能刷新页面。",
+    "移动端不声明 touch-action 就是白做：浏览器在第一次平移手势时按原生滚动裁决，一旦它认为这是滚动就直接发 pointercancel 掐断指针流，你精心写的跟手位移会在拖出 10px 时消失；正解是把 touch-action: none 只放在拖拽把手上（而非整行），这样把手区域归你、行的其余部分仍可正常滚动列表——整行拖动在长列表里必然要面对'滚不动'的投诉。",
+    "被拖项中心点判定插入位时，如果拿'指针位置'代替'元素中心点'，用户会感到落点与视觉严重不符：手指按在行的下半部分时，元素明明已经压住下一行、指针却还在上一行范围内，插入位来回抖动；另外每次 move 都要重算插入位并只在'位次真的变了'时才动让位动画，否则 60fps 的 move 事件会把让位动画反复重启，看起来就是持续抖动。",
+    "落位后只改视觉顺序、不真实重排 DOM 是最隐蔽的坑：页面当下看起来完全正确，但刷新后顺序还原、复制出去的 HTML 顺序是错的、后续任何基于 DOM 索引的逻辑（比如'删除第 3 项'）都会删错——务必在落位过渡结束后用 insertBefore 真排一次，并清掉所有残留的内联 transform，不然下一次 FLIP 会拿脏数据当首位置。",
+    "只在 pointerdown 就起拖、不设移动死区（4px 上下），会让'点一下选中'变成'拖动了一下'：触屏上手指天然抖动 2–5px，用户想点开详情却被抬升了行；死区与 setPointerCapture 的时机也要配对——超过死区才 capture，否则连点击的 pointerup 都被锁给这个元素。"
+  ],
+  "related": ["swipe-actions", "pull-to-refresh", "ripple", "magnetic-button"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/API/Element/setPointerCapture",
+    "https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

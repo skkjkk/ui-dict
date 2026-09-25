@@ -1,0 +1,85 @@
+{
+  "id": "context-menu",
+  "no": "C-11",
+  "category": "component",
+  "nameZh": "上下文菜单",
+  "nameEn": "Context Menu",
+  "aliases": [
+    "右键弹出来的那列操作",
+    "对着文件长按冒出来的菜单",
+    "在列表某一行上点右键才出现的选项",
+    "桌面系统里右键那个小方框",
+    "光标停在哪儿、菜单就开在哪儿的那一份动作清单",
+    "手机上按住不动弹出来的操作条"
+  ],
+  "definition": "在指针所在位置就地展开的动作菜单，由右键（或触屏长按、键盘 ContextMenu 键）唤出，作用于「指针指着的那件事物」：菜单的定位基准是坐标而不是某个按钮，所以它必须自己处理贴近视口右缘/下缘时的翻转，否则会被屏幕裁掉一半。与 Dropdown 的经典辨析：Dropdown 挂在触发按钮上、位置由锚点元素决定、始终属于那个按钮；Context Menu 挂在指针坐标上、位置由指针决定、属于指针当时指着的那条数据——同一个菜单在不同行上唤出，作用对象完全不同。与 Command Palette 的辨析：后者是键盘驱动的全局检索（搜什么有什么），前者是上下文相关的短动作清单（此刻这个对象能做什么），一个靠打字缩小范围，一个靠右键锚定对象。",
+  "whenNotToUse": [
+    "动作要在触屏上高频使用 → 长按是隐藏手势，先给可见的「⋯」按钮或滑动操作，右键菜单只作为桌面端的加速通道",
+    "只有 1–2 个动作、且是这条数据的主操作 → 直接摆成行内按钮，藏进右键等于没做",
+    "动作不依赖「指着哪个对象」（如全局新建、切换主题）→ 用 Dropdown 或命令面板，别借右键的壳",
+    "需要用户先看说明再决定 → 右键菜单只有一行文字的位置，放不下解释，该用 Dialog 或 Popover"
+  ],
+  "confusedWith": ["dropdown", "command-palette", "popover"],
+  "anatomy": [
+    { "part": "菜单容器", "note": "fixed 定位、宽度固定 WIDTH px、圆角 10px + 投影；left/top 由指针坐标算出，并在贴边时翻转" },
+    { "part": "菜单项", "note": "高 ITEM_H px 的一行，左文字右快捷键；hover 与键盘高亮共用同一个 .active 类，避免两套视觉语言" },
+    { "part": "分隔线", "note": "1px 线 + 上下 5px 外边距，把「常规动作」与「危险动作」切开——分组是给眼睛的刹车" },
+    { "part": "危险项", "note": "文字转 #b3352c 的删除类动作；颜色本身不能是唯一信号，要和「删除」二字一起出现" },
+    { "part": "子菜单", "note": "hover 停留 OPEN_DELAY 才展开的二级菜单，靠关闭宽限防「斜穿」误关；本 demo 实现了它" },
+    { "part": "快捷键提示", "note": "右对齐的灰色尾注（⌘C / Delete），让人不必再点开菜单就知道有捷径" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个 Context Menu 上下文菜单：在指定演示区内监听 contextmenu，e.preventDefault() 后以指针坐标为基准展开宽 {WIDTH}px 的菜单（项高 {ITEM_H}px，入场 {DUR}ms cubic-bezier(.2,.8,.2,1) 做 opacity 0→1 叠 scale .96→1，transform-origin 指向指针）。定位规则：先量出菜单实际宽高，若 left+宽 > 视口宽-8 则改为 left = 指针x-菜单宽（向右贴边时向左翻转），若 top+高 > 视口高-8 则改为 top = 指针y-菜单高（向下贴边时向上翻转），翻转后仍用 8px 钳位兜底；由于菜单是 fixed 定位，坐标直接取 clientX/clientY 即可，不必换算滚动偏移。内容含普通项、一条分隔线、一个危险项（红字）和至少一项带快捷键尾注，并含一个 hover {OPEN_DELAY}ms 才展开的子菜单（离开留 {CLOSE_GRACE}ms 宽限）。交互：上下方向键移动高亮（循环）、Enter 触发、Esc 关闭并把焦点还给唤出前的元素、点菜单外或窗口 resize/scroll 关闭；菜单自身 role=menu、每项 role=menuitem、子菜单父项 aria-haspopup=true 且 aria-expanded 随开合翻转。只在演示区内 preventDefault，绝不全局劫持浏览器右键。",
+    "stack": "原生 CSS + 原生 JS（contextmenu / keydown / pointerdown 事件 + fixed 定位与边界翻转计算）实现唤出、翻转、键盘导航与子菜单，无组件库。",
+    "constraints": [
+      "不要在 window 上全局 preventDefault 掉 contextmenu：用户想用浏览器的「在新标签页打开图片」「检查元素」时会被拦死，只在声明了右键语义的容器内接管",
+      "不要用 absolute 定位再手动减 scrollY/scrollX：滚动一发生坐标就错位，菜单会飘到离指针很远的地方——fixed + clientX/clientY 才是零换算的组合",
+      "不要先显示再测尺寸再挪位置：会看到菜单先闪在错误位置再跳一下——必须先 visibility:hidden 量出 offsetWidth/Height、算完 left/top 再显示",
+      "不要在菜单里用 tabindex 逐个可聚焦的项：菜单是「一个焦点 + 内部高亮」的 composite widget，焦点应该留在菜单容器上，用方向键改高亮",
+      "不要省略 prefers-reduced-motion 与触屏降级：减少动效下直接出现；触屏（hover:none）没有右键，靠长按（约 500ms）唤出，并在唤出前取消 click 以免误触"
+    ],
+    "verify": [
+      "在演示区内任意位置右键，菜单出现在指针处（不是演示区左上角，也不是页面中央）",
+      "在演示区右下角右键，菜单自动向左/向上翻转，完整可见、不被视口裁切",
+      "按 Esc 关闭，且焦点回到唤出前的元素上（再按 Tab 从那里继续）",
+      "上下方向键移动高亮、Enter 触发对应动作，危险项呈红色且有分隔线与它分组",
+      "hover「移动到」约 300ms 后子菜单展开，斜穿到子菜单的途中不会误关",
+      "在演示区外的页面上右键，浏览器默认菜单照常出现（没有被全局劫持）"
+    ],
+    "reference": "参考气质：macOS 访达右键菜单、VS Code 编辑器右键菜单、Figma 画布右键——就地弹出、贴边自动翻转、快捷键提示就在手边。",
+    "variants": [
+      { "label": "触屏长按版", "delta": "加 pointerdown 计时 500ms 唤出、pointermove 超 10px 取消，配合 navigator.vibrate(10) 的轻反馈，适合移动端列表" },
+      { "label": "带图标版", "delta": "每项左侧加 16px 线性图标、WIDTH 提到 240px，适合动作语义不够自明的场景（如图层操作）" },
+      { "label": "多选批量版", "delta": "菜单顶部显示「已选 3 项」，动作作用于整个选区而非指针所指的单条——邮箱与文件管理器的常见形态" }
+    ]
+  },
+  "params": [
+    { "key": "WIDTH", "label": "菜单宽度 (px)", "def": 220, "min": 160, "max": 320, "step": 10, "hint": "宽度要能容下最长的一项 + 快捷键尾注；<180 时中文动作名会被挤断行" },
+    { "key": "ITEM_H", "label": "菜单项高度 (px)", "def": 34, "min": 28, "max": 48, "step": 2, "hint": "触屏取 44 以上；28 是桌面密集菜单的下限，再矮就分不清点中了哪一项" },
+    { "key": "DUR", "label": "进场时长 (ms)", "def": 120, "min": 0, "max": 400, "step": 20, "hint": "右键菜单讲究「即时」，>200ms 会让人觉得系统卡了一下；0=直接出现" }
+  ],
+  "scenarios": [
+    "macOS 访达 / Windows 资源管理器：右键文件出「打开方式 / 重命名 / 删除」",
+    "VS Code 编辑器：右键代码出「转到定义 / 重命名符号 / 格式化」",
+    "Figma 画布：右键图层出「编组 / 置顶 / 复制为 PNG」",
+    "邮件列表（Outlook / 网易邮箱）：右键邮件出「标记已读 / 归档 / 删除」",
+    "移动端文件管理 App：长按文件出「分享 / 移动 / 删除」"
+  ],
+  "pitfalls": [
+    "菜单是 fixed 定位就必须用 clientX/clientY，因为 fixed 的包含块是视口、与滚动偏移无关——习惯性写成 absolute 再减 scrollY 的人，会在页面滚过一屏后看到菜单飘到离指针很远的地方，而且这个 bug 只在滚动后复现、本地随手一测发现不了",
+    "贴边翻转必须「先量尺寸再定坐标」，因为菜单宽度是内容撑出来的、翻转需要知道它有多宽——先显示再测量的写法会让人看见菜单先在错误位置闪一帧再跳过去，正确姿势是先 visibility:hidden 挂上、量完 offsetWidth/offsetHeight、算好 left/top 再转可见",
+    "全局 window 上 preventDefault 掉 contextmenu 会把浏览器的「在新标签页打开图片」「检查元素」「翻译此页」一起没收，因为这些默认行为都挂在同一个事件上——只在带 data-context 语义的容器内接管，这是产品能不能被右键爱好者接受的分水岭",
+    "子菜单的 hover 必须带关闭宽限（约 200ms），因为指针从父项斜向移到子菜单的路上会短暂离开两者，判定为「移出」就立刻关——用户永远点不到二级项，于是只好一路横着平移过去，体验像在走钢丝",
+    "菜单打开期间监听 scroll 必须关闭它，因为 fixed 菜单不会跟着文档滚动，滚动后菜单留在原地、与它作用的那条数据已经错位——用户点下去的「删除」删的是另一行，这是最危险的一类错位",
+    "键盘导航要「一个焦点 + 内部高亮」而不是每项 tabindex=0，因为焦点在项之间跳跃时 Esc 后无处可还，也拦不住 Tab 跑到菜单外面——容器持焦、方向键改 .active、Esc 时把焦点还给唤出前的 activeElement，这三件事是一套的",
+    "触屏没有右键，长按唤出时如果不取消随后的 click，菜单会刚出现就被「点外部关闭」的逻辑关掉，因为长按抬手仍会派发一次 click——长按命中后要置一个标志位吞掉紧随的那次 click"
+  ],
+  "related": ["command-palette", "tooltip", "bottom-sheet"],
+  "refs": [
+    "https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/",
+    "https://developer.mozilla.org/en-US/docs/Web/API/Element/contextmenu_event"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

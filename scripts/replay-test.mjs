@@ -35,7 +35,10 @@ import { launchChrome } from "../src/lib/browser.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "replay");
 const API_BASE = process.env.REPLAY_API_BASE ?? "http://127.0.0.1:10081/v1";
-const API_KEY_FILE = process.env.REPLAY_API_KEY_FILE ?? path.resolve(ROOT, "..", "dsh-qoder-connect", ".research", "qoder2api-runtime", "apikey.txt");
+// key 文件不写死机器路径：优先 REPLAY_API_KEY_FILE，缺省按同级仓库约定解析（本地 qoder2api 运行时）
+const API_KEY_FILE =
+  process.env.REPLAY_API_KEY_FILE ??
+  path.resolve(ROOT, "..", "dsh-qoder-connect", ".research", "qoder2api-runtime", "apikey.txt");
 
 // ---------- CLI ----------
 const argv = process.argv.slice(2);

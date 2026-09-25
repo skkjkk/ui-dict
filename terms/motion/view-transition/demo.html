@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>共享元素过渡 Shared Element Transition · ui-dict M-05</title>
+<style>
+  /* 三个参数都落成根上的自定义属性：::view-transition-* 伪元素挂在文档元素下，能继承到它们。
+     写死数值就没法被站点滑杆改写，也谈不上"参数被消费"。 */
+  :root { --dur: 320ms; --radius: 14px; --scale-from: 1; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 22px 18px 40px; background: #f6f5f2; color: #141414;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .hd { max-width: 720px; margin: 0 auto 16px; }
+  .hd h1 { font-size: 15px; margin: 0 0 6px; letter-spacing: .02em; }
+  .hd p { margin: 0; font-size: 12.5px; line-height: 1.65; color: #8a857c; }
+  .readout { margin-top: 10px; font-size: 11.5px; color: #0b4f6c; font-variant-numeric: tabular-nums; }
+
+  .grid { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 520px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .thumb {
+    appearance: none; border: 0; padding: 0; cursor: pointer; display: block;
+    aspect-ratio: 4 / 3; border-radius: var(--radius); overflow: hidden; background: #e8e5de;
+    transition: transform 180ms cubic-bezier(.2,.8,.2,1);
+  }
+  /* hover 抬起只在真有指针的设备上生效：触屏的 :hover 会粘在最后一格上，看着像选中态 */
+  @media (hover: hover) { .thumb:hover { transform: translateY(-3px); } }
+  .thumb:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 3px; }
+  .thumb svg { display: block; width: 100%; height: 100%; }
+
+  .detail { position: fixed; inset: 0; display: none; background: #f6f5f2; z-index: 5; }
+  .detail.open { display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px; }
+  .big {
+    width: min(560px, 88vw); aspect-ratio: 4 / 3; overflow: hidden; background: #e8e5de;
+    border-radius: var(--radius); /* 与缩略图共用同一个变量：形变全程圆角一致，不会中途跳一下 */
+  }
+  .big svg { display: block; width: 100%; height: 100%; }
+  .cap { font-size: 13px; }
+  .back { border: 1px solid #141414; background: #fff; border-radius: 999px; padding: 7px 18px; font-size: 12.5px; cursor: pointer; }
+  .back:hover { background: #efeadf; }
+  .back:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 3px; }
+  .note { max-width: 720px; margin: 16px auto 0; font-size: 11.5px; color: #8a857c; line-height: 1.7; }
+
+  /* ---- 共享元素过渡本体 ----
+     ::view-transition-group(hero) 管几何形变（位置 + 尺寸插值），old/new 是两个快照层管淡出淡入。
+     只改 group 不动 old/new，就会出现"位置早就到位、画面还在淡"的错位感；三层要一起给规格。 */
+  ::view-transition-group(hero) {
+    animation-duration: var(--dur, 320ms);
+    animation-timing-function: cubic-bezier(.2,.8,.2,1);
+  }
+  /* 自己写 opacity 关键帧 = 接管了 UA 的交叉淡化，此时必须把叠加混合（plus-lighter）显式归位成 normal，
+     否则"新图不透明 + 旧图还在淡出"两层相加，中途会闪一次白 */
+  ::view-transition-old(hero) {
+    animation-name: hero-leave;
+    animation-duration: var(--dur, 320ms);
+    animation-timing-function: cubic-bezier(.2,.8,.2,1);
+    animation-fill-mode: both;
+    mix-blend-mode: normal;
+  }
+  ::view-transition-new(hero) {
+    animation-name: hero-settle;
+    animation-duration: var(--dur, 320ms);
+    animation-timing-function: cubic-bezier(.2,.8,.2,1);
+    animation-fill-mode: both;
+    transform-origin: center;
+    mix-blend-mode: normal;
+  }
+  /* SCALE_FROM 的消费点：新快照在浏览器给的几何形变之外再叠一层 scale，收口时"顿"一下；
+     transform-origin 必须是 center，否则从缩略图位置放大时会有明显的偏心拉扯 */
+  @keyframes hero-settle { from { opacity: 0; transform: scale(var(--scale-from, 1)); } to { opacity: 1; transform: scale(1); } }
+  @keyframes hero-leave  { to { opacity: 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 减少动效时 JS 根本不会调用 startViewTransition（截两张全页快照本身有成本，动画又被禁掉，纯白付），
+       这里只是兜底：万一外层强行放行，时长也压到 1ms */
+    ::view-transition-group(hero), ::view-transition-old(hero), ::view-transition-new(hero) {
+      animation-duration: 1ms !important;
+    }
+    .thumb { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="hd">
+    <h1>共享元素过渡 · Shared Element Transition</h1>
+    <p>点任意一张缩略图：它会自己长成详情大图——位置和尺寸由浏览器在两态快照之间插值，不是同一个节点被缩放。
+       点「返回」或按 <b>Esc</b> 会沿原路缩回它原来那一格。</p>
+    <div class="readout" id="readout"></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="detail" id="detail">
+    <div class="big" id="big"></div>
+    <div class="cap" id="cap"></div>
+    <button class="back" id="back" type="button">返回列表</button>
+  </div>
+
+  <p class="note" id="note">
+    键盘：Tab 到缩略图后回车即可打开，Esc 返回。<br>
+    想看清坑：给两张缩略图同时挂上 <code>view-transition-name: hero</code>，过渡会整组静默失效、退化成瞬间切换——
+    浏览器要求同一时刻每个名字全局唯一，撞名时它选择放弃而不是报错。
+  </p>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DUR": 320, "RADIUS": 14, "SCALE_FROM": 1 };
+  /* ui-dict:params:end */
+
+  // 六张扁平插画（内联 SVG，零网络请求）。用同一份字符串既铺缩略图也铺详情大图，
+  // 保证"共享元素"共享的确实是同一张画，形变时不会露馅成两张不同的图。
+  const ART = [
+    '<svg viewBox="0 0 200 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="200" height="150" fill="#cfe0e6"/><circle cx="150" cy="42" r="20" fill="#e8b96a"/><path d="M0 96 L48 58 L96 96 Z" fill="#5b7f8c"/><path d="M70 96 L120 48 L172 96 Z" fill="#3f5f6b"/><rect y="96" width="200" height="54" fill="#2f4a52"/></svg>',
+    '<svg viewBox="0 0 200 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="200" height="150" fill="#f0d6c0"/><circle cx="58" cy="46" r="22" fill="#d9764a"/><path d="M0 100 L56 66 L112 100 Z" fill="#a2716a"/><path d="M84 100 L140 56 L200 100 Z" fill="#6d4a52"/><rect y="100" width="200" height="50" fill="#4a3038"/></svg>',
+    '<svg viewBox="0 0 200 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="200" height="150" fill="#2b3a4a"/><circle cx="148" cy="38" r="16" fill="#d9e2e8"/><path d="M0 94 L52 60 L104 94 Z" fill="#22303d"/><path d="M76 94 L130 52 L186 94 Z" fill="#17222c"/><rect y="94" width="200" height="56" fill="#0f1720"/></svg>',
+    '<svg viewBox="0 0 200 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="200" height="150" fill="#d9e6d2"/><circle cx="52" cy="40" r="18" fill="#c9d98a"/><path d="M0 98 L60 62 L120 98 Z" fill="#6f8f63"/><path d="M88 98 L142 58 L200 98 Z" fill="#4a6b45"/><rect y="98" width="200" height="52" fill="#2f4a30"/></svg>',
+    '<svg viewBox="0 0 200 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="200" height="150" fill="#e6ecf0"/><circle cx="146" cy="40" r="18" fill="#ffffff"/><path d="M0 100 L54 64 L108 100 Z" fill="#b8c8d2"/><path d="M80 100 L136 60 L194 100 Z" fill="#8fa4b2"/><rect y="100" width="200" height="50" fill="#6b8090"/></svg>',
+    '<svg viewBox="0 0 200 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="200" height="150" fill="#f2e3c8"/><circle cx="62" cy="44" r="21" fill="#e0a85c"/><path d="M0 96 L58 68 L116 96 Z" fill="#c9a06a"/><path d="M92 96 L146 62 L200 96 Z" fill="#9c7448"/><rect y="96" width="200" height="54" fill="#6f5233"/></svg>'
+  ];
+  const DATA = ["千岛湖 · 晨雾", "落日脊线", "北岸夜航", "林间小径", "雪后垭口", "沙丘正午"];
+
+  const gridEl = document.getElementById("grid");
+  const detail = document.getElementById("detail");
+  const big = document.getElementById("big");
+  const cap = document.getElementById("cap");
+  const back = document.getElementById("back");
+  const readout = document.getElementById("readout");
+  const note = document.getElementById("note");
+
+  const SUPPORTED = typeof document.startViewTransition === "function";
+  const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  document.documentElement.style.setProperty("--dur", PARAMS.DUR + "ms");
+  document.documentElement.style.setProperty("--radius", PARAMS.RADIUS + "px");
+  document.documentElement.style.setProperty("--scale-from", String(PARAMS.SCALE_FROM));
+
+  readout.textContent =
+    "DUR " + PARAMS.DUR + "ms · RADIUS " + PARAMS.RADIUS + "px · SCALE_FROM " + PARAMS.SCALE_FROM +
+    " · View Transition API " + (SUPPORTED ? "可用" : "不可用（已走降级分支）") +
+    (reduced() ? " · 减少动效开启（直接切 DOM）" : "");
+  if (!SUPPORTED) note.insertAdjacentHTML("afterbegin", "本浏览器不支持 <code>document.startViewTransition</code>：打开/返回照常工作，只是瞬间切换——降级分支在跑。<br>");
+  if (matchMedia("(hover: none)").matches) note.insertAdjacentHTML("afterbegin", "触屏设备：直接点按缩略图即可，hover 抬起效果已自动关闭。<br>");
+
+  // 缩略图建成 <button>：键盘 Tab/回车天然可用，不用自己补 role 与 keydown
+  const thumbs = ART.map((svg, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "thumb";
+    b.setAttribute("aria-label", "查看 " + DATA[i]);
+    b.innerHTML = svg;
+    b.addEventListener("click", () => openDetail(i));
+    gridEl.appendChild(b);
+    return b;
+  });
+
+  let current = -1;
+  let busy = false;
+  let lastFocus = null;
+
+  // 名字必须收干净：同一时刻每个 view-transition-name 只能挂在一个元素上，
+  // 残留一个就会让下一次过渡撞名失效（而且只留控制台警告，肉眼看不出原因）
+  function clearNames() {
+    for (const t of thumbs) t.style.viewTransitionName = "";
+    big.style.viewTransitionName = "";
+  }
+
+  function paint(i) { big.innerHTML = ART[i]; cap.textContent = DATA[i]; }
+
+  // 过渡结束（或被跳过）后清名。finished 在过渡被 skipTransition 时可能 reject，先 catch 再清，
+  // 免得留下未处理的 rejection，也免得名字清不掉
+  function settle(vt, after) {
+    busy = true;
+    Promise.resolve(vt.finished).catch(function () {}).then(function () {
+      clearNames();
+      busy = false;
+      if (after) after();
+    });
+  }
+
+  function openDetail(i) {
+    if (busy || detail.classList.contains("open")) return;
+    lastFocus = document.activeElement;
+    current = i;
+
+    // 降级：不支持 API 或用户要减少动效 → 直接切 DOM。功能一点不能少，过渡只是增强层
+    if (!SUPPORTED || reduced()) {
+      clearNames(); paint(i); detail.classList.add("open"); back.focus(); return;
+    }
+
+    // 旧状态快照是在 startViewTransition 被调用的那一瞬间截的：
+    // 名字必须此刻就挂在缩略图上，写进回调里就晚了，旧快照里根本没有这个元素
+    thumbs[i].style.viewTransitionName = "hero";
+
+    const vt = document.startViewTransition(function () {
+      thumbs[i].style.viewTransitionName = "";  // 让位给详情大图：同名元素同一时刻只能有一个
+      paint(i);
+      big.style.viewTransitionName = "hero";
+      detail.classList.add("open");
+    });
+    // 焦点在过渡结束后才归还：动画途中详情容器还在用旧快照渲染，此刻移焦会被读屏念到"看不见"的元素
+    settle(vt, function () { back.focus(); });
+  }
+
+  function closeDetail() {
+    if (busy || !detail.classList.contains("open")) return;
+    const i = current;
+
+    if (!SUPPORTED || reduced()) {
+      clearNames(); detail.classList.remove("open"); restoreFocus(); return;
+    }
+
+    big.style.viewTransitionName = "hero";
+    const vt = document.startViewTransition(function () {
+      big.style.viewTransitionName = "";
+      detail.classList.remove("open");
+      // 反向过渡的关键：把名字交还给"原来那一格"，大图才会缩回它出发的位置而不是缩到屏幕中央
+      if (thumbs[i]) thumbs[i].style.viewTransitionName = "hero";
+    });
+    // 同理，焦点等动画跑完再还给原缩略图
+    settle(vt, restoreFocus);
+  }
+
+  function restoreFocus() { if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+
+  back.addEventListener("click", closeDetail);
+  addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && detail.classList.contains("open")) closeDetail();
+  });
+})();
+</script>
+</body>
+</html>

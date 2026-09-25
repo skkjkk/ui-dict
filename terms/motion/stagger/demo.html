@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>错峰入场 Stagger · ui-dict M-06</title>
+<style>
+  /* 三个参数落成根上的自定义属性，关键帧与延迟算式直接引用——写死数值就没法被站点滑杆改写 */
+  :root { --step: 60; --dur: 420ms; --dist: 12px; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 22px 18px 40px; background: #f6f5f2; color: #141414;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .hd { max-width: 720px; margin: 0 auto 14px; }
+  .hd h1 { font-size: 15px; margin: 0 0 6px; letter-spacing: .02em; }
+  .hd p { margin: 0; font-size: 12.5px; line-height: 1.65; color: #8a857c; }
+  .bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .replay { border: 1px solid #141414; background: #fff; border-radius: 999px; padding: 7px 18px; font-size: 12.5px; cursor: pointer; }
+  .replay:hover { background: #efeadf; }
+  .replay:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 3px; }
+  .readout { font-size: 11.5px; color: #0b4f6c; font-variant-numeric: tabular-nums; }
+
+  /* 时序尺：把每项的动画区间画出来，橙线是封顶时刻——
+     "总时长封顶"是本条最容易漏的工程约束，光看卡片浮起是看不出来的 */
+  .ruler { position: relative; max-width: 720px; margin: 12px auto 0; display: grid; gap: 3px; }
+  .ruler .row { position: relative; height: 5px; background: #e8e5de; border-radius: 3px; }
+  .ruler .row i { position: absolute; top: 0; height: 5px; border-radius: 3px; background: #0b4f6c; opacity: .55; }
+  .ruler .cap-line { position: absolute; top: 0; bottom: 0; width: 1px; background: #c2410c; }
+
+  .grid { max-width: 720px; margin: 14px auto 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 620px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 420px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .item {
+    background: #fff; border: 1px solid #e4e0d8; border-radius: 10px;
+    padding: 14px 13px 15px; min-height: 92px;
+  }
+  .item .k { font-size: 11px; color: #b3ada2; font-variant-numeric: tabular-nums; }
+  .item .t { font-size: 13px; margin: 6px 0 4px; }
+  .item .s { font-size: 11.5px; color: #8a857c; line-height: 1.5; }
+
+  /* armed：JS 就位后才把卡片压成透明待入场。不这么分两步，JS 一旦没跑起来
+     卡片会永远停在 opacity:0——内容可见性不能押在脚本上 */
+  .grid.armed .item { opacity: 0; }
+  .grid.play .item {
+    /* both 是必须的：延迟期间按 from 帧渲染，元素保持透明。
+       用 none 会先正常显示、再跳回透明重播一遍，整组闪一下 */
+    animation: rise var(--dur) cubic-bezier(.2,.8,.2,1) both;
+    /* 延迟增量在这里被真正消费：序号 --i 由 HTML 内联给出，STEP 来自根变量，
+       min() 就是封顶——12 项 × 60ms 本会拖到 660ms，封顶后末尾几项同时入场 */
+    animation-delay: min(calc(var(--i) * var(--step) * 1ms), 600ms);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(var(--dist)); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .note { max-width: 720px; margin: 16px auto 0; font-size: 11.5px; color: #8a857c; line-height: 1.75; }
+  .note code { background: #ece8df; padding: 1px 4px; border-radius: 3px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 减少动效不是"把时长设成 0"就完事——delay 还挂在元素上，用户仍要盯着空白排队。
+       这里把位移、延迟、动画一起拿掉，一次性全部显示 */
+    .grid.armed .item, .item {
+      opacity: 1 !important; transform: none !important; animation: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="hd">
+    <h1>错峰入场 · Stagger</h1>
+    <p>12 张卡片依次浮起：每项延迟 = <b>min(序号 × STEP, 封顶 600ms)</b>，所以项数再多也不会让最后一项等太久。
+       滚到这一块自动播一次，也可以点「重播」反复看。下面时序尺上的橙线就是封顶位置。</p>
+    <div class="bar">
+      <button class="replay" id="replay" type="button">重播一次</button>
+      <span class="readout" id="readout"></span>
+    </div>
+  </div>
+
+  <div class="ruler" id="ruler"></div>
+
+  <div class="grid" id="grid">
+    <article class="item" style="--i:0"><div class="k">01</div><div class="t">自动布局</div><div class="s">约束驱动，改一处不塌一片</div></article>
+    <article class="item" style="--i:1"><div class="k">02</div><div class="t">设计令牌</div><div class="s">颜色间距全走变量</div></article>
+    <article class="item" style="--i:2"><div class="k">03</div><div class="t">组件契约</div><div class="s">props 即文档</div></article>
+    <article class="item" style="--i:3"><div class="k">04</div><div class="t">暗色模式</div><div class="s">一套令牌两套皮肤</div></article>
+    <article class="item" style="--i:4"><div class="k">05</div><div class="t">响应式</div><div class="s">断点跟着内容走</div></article>
+    <article class="item" style="--i:5"><div class="k">06</div><div class="t">可访问性</div><div class="s">键盘先能用</div></article>
+    <article class="item" style="--i:6"><div class="k">07</div><div class="t">动效规格</div><div class="s">给曲线也给时长</div></article>
+    <article class="item" style="--i:7"><div class="k">08</div><div class="t">错误态</div><div class="s">说清怎么修</div></article>
+    <article class="item" style="--i:8"><div class="k">09</div><div class="t">空状态</div><div class="s">别只放一句暂无</div></article>
+    <article class="item" style="--i:9"><div class="k">10</div><div class="t">加载态</div><div class="s">骨架与内容同构</div></article>
+    <article class="item" style="--i:10"><div class="k">11</div><div class="t">国际化</div><div class="s">留出 30% 膨胀</div></article>
+    <article class="item" style="--i:11"><div class="k">12</div><div class="t">性能预算</div><div class="s">首屏 JS 有上限</div></article>
+  </div>
+
+  <p class="note">
+    把 STEP 调大：卡片之间的先后越来越明显，但末项的入场时刻被橙线钉住不动——这就是封顶。<br>
+    把 DIST 调到 0：只剩淡入，次序感全靠时序撑着，反而更能看出「错峰」不等于「位移」。<br>
+    键盘：Tab 到「重播一次」按回车即可；触屏不需要 hover，滚动到此处自动触发。
+  </p>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "STEP": 60, "DUR": 420, "DIST": 12 };
+  /* ui-dict:params:end */
+
+  // 总时长封顶：i × STEP 会随项数线性膨胀（40 项 × 60ms = 2.4s），
+  // 封顶后末尾几项共用同一个延迟同时入场，收束成"整批到齐"。
+  // 这里与 CSS 里的 min(...) 是同一个数，改一处要改两处——所以它只出现这一次，别处都引用 CAP。
+  const CAP = 600;
+  const grid = document.getElementById("grid");
+  const ruler = document.getElementById("ruler");
+  const readout = document.getElementById("readout");
+  const replay = document.getElementById("replay");
+  const items = Array.prototype.slice.call(grid.querySelectorAll(".item"));
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  document.documentElement.style.setProperty("--step", String(PARAMS.STEP));
+  document.documentElement.style.setProperty("--dur", PARAMS.DUR + "ms");
+  document.documentElement.style.setProperty("--dist", PARAMS.DIST + "px");
+
+  // 延迟值只在这里算一次，既喂给时序尺也喂给读数，保证画面与文字永远同源
+  const delays = items.map(function (el, i) {
+    return reduced ? 0 : Math.min(i * PARAMS.STEP, CAP);
+  });
+  const total = CAP + PARAMS.DUR;                 // 时间轴总长 = 末项结束时刻
+  const last = delays[delays.length - 1];
+
+  delays.forEach(function (d, i) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const bar = document.createElement("i");
+    bar.style.left = (d / total * 100) + "%";
+    bar.style.width = (PARAMS.DUR / total * 100) + "%";
+    row.appendChild(bar);
+    ruler.appendChild(row);
+  });
+  const capLine = document.createElement("div");
+  capLine.className = "cap-line";
+  capLine.style.left = (CAP / total * 100) + "%";
+  ruler.appendChild(capLine);
+
+  readout.textContent =
+    "STEP " + PARAMS.STEP + "ms · DUR " + PARAMS.DUR + "ms · DIST " + PARAMS.DIST + "px" +
+    " · 封顶 " + CAP + "ms · 末项 " + last + "ms 入场、" + (last + PARAMS.DUR) + "ms 结束" +
+    (reduced ? " · 减少动效开启（无延迟无位移）" : "");
+
+  // armed 只是把卡片压成透明待入场，动画本身仍由 CSS 算延迟；JS 没跑起来时卡片照常可见
+  grid.classList.add("armed");
+
+  function play() {
+    if (reduced) return;              // 减少动效下元素本来就该直接可见，不该播也不该等
+    // 重播必须强制一次 reflow：节点上已经挂着 animation，只换 class 浏览器会认为动画没变、
+    // 直接沿用已结束的状态，表现就是"点了没反应"
+    grid.classList.remove("play");
+    void grid.offsetWidth;
+    grid.classList.add("play");
+  }
+
+  // 首次进视口播一次，播完即断开——滚动经过就重播会让长尾反复拖累整页
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver(function (en) {
+      if (!en[0].isIntersecting) return;
+      play();
+      io.disconnect();
+    }, { threshold: 0.15 });
+    io.observe(grid);
+  } else {
+    play();                           // 没有 IO 就直接播，降级路径不能把内容永远留在透明
+  }
+
+  replay.addEventListener("click", play);   // 手动重播是明确意图，不受"只播一次"约束
+})();
+</script>
+</body>
+</html>

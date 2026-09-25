@@ -2,7 +2,6 @@
 
 > 前端设计词汇与模式的活词典——为"叫不出名字"而诞生。
 > **输入你想要的感觉，找到它的名字、提示词和能跑的代码。**
->
 
 ## 它是什么
 
@@ -28,7 +27,9 @@ vibe-coding 时代的真实断点：脑子里有一个效果（"鼠标靠近就�
 - ❌ 不是灵感画廊：每个词条必须可复制、可运行、可喂给 AI
 - ❌ 不拼案例量、不拼词条数：与 Mobbin/21st/动效词典错位竞争，拼**完整度与可带走性**
 
-## 调研结论速览（2026-09-24，30+ 产品走查，详见 [research/00-synthesis.md](research/00-synthesis.md)）
+## 调研结论速览（2026-09-24，30+ 产品走查）
+
+> 调研档案（5 份报告）按 [DEPLOY.md](DEPLOY.md) 决策留在本地，不入公开仓库；结论摘要如下。
 
 **方向全被验证**：prompt 已是行业一等产物（21st.dev "Every component ships as a prompt"）；单文件零依赖是 AI 时代资产流通的最优形态（Simon Willison、Uiverse 平台规范背书）。
 
@@ -96,8 +97,12 @@ interface PromptCard {
 2. 一句话定义（含辨析句）
 3. **When to use / When NOT to use** 双栏对照（Mobbin）
 4. 操作行三按钮：`复制 Prompt ｜ 复制代码 ｜ 独立页打开 Demo`（21st + Aceternity + shadcn /view 合体）
-5. Live Demo：srcdoc iframe 渲染 demoCode 本体 + 参数滑杆实时回写 + 全站"减少动效"开关
-6. 代码块：整页版 / 核心片段两粒度复制（Animista 双粒度）
+5. Live Demo：srcdoc iframe 渲染 demoCode 本体 + 参数滑杆实时回写 + 全站"减少动效"开关。
+   左列预览面板与右列（参数 + 代码）**严格同高**：纯 CSS Grid `stretch`，右列定义行高、左列整体拉伸，
+   iframe 吃掉面板内的剩余空间——不用 JS 量高，避免测量时序与网络字体回流造成的抖动。
+   「展开全码」时右列可达上万像素，此时左列切 `sticky` 定高（滚代码时预览停在视口顶部），收起即恢复同高。
+   窄屏（<1024px）单列堆叠无同高可言，iframe 回到固定 420px 的可玩高度。
+6. 代码块：默认固定 420px 内滚 + 「展开全码」切全高（整页版 / 核心片段两粒度复制，Animista 双粒度）
 7. 易混淆辨析小块
 8. 场景与坑（因果句文体）
 9. 相关词条（hash 筛选，词条即查询视图）+ Refs 信任状
@@ -126,7 +131,9 @@ interface PromptCard {
 ui-dict/
 ├── README.md          ← 你在这里（v0.2，2026-09-24 按调研结论修订）
 ├── NEW_ENTRY.md       ← 词条工厂规范 + 标杆词条 C-01 完整示例
-├── research/          ← 同类产品调研 5 份报告（已完成）
+├── BATCH-30.md        ← 20 → 30 条扩产批次规格（唯一权威规格）
+├── DEPLOY.md          ← 部署决策记录（含 research/ 不入公开仓的约定）
+├── REPLAY.md          ← prompt 回放测试工具说明
 ├── poc/               ← 早期零构建 POC（srcdoc 同源可行性验证，已完成使命）
 ├── astro.config.mjs   ← Astro + Tailwind + @/ 别名
 ├── scripts/           ← 数据管线：sync-demofiles / qa-demofiles / gen-client-data · 回归：regression-check · 回放：replay-test（REPLAY.md）
@@ -137,13 +144,13 @@ ui-dict/
 │   ├── scripts/       ← 浏览器岛：frame / home（反查搜索）/ entry（滑杆同步）
 │   ├── styles/        ← global.css（Tailwind v4 + 词典排版层）
 │   └── generated/     ← 构建产物（gitignore）：demos.js · site-data.js
-└── terms/             ← 词条数据：一条一目录（entry.json + demo.html），五类 10 条
+└── terms/             ← 词条数据：一条一目录（entry.json + demo.html），五类 30 条
 ```
 
 ## 状态
 
 - [x] 产品定位与决策定稿 v1（2026-09-24）
-- [x] 同类产品调研 4 线 + 汇总（[research/](research/00-synthesis.md)）
+- [x] 同类产品调研 4 线 + 汇总（档案留本地，见上方「调研结论速览」）
 - [x] 战略卡位确认：差异化半区立旗；首版避其锋芒混编
 - [x] Schema v0.2 + 词条页版式蓝图（本 README）
 - [x] NEW_ENTRY.md 词条工厂规范 + C-01 标杆示例
@@ -153,6 +160,7 @@ ui-dict/
 - [x] 本地 git 管理（独立仓库，main 分支，LF 统一，构建产物已 ignore）
 - [x] **首版 10 条标杆词条集齐**（五类全覆盖，QA+zod+构建+浏览器实测全绿）
 - [x] **词条扩到 20 条**（组件7 · 动效4 · 交互2 · 布局4 · 风格3；写手并行管线二次验证）
+- [x] **词条扩到 30 条**（组件11 · 交互4 · 布局6 · 动效6 · 风格3；5 写手并行、目录互不重叠。新增 C-08 气泡卡片 / C-09 分段控件 / C-10 分格验证码输入 / C-11 上下文菜单 / I-03 拖拽排序 / I-04 滑动行操作 / L-05 滚动叠卡 / L-06 破格长文栏 / M-05 共享元素过渡 / M-06 错峰入场。规格见 [BATCH-30.md](BATCH-30.md)，`pnpm gen` + `astro build` + 详情页回归 30/30 全绿）
 - [x] **首页编辑部词典排版 v0.2**：报头双线 + 罗马数字目录 + 发刊词（引 AI articulation barrier）+ 页边注四步管线 + 分节活词条墙 + 分节搜索收起
 - [ ] 部署上线（GitHub Pages / Vercel + 独立域名 + 主动归档 Internet Archive；决策见 DEPLOY.md）
 - [x] **prompt 回放测试工具化**（`pnpm replay`：生成→铁律→真浏览器渲染→视觉判读→回填 verifiedWith；兑现出厂自检第二关，见 [REPLAY.md](REPLAY.md)）——**全 20 条双关验证回填**（Qwen3.8-Flash · 2026-09-25：20/20 生成通过 + 20/20 视觉还原判读通过）

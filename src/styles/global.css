@@ -28,13 +28,13 @@
 /* 编号 / 页边注：词典的两枚身份标记 */
 .num {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: .16em;
   color: var(--color-accent);
 }
 .eyebrow {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: .34em;
   color: var(--color-muted);
   text-transform: uppercase;
@@ -58,7 +58,7 @@
   transform: translateY(-2px);
 }
 .term-card iframe {
-  width: 100%; height: 148px; border: 0; display: block;
+  width: 100%; height: 280px; border: 0; display: block;
   background: #f6f5f2; pointer-events: none;   /* 索引卡只看不玩，点击进详情页 */
 }
 .term-card:hover iframe { pointer-events: auto; }  /* 悬停后允许交互：卡片即活 demo */
@@ -69,24 +69,64 @@
   background: #f6f5f2; display: block; border-radius: 3px;
 }
 
-/* 代码块（Shiki 上色）滚动区 */
-.code-scroll {
-  max-height: 340px; overflow: auto;
-  font-size: 12.5px; line-height: 1.65;
+/* 详情页第六段（Live Demo + 代码）双列：左列预览面板与右列严格同高。
+   实现走 CSS 网格 stretch —— 右列（参数 + 代码块）是高度的定义者，左列整体拉伸到同一行高，
+   iframe 作为面板内唯一的可伸缩项吃掉全部剩余空间。不靠 JS 量高，避免测量时序/字体加载抖动。 */
+.live-grid { align-items: stretch; }
+.live-grid > div { display: flex; flex-direction: column; min-width: 0; }
+
+/* 左列：预览面板 = 标题行之外的整个列高，视觉上就是一个「预览窗」 */
+.demo-panel {
+  flex: 1; min-height: 420px;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--color-line); border-radius: 3px;
+  background: #fff; overflow: hidden;
 }
+.demo-panel .demo-frame {
+  flex: 1 1 0; min-height: 0; height: auto;
+  border: 0; border-radius: 0;
+}
+.demo-panel-meta {
+  flex: none; padding: 8px 12px;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-muted);
+}
+/* 「展开全码」：右列变全高（上万像素），左列若跟随会撑成巨幕。
+   此时左列改为粘性固定高度，滚代码时预览停在视口顶部。 */
+.live-grid.code-expanded { align-items: start; }
+.live-grid.code-expanded > div:first-child { position: sticky; top: 1rem; }
+
+/* 窄屏单列堆叠：没有「同高」可言，iframe 回到固定 420px 的可玩高度 */
+@media (max-width: 1023px) {
+  .demo-panel { min-height: 0; }
+  .demo-panel .demo-frame { flex: 0 0 auto; height: 420px; }
+}
+
+/* 代码块（Shiki 上色）滚动区：默认固定 420px 内滚，展开按钮切全高 */
+.code-scroll {
+  height: 420px; overflow: auto;
+  font-size: 15px; line-height: 1.7;
+}
+.code-scroll.expanded { height: auto; overflow: visible; }
 .code-scroll pre { margin: 0; }
 .code-scroll code { font-family: var(--font-mono); }
+.code-toggle {
+  font-family: var(--font-mono); font-size: 13px;
+  background: none; border: 0; cursor: pointer;
+  color: var(--color-accent); text-decoration: underline; padding: 0;
+}
+.code-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 .prompt-preview {
   background: var(--color-tag); color: #44403a;
-  font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
-  white-space: pre-wrap; padding: 14px 16px; border-radius: 3px;
-  max-height: 300px; overflow: auto;
+  font-family: var(--font-mono); font-size: 15px; line-height: 1.7;
+  white-space: pre-wrap; padding: 18px 20px; border-radius: 3px;
+  max-height: 380px; overflow: auto;
 }
 
 .btn {
-  font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .04em;
-  padding: 9px 15px; border: 1px solid var(--color-ink); background: #fff; color: var(--color-ink);
+  font-family: var(--font-mono); font-size: 15.5px; letter-spacing: .04em;
+  padding: 12px 20px; border: 1px solid var(--color-ink); background: #fff; color: var(--color-ink);
   cursor: pointer; border-radius: 2px; transition: background .14s, color .14s;
 }
 .btn:hover { background: #efeadf; }
@@ -94,9 +134,9 @@
 .btn-primary:hover { background: #333; }
 
 .chip {
-  font-family: var(--font-mono); font-size: 11px;
+  font-family: var(--font-mono); font-size: 14px;
   background: var(--color-tag); color: #5b564d;
-  padding: 2px 9px; border-radius: 2px;
+  padding: 4px 12px; border-radius: 2px;
 }
 
 /* 参数滑杆 */

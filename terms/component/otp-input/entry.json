@@ -1,0 +1,84 @@
+{
+  "id": "otp-input",
+  "no": "C-10",
+  "category": "component",
+  "nameZh": "分格验证码输入",
+  "nameEn": "OTP Input",
+  "aliases": [
+    "短信来了六个格子挨个填的那排框",
+    "一格一个数字、填完自己跳走的验证码框",
+    "银行 App 转账时一位一位敲的密码格",
+    "等验证码时盯着看的那六个小方块",
+    "填满最后一格就自动提交的输入框",
+    "支付前要逐位敲进去的那串格子"
+  ],
+  "definition": "把固定长度的数字串（通常 4–6 位）拆成等宽单字格、每敲一位自动跳下一格的输入控件：粘贴整串会自动分发到各格，退格按「当前格有值就地清空／当前格已空回跳上一格」两条规则回退，填满即触发校验或自动提交。它是登录、支付、二次验证链路上的高频件，价值在于把「一串字符」变成可数、可校对、可逐位纠错的进度感。与普通输入框（input）的辨析：普通输入框承载任意长度文本、允许全选与自由编辑，OTP 输入长度固定、逐格锁定，不该拿它收手机号或密码；与密码框（password）的辨析：密码框遮字符且长度不定，OTP 反而明文显示——验证码是一次性、短时效的，遮住它只会让人多敲错一次。",
+  "whenNotToUse": [
+    "要收的是密码、身份证号、银行卡号这类可复用凭据 → 用普通 input + type=password，OTP 的逐格锁定会让「只改中间一位」变得很烦",
+    "长度超过 8 位（16 位券码、32 位激活码）→ 格子会挤成一条缝，改用普通输入框，或按 4 位一组分两行",
+    "内容含字母且大小写敏感（如邀请码 aB3xK9）→ 逐格没有全选/替换的编辑能力，错一位要退回去重敲",
+    "验证码需要掩码显示（*）→ 逐格本来就是靠「看得见」降低错率，再遮起来等于两个方案互相抵消"
+  ],
+  "confusedWith": ["input", "pin-input", "verification-code"],
+  "anatomy": [
+    { "part": "格子 Cell", "note": "等宽单字输入框，尺寸/间距/圆角由 CELL·GAP·RADIUS 决定；每格 maxlength=1、inputmode=numeric" },
+    { "part": "光标 Caret", "note": "焦点所在的那一格——OTP 的「进度」全靠它表达，所以自动前进必须在写入值之后立刻执行，不能等下一帧" },
+    { "part": "分隔符 Separator", "note": "3+3 中间那条短横线，银行/支付类验证码的习惯断法，让人不用数格子" },
+    { "part": "粘贴分发逻辑", "note": "paste 事件读 clipboardData、过滤非数字、按位回填；这是 OTP 最容易漏、也最影响体验的一段逻辑" },
+    { "part": "自动提交", "note": "填满最后一格即发起校验，用户不必再找「确认」按钮；失败则整组抖动并保持输入可编辑" },
+    { "part": "错误态", "note": "整组红边 + 300ms 水平抖动，但不清空输入——清空会逼用户从头再敲一遍" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个 6 格 OTP 分格验证码输入：每格是 {CELL}px 见方、间距 {GAP}px、圆角 {RADIUS}px 的单字输入框（type=text + inputmode=numeric + autocomplete=one-time-code + maxlength=1），第 3、4 格之间放一条短横线分隔符。触发与行为：敲入数字即写入当前格并在同一帧把焦点移到下一格；粘贴时读 clipboardData 过滤非数字，长度 ≥ 总格数就从第 1 格重铺、否则从当前格顺填，填到哪焦点停到哪；退格分两条规则——当前格有值只清当前格、当前格已空则回跳到前一格并清空它；左右方向键移动焦点、Home/End 跳首尾。填满 6 位触发完成态：格子边框转 #0b4f6c、底色 #f0f6f8，并在 240ms cubic-bezier(.2,.8,.2,1) 内上浮 2px 后停住；校验失败则整组 300ms 水平抖动（±4px 递减），结束态为红边 + 输入保持可编辑。整组用 role=group 加整体 aria-label 包住，每格 aria-label 写「第 N 位」，状态文案挂在 aria-live=polite 的节点上。",
+    "stack": "原生 CSS + 原生 JS（keydown / input / paste 三路事件 + focus 管理）实现分格、粘贴分发与自动前进，无组件库、无第三方 OTP 控件。",
+    "constraints": [
+      "不要用 type=number：它的 value 会把 007123 的前导零吃掉、上下箭头还会在格子里冒出来——要数字键盘用 inputmode=numeric 就够了",
+      "不要只靠 input 事件做分格：maxlength=1 的框粘 6 位会被浏览器截成 1 位，不自己监听 paste 读 clipboardData 就永远收不到完整验证码",
+      "不要把退格写成一条规则：无脑回跳上一格再清空，会让「当前格有值」时按一下退两格——两个分支要显式分开，并各自 preventDefault 拿回控制权",
+      "不要用不带 preventScroll 的 focus()：移动端连填 6 格会让页面自己滚 6 次，把用户的视野顶来顶去",
+      "不要省略 prefers-reduced-motion 与触屏降级：触屏格子给 52px 下限，手指命中精度按 44px 起算，hover 态在触屏上也不成立"
+    ],
+    "verify": [
+      "敲入 1 位，光标立刻跳到下一格；连敲 6 位后出现「验证通过」",
+      "Ctrl+V 粘贴 123456（或点页面上的「粘贴 123456」按钮），6 格被一次性填满，而不是只填第一格",
+      "在某格已填时按退格，只清空该格、焦点不动；再按一次退格，回跳并清空前一格",
+      "左右方向键能在格间移动，Home/End 直达首尾格",
+      "填错时整组抖动、转红边，但输入内容保留，可以直接改某一位",
+      "整组带 role=group 与整体 aria-label，读屏逐格念出「第 N 位」"
+    ],
+    "reference": "参考气质：支付宝/微信支付的 6 位密码格、GitHub 两步验证页、Apple 双重认证——格子安静、焦点明确、粘贴必成功。",
+    "variants": [
+      { "label": "3+3 分组", "delta": "6 格中间加分隔符并把 GAP 提到 16px，银行类验证码的读法，降低数格子成本" },
+      { "label": "掩码模式", "delta": "填入后 600ms 把数字换成圆点，兼顾防肩窥与逐位校对——代价是用户无法回头确认第几位错了" },
+      { "label": "自动读取短信", "delta": "加 WebOTP（navigator.credentials.get 的 otp 传输），安卓上免手输；iOS 侧仍依赖 autocomplete=one-time-code 的键盘建议" }
+    ]
+  },
+  "params": [
+    { "key": "CELL", "label": "格子尺寸 (px)", "def": 48, "min": 32, "max": 72, "step": 2, "hint": "触屏给 52px 以上；<40 时数字与边框挤在一起，眼睛要凑近看" },
+    { "key": "GAP", "label": "格子间距 (px)", "def": 10, "min": 4, "max": 24, "step": 1, "hint": "间距 ≥ 6px 才能让人一眼数清是 6 格；过大整组会超出手机宽度" },
+    { "key": "RADIUS", "label": "圆角 (px)", "def": 10, "min": 0, "max": 24, "step": 1, "hint": "0=终端风硬边，24 在 48px 格子上已接近圆形（iOS 密码格的做法）" }
+  ],
+  "scenarios": [
+    "支付宝/微信支付的 6 位支付密码格",
+    "银行 App 转账时的短信验证码（3+3 分组）",
+    "GitHub / Google 的两步验证六位动态码",
+    "携程、12306 手机号登录的短信验证码",
+    "Apple ID 双重认证的设备验证码输入"
+  ],
+  "pitfalls": [
+    "type=number 会在取值时把 007123 的前导零吃掉（value 返回 '7123'），因为 number 的语义是数值而不是字符串——OTP 一律用 type=text（或省略 type）配 inputmode=numeric，数字键盘照样弹出来，字符却一个不少",
+    "粘贴必须自己监听 paste 事件读 clipboardData，因为 maxlength=1 的输入框在收到多字符粘贴时会被浏览器直接截成 1 位（Chrome 丢弃其余字符、Safari 只留首字符），只写 input 处理函数的话用户粘贴整串验证码永远只能填进第一格",
+    "退格的两条规则混写会按一下退两格，因为 keydown 阶段浏览器默认删除还没执行、value 也还没变——必须先把当前值读出来判分支，并在两个分支里都 preventDefault，否则「手动清空 + 浏览器再删一次」叠加成双退",
+    "iOS 的短信验证码建议（键盘上方那一条）会把整串塞进当前聚焦的那一格，因为系统只认 autocomplete=one-time-code 这一个信号、不关心你有几个格子——所以 input 事件里必须做多字符分发兜底，不能假设每次只来一个字符",
+    "6 个独立 input 会被读屏念成 6 个互不相关的文本框，因为无障碍树里它们没有共同的语义父节点——用 role=group 加整体 aria-label 包住、每格补 aria-label 写「第 N 位」，用户才知道自己敲到第几位了",
+    "自动前进调用 focus() 在移动端会把该格滚到视口中央，因为 focus 默认触发滚动——连填 6 格页面就自己跳 6 次，要传 focus({preventScroll:true})，把滚动权还给用户"
+  ],
+  "related": ["snackbar", "skeleton", "tooltip"],
+  "refs": [
+    "https://web.dev/articles/one-time-code-input",
+    "https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/autocomplete"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

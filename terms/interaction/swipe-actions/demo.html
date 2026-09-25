@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>滑动行操作 Swipe Actions · ui-dict I-04</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #141414;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 90px; max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.7; }
+  .lead kbd { background: #ece8e0; border-radius: 4px; padding: 1px 5px; font-size: 12px; font-family: inherit; }
+  #readout { font-size: 12px; color: #999; margin-bottom: 12px; }
+  #hint { font-size: 12.5px; color: #0b4f6c; margin-bottom: 12px; min-height: 18px; }
+  .bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .bar b { font-size: 15px; }
+  #reset {
+    border: 1px solid #d8d2c6; background: #fff; color: #0b4f6c;
+    border-radius: 8px; padding: 5px 11px; font-size: 12.5px; cursor: pointer;
+  }
+  #reset:hover { background: #f1ede4; }
+  #reset:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+
+  /* 行容器 = 裁剪窗口。操作层必须藏在行体「正下方」而不是旁边，
+     这样露出来的部分天然就是「行体滑走后留下的空隙」，不需要额外算位置 */
+  .list {
+    list-style: none; margin: 0; padding: 0;
+    background: #fff; border: 1px solid #e5e1d8; border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.05); overflow: hidden;
+  }
+  .wrap { position: relative; overflow: hidden; border-bottom: 1px solid #f1ede4; background: #fff; }
+  .wrap:last-child { border-bottom: 0; }
+
+  /* 操作层铺满整行、内容贴外缘：行体往左滑多少，右侧就露出多少红色。
+     用「铺满 + 内容靠边」而不是「固定宽度的按钮」，露出的色块才能随滑动连续变宽——
+     这就是 iOS 邮件里那块红色会跟着手指长出来的原因 */
+  .act {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    color: #fff; font-size: 13px; pointer-events: none;   /* 层本身不吃事件，只有里面的按钮吃 */
+  }
+  .act[hidden] { display: none; }
+  .act-left { background: #0b4f6c; justify-content: flex-start; padding-left: var(--inset, 16px); }
+  .act-right { background: #b3261e; justify-content: flex-end; padding-right: var(--inset, 16px); }
+  .actbtn {
+    pointer-events: auto; display: inline-flex; align-items: center; gap: 6px;
+    border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+    padding: 8px 10px; border-radius: 9px;
+  }
+  .actbtn:hover { background: rgba(255,255,255,.16); }
+  /* 焦点环向内偏移：行容器的 overflow:hidden 会把向外扩的 outline 整条裁掉，
+     键盘用户会完全看不到焦点落在哪个按钮上 */
+  .actbtn:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+
+  /* 行体：跟手位移的载体。touch-action: pan-y 把竖直平移让给原生滚动、
+     水平方向收归自己——不然首次水平移动会被判成滚动，直接 pointercancel 掐断指针流 */
+  .body {
+    position: relative; display: flex; align-items: center; gap: 11px;
+    padding: 12px 14px; background: #fff; touch-action: pan-y;
+    user-select: none; cursor: grab;
+  }
+  .body.dragging { cursor: grabbing; }
+  .body:focus-visible { outline: 2px solid #0b4f6c; outline-offset: -3px; }
+  .avatar {
+    flex: none; width: 38px; height: 38px; border-radius: 50%; color: #fff;
+    display: grid; place-items: center; font-size: 15px; background: #0b4f6c;
+  }
+  .avatar.alt { background: #6b675f; }
+  .meta { flex: 1; min-width: 0; }
+  .meta b { display: block; font-size: 14px; font-weight: 600; }
+  .meta small { display: block; font-size: 12.5px; color: #8a8579; margin-top: 2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .body time { flex: none; font-size: 11px; color: #b3ada1; }
+
+  .foot { font-size: 12.5px; color: #8a8579; margin-top: 16px; line-height: 1.8; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：取消回弹/吸附/滑出动画（直接落位），阈值判定与单行互斥等全部功能链保留 */
+    .body, .wrap { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>滑动行操作 · Swipe Actions</h1>
+    <p class="lead">
+      演示词条 I-04。<b>左滑</b>任意一行露出红色「删除」，<b>右滑</b>露出蓝色「归档」——
+      行体严格跟手，滑过行宽一半松手才会吸附展开，不到一半就弹回；继续拉到底（阻尼区间）松手则<b>直接执行</b>。
+      同时只会有一行张开。键盘：<kbd>Tab</kbd> 聚焦某行后按 <kbd>←</kbd>/<kbd>→</kbd> 展开对应操作，
+      <kbd>Esc</kbd> 收起，<kbd>Enter</kbd> 触发按钮。
+    </p>
+    <div id="readout"></div>
+    <!-- #hint 只做视觉提示、刻意不带 aria-live：它在 pointermove 里逐帧改写
+         （"继续滑动"→"松手展开"→"松手即删除"），挂成 live region 会被读屏逐帧念出来；
+         播报统一交给页面底部那个只在动作真正发生时才写的 #announce -->
+    <div id="hint"></div>
+
+    <div class="bar">
+      <b>收件箱</b>
+      <button id="reset" type="button">↺ 重置列表</button>
+    </div>
+
+    <ul class="list" id="list" aria-label="收件箱（每行可左右滑动）">
+      <li class="wrap">
+        <div class="act act-left" hidden><button class="actbtn" type="button" data-act="archive">📦 归档</button></div>
+        <div class="act act-right" hidden><button class="actbtn" type="button" data-act="delete">🗑 删除</button></div>
+        <div class="body" tabindex="0" aria-label="来自 设计组 的邮件：新版栅格规范已定稿">
+          <span class="avatar">设</span>
+          <span class="meta"><b>设计组</b><small>新版栅格规范已定稿，附对比图</small></span>
+          <time>09:12</time>
+        </div>
+      </li>
+      <li class="wrap">
+        <div class="act act-left" hidden><button class="actbtn" type="button" data-act="archive">📦 归档</button></div>
+        <div class="act act-right" hidden><button class="actbtn" type="button" data-act="delete">🗑 删除</button></div>
+        <div class="body" tabindex="0" aria-label="来自 账单中心 的邮件：本月订阅扣款成功">
+          <span class="avatar alt">账</span>
+          <span class="meta"><b>账单中心</b><small>本月订阅扣款成功 ¥128.00</small></span>
+          <time>昨天</time>
+        </div>
+      </li>
+      <li class="wrap">
+        <div class="act act-left" hidden><button class="actbtn" type="button" data-act="archive">📦 归档</button></div>
+        <div class="act act-right" hidden><button class="actbtn" type="button" data-act="delete">🗑 删除</button></div>
+        <div class="body" tabindex="0" aria-label="来自 通知 的邮件：构建流水线已通过">
+          <span class="avatar">通</span>
+          <span class="meta"><b>通知</b><small>构建流水线 #218 已通过</small></span>
+          <time>昨天</time>
+        </div>
+      </li>
+      <li class="wrap">
+        <div class="act act-left" hidden><button class="actbtn" type="button" data-act="archive">📦 归档</button></div>
+        <div class="act act-right" hidden><button class="actbtn" type="button" data-act="delete">🗑 删除</button></div>
+        <div class="body" tabindex="0" aria-label="来自 skkjkk 的邮件：周五评审换个时间">
+          <span class="avatar alt">D</span>
+          <span class="meta"><b>skkjkk</b><small>周五评审换个时间行吗？我下午有课</small></span>
+          <time>周一</time>
+        </div>
+      </li>
+      <li class="wrap">
+        <div class="act act-left" hidden><button class="actbtn" type="button" data-act="archive">📦 归档</button></div>
+        <div class="act act-right" hidden><button class="actbtn" type="button" data-act="delete">🗑 删除</button></div>
+        <div class="body" tabindex="0" aria-label="来自 订阅 的邮件：本周前端周报">
+          <span class="avatar">订</span>
+          <span class="meta"><b>订阅</b><small>本周前端周报：12 条值得读的文章</small></span>
+          <time>上周</time>
+        </div>
+      </li>
+    </ul>
+
+    <p class="foot">
+      左滑到底 = 删除（红）· 右滑到底 = 归档（蓝）· 半程吸附 / 不足半程回弹 · 一次只开一行。
+      滑动方向与列表滚动由首次移动的水平/垂直分量裁决，竖直拖动仍然正常滚列表。
+    </p>
+    <p class="sr" id="announce" aria-live="polite"></p>
+  </main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "THRESHOLD": 0.5, "DAMP": 0.5, "DUR": 220 };
+  /* ui-dict:params:end */
+
+  const list = document.getElementById("list");
+  const hint = document.getElementById("hint");
+  const announce = document.getElementById("announce");
+  const readout = document.getElementById("readout");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const EASE = "cubic-bezier(.2,.8,.2,1)";   // 与 I-03 拖拽排序同一条曲线：全站手势收尾节奏统一
+  const DEAD_ZONE = 6;                        // 方向裁决死区：触屏手指天然抖动 2-5px
+  const FULL_OF_MAX = 0.92;                   // 全滑判定：达到「阻尼后最大可达位移」的 92%
+                                              // 默认参数下 ≈ 0.69 行宽，即规格说的「约 70%」；
+                                              // 若直接写死 0.7×行宽，THRESHOLD 调小时全滑会变成
+                                              // 物理上够不着的死值（阻尼吃掉了增量）
+
+  let drag = null;    // { wrap, bodyEl, rowW, openW, maxX, full, base, x, x0, y0, id, locked, moved }
+  let open = null;    // { wrap, bodyEl, dir, x } —— 模块级单例，这就是「同时只开一行」的实现
+  let suppressClick = false;
+  const tally = { delete: 0, archive: 0 };
+
+  const INITIAL = list.innerHTML;   // 重置用：事件全部走委托，重建 HTML 不需要重新绑监听
+
+  // 三个参数各有一个真实消费点：
+  //   THRESHOLD → openW（吸附阈值 = 完全展开位，一个数同时表达两件事）
+  //   DAMP      → 越界阻尼，决定拉到底还能多走多远
+  //   DUR       → 回弹 / 吸附 / 滑出共用时长
+  function metrics(wrap) {
+    const rowW = wrap.clientWidth || 340;
+    const openW = rowW * PARAMS.THRESHOLD;
+    const maxX = openW + (rowW - openW) * PARAMS.DAMP;
+    return { rowW: rowW, openW: openW, maxX: maxX, full: maxX * FULL_OF_MAX };
+  }
+
+  function syncInset() {
+    const wrap = list.querySelector(".wrap");
+    if (!wrap) return;
+    const m = metrics(wrap);
+    // 让按钮落在「展开位」的中间，而不是贴着屏幕边缘：inset = (展开宽 - 按钮宽)/2
+    list.style.setProperty("--inset", Math.max(10, Math.round((m.openW - 78) / 2)) + "px");
+    readout.textContent =
+      "当前参数：THRESHOLD = " + PARAMS.THRESHOLD + "（展开位 ≈ " + Math.round(m.openW) +
+      "px） · DAMP = " + PARAMS.DAMP + " · DUR = " + PARAMS.DUR + " ms" +
+      " ｜ 已删 " + tally["delete"] + " · 已归档 " + tally["archive"];
+  }
+
+  function setX(bodyEl, x) { bodyEl.style.transform = "translateX(" + x + "px)"; }
+
+  function showSide(wrap, dir) {
+    wrap.querySelector(".act-left").hidden = dir !== "archive";
+    wrap.querySelector(".act-right").hidden = dir !== "delete";
+  }
+
+  // 越界阻尼：超过展开位之后的增量才乘 DAMP。
+  // 写成 |dx| * DAMP 是常见错误——那样全程都被衰减，用户滑半天露不出按钮、以为卡住了
+  function damped(raw, openW) {
+    const a = Math.abs(raw), s = raw < 0 ? -1 : 1;
+    if (a <= openW) return raw;
+    return s * (openW + (a - openW) * PARAMS.DAMP);
+  }
+
+  function snapBack(wrap, bodyEl) {
+    bodyEl.style.transition = reduce ? "none" : "transform " + PARAMS.DUR + "ms " + EASE;
+    setX(bodyEl, 0);
+    showSide(wrap, null);
+    if (open && open.wrap === wrap) open = null;
+  }
+
+  function snapOpen(wrap, bodyEl, dir) {
+    const m = metrics(wrap);
+    const x = dir === "delete" ? -m.openW : m.openW;
+    bodyEl.style.transition = reduce ? "none" : "transform " + PARAMS.DUR + "ms " + EASE;
+    setX(bodyEl, x);
+    showSide(wrap, dir);
+    open = { wrap: wrap, bodyEl: bodyEl, dir: dir, x: x };
+  }
+
+  // 单行互斥：打开新行前先收起旧行。这条在需求里几乎从不写，但 iOS 邮件与 Gmail 都遵守
+  function ensureOnly(wrap) {
+    if (open && open.wrap !== wrap) snapBack(open.wrap, open.bodyEl);
+  }
+
+  function dismiss(wrap, dir) {
+    const bodyEl = wrap.querySelector(".body");
+    const rowW = wrap.clientWidth;
+    const h = wrap.offsetHeight;
+    tally[dir === "delete" ? "delete" : "archive"]++;
+    announce.textContent = (dir === "delete" ? "已删除" : "已归档") + "一封邮件，剩余 " +
+      (list.querySelectorAll(".wrap").length - 1) + " 封";
+    hint.textContent = (dir === "delete" ? "已删除" : "已归档") + "：" + bodyEl.getAttribute("aria-label");
+
+    if (open && open.wrap === wrap) open = null;
+    wrap.style.height = h + "px";
+    wrap.style.transition = reduce ? "none"
+      : "height " + PARAMS.DUR + "ms " + EASE + ", opacity " + PARAMS.DUR + "ms linear";
+    bodyEl.style.transition = reduce ? "none" : "transform " + PARAMS.DUR + "ms " + EASE;
+    setX(bodyEl, dir === "delete" ? -rowW : rowW);   // 顺着用户已经用力的方向滑出去，不逆转惯性
+    void wrap.offsetHeight;                          // 强制 reflow：不然高度 0 会跟滑动动画合并成一帧
+    wrap.style.height = "0px";
+    wrap.style.opacity = "0";
+    setTimeout(function () {
+      wrap.remove();
+      if (!list.querySelector(".wrap")) hint.textContent = "列表已空，点右上角「重置列表」继续试";
+      syncInset();
+    }, reduce ? 0 : PARAMS.DUR);
+  }
+
+  /* ---------- 指针：触屏与鼠标共用同一条通道 ---------- */
+  list.addEventListener("pointerdown", function (e) {
+    if (e.target.closest(".actbtn")) return;   // 点按钮不是拖行
+    const wrap = e.target.closest(".wrap");
+    if (!wrap || drag) return;
+    const bodyEl = wrap.querySelector(".body");
+    const m = metrics(wrap);
+    const base = (open && open.wrap === wrap) ? open.x : 0;
+    // 碰别的行就把已展开那行收起来（iOS 邮件同款）：等到 pointerup 再收的话，
+    // 用户按住别的行犹豫一下，屏幕上会同时张着两行，分不清按钮属于谁
+    ensureOnly(wrap);
+
+    drag = {
+      wrap: wrap, bodyEl: bodyEl, rowW: m.rowW, openW: m.openW, maxX: m.maxX, full: m.full,
+      base: base, x: base, x0: e.clientX, y0: e.clientY, id: e.pointerId,
+      locked: false, moved: false
+    };
+    bodyEl.style.transition = "none";   // 拖动期绝不能有过渡：挂了过渡元素永远落后手指，跟手感直接归零
+  });
+
+  list.addEventListener("pointermove", function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+
+    if (!drag.locked) {
+      if (Math.abs(dx) < DEAD_ZONE && Math.abs(dy) < DEAD_ZONE) return;
+      // 方向裁决：竖直分量占优就把这次手势完整让回列表滚动。
+      // 不做这一步，用户想上下滚列表，手指竖直移动 6px 就划出一片红色删除
+      if (Math.abs(dx) <= Math.abs(dy)) { drag = null; return; }
+      drag.locked = true;
+      drag.moved = true;
+      // 裁决通过才 setPointerCapture：提前 capture 会把「想滚动」的竖直手势也锁死在行上。
+    // 已非活跃的指针上调用会抛 NotFoundError，必须兜住，否则行体卡在半开位置
+      try { drag.bodyEl.setPointerCapture(e.pointerId); } catch (err) {}
+      drag.bodyEl.classList.add("dragging");
+      ensureOnly(drag.wrap);
+      if (!open || open.wrap !== drag.wrap) {
+        drag.base = 0;
+        drag.x = 0;
+      }
+    }
+
+    // 方向锁不是「锁死一侧」而是「同一时刻只露一侧」：位移连续穿过 0 是允许的
+    // （从左侧展开位往回拉、拉过零再往右继续开归档，iOS 邮件就是这么走的），
+    // 真正要禁的是两层按钮同时可见——所以锁体现在下面 showSide 按符号二选一，
+    // 而不是把 x 硬夹在某一侧（硬夹会让「从展开位往回拉」直接跳变到 0）
+    const x = damped(drag.base + dx, drag.openW);
+    drag.x = x;
+    setX(drag.bodyEl, x);
+    // 按「当前位移的符号」决定露哪一边，而不是按起手方向：
+    // 从左侧展开位往回拉时，露出的应当是正在被合上的那一层，而不是对面那层
+    showSide(drag.wrap, x < 0 ? "delete" : (x > 0 ? "archive" : null));
+
+    // 进入全滑区间给一次可见预反馈——没有预警的全滑删除会被当成程序乱删东西
+    const past = Math.abs(x) >= drag.full;
+    drag.bodyEl.style.background = past ? "#fdf2f1" : "#fff";
+    hint.textContent = past
+      ? (x < 0 ? "松手即删除" : "松手即归档")
+      : (Math.abs(x) >= drag.openW ? "松手展开" : "继续滑动");
+  });
+
+  function endDrag(e) {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    d.bodyEl.classList.remove("dragging");
+    d.bodyEl.style.background = "#fff";
+    if (!d.moved) return;                        // 没越过死区 = 一次点击，什么都不改
+
+    suppressClick = true;
+    setTimeout(function () { suppressClick = false; }, 350);
+
+    const x = d.x;
+    if (Math.abs(x) >= d.full) {                 // 全滑：直接执行，不等用户点按钮
+      dismiss(d.wrap, x < 0 ? "delete" : "archive");
+    } else if (Math.abs(x) >= d.openW) {         // 过半：吸附到完全展开位
+      snapOpen(d.wrap, d.bodyEl, x < 0 ? "delete" : "archive");
+      hint.textContent = "已展开：" + (x < 0 ? "删除" : "归档") + "（点按钮或划到底执行）";
+    } else {                                     // 不足半程：回弹归零
+      snapBack(d.wrap, d.bodyEl);
+      hint.textContent = "未过半程，已回弹";
+    }
+    syncInset();
+  }
+
+  list.addEventListener("pointerup", endDrag);
+  // 系统手势 / 来电 / 浏览器抢滚动都会发 pointercancel：不处理的话行体会永久卡在半开位置
+  list.addEventListener("pointercancel", function (e) {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    d.bodyEl.classList.remove("dragging");
+    d.bodyEl.style.background = "#fff";
+    snapBack(d.wrap, d.bodyEl);
+  });
+
+  /* ---------- 点按钮：与全滑等价的第二条路径 ---------- */
+  list.addEventListener("click", function (e) {
+    const btn = e.target.closest(".actbtn");
+    if (!btn || suppressClick) return;
+    const wrap = btn.closest(".wrap");
+    dismiss(wrap, btn.dataset.act);
+  });
+
+  /* ---------- 键盘：没有它，键盘与读屏用户完全够不到行级动作 ---------- */
+  list.addEventListener("keydown", function (e) {
+    // 从 .wrap 往上找而不是从 .body：展开后焦点在按钮上，而按钮是 .body 的兄弟节点，
+    // 只认 .body 的话 Esc 会失效，键盘用户被卡在展开态里出不来
+    const wrap = e.target.closest(".wrap");
+    if (!wrap) return;
+    const bodyEl = wrap.querySelector(".body");
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const dir = e.key === "ArrowLeft" ? "delete" : "archive";
+      ensureOnly(wrap);
+      snapOpen(wrap, bodyEl, dir);
+      wrap.querySelector(dir === "delete" ? ".act-right .actbtn" : ".act-left .actbtn").focus();
+      hint.textContent = "已展开：" + (dir === "delete" ? "删除" : "归档") + "，Enter 执行";
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      snapBack(wrap, bodyEl);
+      bodyEl.focus();   // 收起后焦点还回行体，否则焦点会随 hidden 的按钮一起掉到 body
+    }
+  });
+
+  /* ---------- 重置 ---------- */
+  document.getElementById("reset").addEventListener("click", function () {
+    drag = null;
+    open = null;
+    list.innerHTML = INITIAL;
+    tally["delete"] = 0;
+    tally["archive"] = 0;
+    hint.textContent = "列表已重置";
+    syncInset();
+  });
+
+  addEventListener("resize", syncInset);
+  syncInset();
+})();
+</script>
+</body>
+</html>

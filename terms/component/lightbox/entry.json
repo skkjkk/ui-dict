@@ -1,0 +1,80 @@
+{
+  "id": "lightbox",
+  "no": "C-12",
+  "category": "component",
+  "nameZh": "灯箱",
+  "nameEn": "Lightbox",
+  "aliases": [
+    "点小图放大成全屏大图",
+    "图片查看器",
+    "点开图片后背景变黑那一层",
+    "画廊点开的全屏预览",
+    "带左右箭头的图片放大层",
+    "image viewer / photo overlay"
+  ],
+  "definition": "点击缩略图后浮起的模态图片查看层：大图居中放大、背景压暗且滚动锁定，Esc / 关闭钮 / 点暗处三条路退出，←→ 或两侧圆钮在图集内导航，关闭后焦点归还触发它的那张缩略图。与模态 Dialog 的辨析：Dialog 装的是「需要决策的内容」，灯箱装的是「需要仔细看的内容」——不做决策，所以退出路径要无限宽松；与共享元素过渡（M-05）的辨析：M-05 卖的是「缩略图自己长成大图」的形变动画，灯箱是「旧层退下、新层浮起」的普通模态切换，两者常被混用但视觉语义完全不同。与悬停图片预览（M-07）的辨析：M-07 是指针扫过的瞬时可看，灯箱是明确点击后的驻留细看。",
+  "whenNotToUse": [
+    "图片信息一屏内就能看完（≤3 张小图）→ 直接平铺大图，灯箱多一次点击是纯摩擦",
+    "图上需要频繁交互（标注、裁剪、缩放拖拽）→ 那是图片编辑器，模态层装不下工具面板",
+    "内容是视频且要连续自动播放 → 用视频播放器组件，灯箱的开关动画会打断播放连续性",
+    "页面主体就是图片流（Unsplash 首页式）→ 整页即灯箱，再套一层只是浪费"
+  ],
+  "confusedWith": ["dialog", "view-transition", "hover-image"],
+  "anatomy": [
+    { "part": "Backdrop 遮罩", "note": "全屏压暗层，点击即关闭——是三条退出路径中最顺手的一条" },
+    { "part": "Stage 舞台", "note": "大图 + 图注的居中容器；大图必须 max-width/max-height 双钳位，否则竖图必撑破" },
+    { "part": "Nav 前后导航", "note": "←→ 键 + 两侧圆钮；索引循环（第一张向左回到末张），图注同步报「3 / 8」" },
+    { "part": "Close 关闭钮", "note": "右上角 ×；与 Esc、点遮罩共用同一个 close()，焦点归还逻辑才不会漏" },
+    { "part": "Scroll Lock 滚动锁", "note": "body overflow:hidden + 滚动条宽度补偿（paddingRight），否则开灯箱瞬间页面右移一条滚动条" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个「灯箱（Lightbox）」图片查看器：页面上是一面瀑布流缩略图墙（3 列、悬停时图片 scale(1.045) 微放大），点击任意缩略图后，全屏灯箱以 {DUR}ms 浮起——背景压暗到 rgba(0,0,0,{DIM})、大图居中（max-width 90vw / max-height 72vh 双钳位）、图注显示标题与「n / 总数」。导航：←→ 方向键与两侧圆形按钮切换上一张/下一张，索引循环。退出：Esc、右上角 ×、点击暗色遮罩三条路径都调用同一个 close()，关闭动画与浮起对称，焦点归还给触发的那张缩略图。打开时 body 加 overflow:hidden 锁滚动，并用 (innerWidth - clientWidth) 补偿滚动条消失造成的页面右移。灯箱内 Tab 焦点在 ×/←/→ 三钮间循环（focus trap）。触屏与键盘行为一致，缩略图用真 button 元素（Tab 可达、Enter 打开）。",
+    "stack": "原生 CSS + 原生 JS（classList 状态机 + keydown 委托 + 焦点管理），零依赖——原版 motion/clsx 版的入场动画等价替换为 CSS opacity+scale 过渡。",
+    "constraints": [
+      "不要省略滚动条宽度补偿——开灯箱瞬间背景右移一条滚动条的宽度，是所有灯箱实现里最显廉价的一处",
+      "退出路径不要只做 Esc——点遮罩关闭是比键盘更常用的退路，三条路径必须共用同一个 close()，否则焦点归还只在其中一条里生效",
+      "大图不要只钳 max-width——竖图会垂直撑破视口，必须 max-width 与 max-height 同时声明",
+      "导航不要做死边界——看图的心流里撞到「已是第一张」很扫兴，索引取模循环",
+      "关闭时不要立刻 visibility:hidden——退场淡出会被腰斩，让过渡跑完再收（与 Popover 同一条坑）",
+      "prefers-reduced-motion 下关掉浮起/缩放过渡，功能链（打开/导航/退出/焦点）一条不少"
+    ],
+    "verify": [
+      "点击任意缩略图：背景压暗、大图浮起居中，页面不再滚动且没有左右跳动",
+      "←→ 与两侧圆钮都能循环切换，图注「n / 8」同步更新",
+      "Esc、右上角 ×、点暗处三种方式都能关闭，关闭后焦点回到点开的那张图",
+      "开着灯箱按 Tab：焦点只在 ×/←/→ 三个按钮间循环，跑不到背景页",
+      "系统开启减少动效后：灯箱瞬开瞬关，所有功能不变"
+    ],
+    "reference": "参考气质：Unsplash / Medium 的图片查看层、Apple 官网产品图的放大预览。安静、对称、退出无限宽松。",
+    "variants": [
+      { "label": "缩放联动版", "delta": "灯箱浮起时大图从缩略图位置 scale 放大（即叠加 M-05 共享元素过渡），形变感更强，代价是快照成本与唯一名约束" },
+      { "label": "双击缩放版", "delta": "大图内支持双击在 1×/2.5× 间切换并跟手平移，看细节用；需要额外的手势裁决" }
+    ]
+  },
+  "params": [
+    { "key": "DUR", "label": "开关动画时长 (ms)", "def": 240, "min": 0, "max": 600, "step": 20, "hint": "0=瞬开瞬关（减少动效等价物）；>400 显得拖沓" },
+    { "key": "DIM", "label": "遮罩浓度", "def": 0.82, "min": 0.5, "max": 0.95, "step": 0.02, "hint": "越暗聚焦感越强；>0.9 会让人以为页面崩了" }
+  ],
+  "scenarios": [
+    "摄影作品集 / 旅行博客的图集页（点缩略图细看）",
+    "电商商品详情的买家秀图墙（淘宝/京东评价区）",
+    "设计系统文档里的组件截图查看（Stripe Docs 式）",
+    "新闻长文中的信息图放大阅读"
+  ],
+  "pitfalls": [
+    "开灯箱只加 overflow:hidden 不补滚动条宽度，背景页面会整体右移一条滚动条的宽度再弹回来——用 (innerWidth - clientWidth) 量出实际宽度写成 paddingRight 补偿，桌面端永远会被这个细节出卖",
+    "三条退出路径（Esc/×/点遮罩）各写各的关闭逻辑，焦点归还只写在其中一条里，用户从另一条退出后焦点掉进 body、Tab 从页面开头重来——关闭必须收敛到同一个 close() 函数",
+    "大图只写 max-width 不写 max-height，竖图（手机竖拍）会把灯箱撑出滚动条，用户要在灯箱里滚着看图——max-width 与 max-height 必须成对出现",
+    "导航索引写成 if (i === 0) return 的死边界，用户在图集里按 ← 被无声拒绝；看图心流里这比报错更糟——索引取模循环，末张的下一张就是第一张",
+    "关闭时立刻 visibility:hidden 或移除 DOM，退场淡出被腰斩成闪没；与 Popover 的 visibility 延迟翻转是同一条坑——过渡跑完再收层",
+    "缩略图用 div + onclick，键盘用户 Tab 不到也 Enter 不了——灯箱的触发器必须是真 button，focus-visible 描边一个不能省"
+  ],
+  "related": ["dialog", "view-transition", "hover-image", "masonry", "drawer"],
+  "refs": [
+    "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/",
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/overscroll-behavior"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "id": "stagger",
+  "no": "M-06",
+  "category": "motion",
+  "nameZh": "错峰入场",
+  "nameEn": "Stagger",
+  "aliases": [
+    "一个一个冒出来",
+    "卡片排队进来",
+    "像发牌一样依次翻开",
+    "列表从下往上挨个浮起",
+    "不是一起出现，是一个接一个",
+    "波浪式入场"
+  ],
+  "definition": "一组元素在入场时逐项延迟递增地播放同一个动画，形成从左到右、从上到下的次序感，让「一批东西到齐了」读起来像被逐一递到眼前。它的规格核心不在单项动画上，而在**每项的延迟增量**上——这是它与普通淡入（Fade-in）的全部差别：淡入只说「怎么出现」，错峰入场还说「谁先谁后」。与微光扫过（Shimmer）的区别：Shimmer 是同一元素上循环往复的扫光、表示「还在加载」，错峰入场是多个元素之间的入场时间差、播完即止且不循环。",
+  "whenNotToUse": [
+    "列表长度不确定且可能上百项 → 延迟增量乘项数会无限拖长，必须给总时长封顶或只让首屏可见的十几项参与",
+    "内容承载关键操作（结算页、错误提示）→ 让用户等动画跑完才拿到信息是本末倒置，直接给结果",
+    "同一屏已经有三处动效在抢注意力 → 逐项入场的次序感会被稀释成噪音，只留一处",
+    "滚动中反复经过的区块 → 每次重播都拖一遍长尾，用户会开始烦躁"
+  ],
+  "confusedWith": ["shimmer", "parallax", "count-up"],
+  "anatomy": [
+    { "part": "容器 Container", "note": "错峰的作用域；延迟只在容器内部编号，容器外互不影响" },
+    { "part": "单项 Item", "note": "入场动画的载体；统一用 opacity 0→1 + translateY(DIST→0)" },
+    { "part": "延迟增量 --i", "note": "CSS 变量传索引，animation-delay 由 calc 算出；零 JS 也能算延迟，JS 只负责发牌" },
+    { "part": "总时长封顶 CAP", "note": "delay = min(i × STEP, CAP)——项数一多必须封顶，否则最后一项要等好几秒" },
+    { "part": "重播触发 Replay", "note": "首次进视口播一次；演示用重播按钮要强制 reflow 才能重启动画" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个「错峰入场（Stagger）」动效。触发条件：容器首次进入视口（IntersectionObserver，threshold 0.15，触发后 unobserve 只播一次），或用户点重播按钮。运动模型：容器内每个子项播放同一段关键帧（opacity 0→1、translateY({DIST}px)→0），animation-delay = min(索引 × {STEP}ms, 封顶 600ms)，曲线 cubic-bezier(.2,.8,.2,1)，单次时长 {DUR}ms，fill-mode both 保证延迟期间保持透明不闪。时长量级：单项 {DUR}ms；末项最迟在 封顶 + {DUR}ms 内结束，整组总时长必须封顶。结束态：一次性播完即停在最终态，不回弹、不循环。索引通过 CSS 变量 --i 写到每个子项上，延迟用 calc(var(--i) * {STEP}ms) 计算。",
+    "stack": "纯 CSS 关键帧 + animation-delay，索引走内联 CSS 变量 --i；JS 只做 IntersectionObserver 触发与重播时强制 reflow。",
+    "constraints": [
+      "不要写死 i × STEP 而不封顶——12 项 × 60ms 就是 660ms，40 项会拖到 2.4s，长列表必须 min(i × STEP, CAP) 或只让前 N 项参与",
+      "不要用 JS 的 setTimeout 逐个改 style 来制造延迟——项数一多就有一堆定时器，且每项各自触发一次样式计算；延迟交给 animation-delay 在合成器上排队",
+      "不要在重播时只删加 class——节点上已有 animation 时不会重启动画，必须 void el.offsetWidth 强制 reflow 再重新挂动画",
+      "不要用 fill-mode: none 配延迟——延迟期间元素按未播放的样式渲染，会先正常显示再突然跳回透明，整组「闪一下」才进入动画；必须 both 或 backwards",
+      "prefers-reduced-motion 下不要只把时长设 0——延迟还留着，用户仍要等它排队；要整体去掉 delay 与位移，一次全部显示"
+    ],
+    "verify": [
+      "容器进视口后，卡片从左上到右下依次浮起，相邻两项肉眼可见先后，不是整块一起淡入",
+      "把 STEP 拉到 200ms：次序感明显变强，末项在封顶时间内仍会结束，不会越等越久",
+      "点重播：整组从头再跑一遍，中途点也立即重排（不是叠加出双重动画）",
+      "开启减少动效后：所有卡片一次性直接显示，无位移、无延迟、无等待",
+      "触屏上滚动到该区块同样触发，且不依赖 hover"
+    ],
+    "reference": "参考气质：Material 3「Now in Motion」的列表入场、Linear 首页卡片逐张浮起——间隔短、幅度小，是节奏不是表演。",
+    "variants": [
+      { "label": "只封顶不截断", "delta": "delay = min(i × STEP, CAP)，末尾几项共用同一个延迟同时入场，保留\"整批到齐\"的收束感" },
+      { "label": "只让可见项参与", "delta": "IntersectionObserver 只给视口内前 12 项编号，其余 i 固定为 0；超长列表的总时长恒定，代价是滚动下去时后面的项没有次序" },
+      { "label": "中心向外扩散", "delta": "delay 按到中心的距离算而不是按索引，适合 hero 区的图标阵列；同一行内的次序感消失，换来\"从中间漾开\"的观感" }
+    ]
+  },
+  "params": [
+    { "key": "STEP", "label": "每项延迟增量 (ms)", "def": 60, "min": 10, "max": 200, "step": 10, "hint": "40–80ms 最舒服；<30ms 看不出先后、像整块淡入，>120ms 会显得拖沓" },
+    { "key": "DUR", "label": "单项时长 (ms)", "def": 420, "min": 100, "max": 900, "step": 20, "hint": "单项要明显长于 STEP，相邻项才会重叠成连续波浪而不是一个个闪" },
+    { "key": "DIST", "label": "位移距离 (px)", "def": 12, "min": 0, "max": 40, "step": 2, "hint": "8–16px 是克制区间；调到 0 就只剩淡入，次序感靠时序撑" }
+  ],
+  "scenarios": [
+    "SaaS 首页功能卡片区的入场（Linear / Vercel 式）",
+    "电商搜索结果网格逐项浮起（淘宝/Amazon 列表）",
+    "仪表盘指标卡首屏到齐（Datadog / Grafana）",
+    "设置页分组的逐项展开",
+    "定价页三档套餐依次落位"
+  ],
+  "pitfalls": [
+    "delay 直接用 i × STEP 而不封顶，是长列表里最容易翻车的一处：12 项 × 60ms 是 660ms 尚可，40 项就是 2.4s，用户滚到区块时最后一项还没出来——要么 min(i × STEP, 600ms) 封顶，要么只给视口内前 N 项编号",
+    "重播时只做 remove/add class 是无效的，因为节点上已经存在 animation 且没有重新计算样式，浏览器认为动画没变、直接沿用已结束的状态——必须先 void el.offsetWidth 强制一次 reflow 再重新挂上动画类",
+    "延迟期间用 animation-fill-mode: none 会先正常显示再突然跳回透明，因为 fill 决定的是「动画未播放时按哪一帧渲染」——错峰入场配延迟必须 both（或 backwards），否则整组会闪一下才进入动画",
+    "错峰用 JS setTimeout 逐项设置样式来造延迟，在项数一多时会退化：几十个定时器各自触发一次样式写入，还会因为主线程卡顿让间隔抖动——延迟交给 animation-delay，浏览器在合成器上统一排队",
+    "prefers-reduced-motion 下只把 duration 设为 0 是不够的，因为 delay 还挂在元素上，用户仍然要盯着一段空白等它排队——减少动效要同时去掉 delay 和位移，一次性全部显示",
+    "让整个列表容器淡入再叠加子项错峰，会得到「先整体亮一下、再逐项亮一次」的双重入场，因为容器与子项各自在算透明度——错峰的容器自己不能参与淡入"
+  ],
+  "related": ["shimmer", "skeleton"],
+  "refs": [
+    "https://m3.material.io/styles/motion/transitions",
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/animation-delay"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分段控件 Segmented Control · ui-dict C-09</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 40px; max-width: 620px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .page p { font-size: 13.5px; color: #6b675f; margin: 0 0 14px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #readout { font-size: 12px; color: #8f8a80; margin: 0 0 18px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+  .step { font-size: 12px; letter-spacing: .12em; color: #a09a8e; margin: 0 0 8px; }
+
+  /* ★ 轨道。内边距与圆角都吃 PARAMS 回写的变量：RADIUS 只配一次，
+     滑块的圆角由 calc(RADIUS - PAD) 推导——两个值各自硬编码是「圆角对不上」的经典来源 */
+  .seg {
+    position: relative; display: flex; width: 100%; max-width: 420px;
+    padding: var(--pad); border-radius: var(--radius); background: #ece8e0;
+    touch-action: manipulation;   /* 触屏上免掉 300ms 双击缩放等待，点击切换才跟手 */
+  }
+  /* 分段：flex:1 1 0 是「等宽」的唯一来源（flex-basis 为 0 才会真正均分，
+     写成 flex:1 时 basis 是 auto，长标签那段会自己变宽）。min-width:0 防溢出 */
+  .seg button {
+    flex: 1 1 0; min-width: 0; position: relative; z-index: 1;
+    border: 0; background: none; cursor: pointer; font-family: inherit;
+    height: 34px; border-radius: calc(var(--radius) - var(--pad));
+    font-size: 13px; color: #6b675f; white-space: nowrap;
+    display: grid; place-items: center; transition: color var(--dur) ease;
+  }
+  .seg button[aria-selected="true"] { color: #141414; font-weight: 600; }
+  .seg button:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+
+  /* ★ 共享滑块。全条轨道只有这一块选中态——它就是「分段控件」和「一排按钮」的全部区别。
+     绝对定位、宽 = 内宽 ÷ 段数；位移只写 transform（合成器属性），
+     绝不用 left 或 width 逐帧改（那是布局属性，每帧重排整条轨道） */
+  .ind {
+    position: absolute; top: var(--pad); bottom: var(--pad); left: var(--pad);
+    width: calc((100% - var(--pad) * 2) / var(--n));
+    border-radius: calc(var(--radius) - var(--pad));
+    background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+    /* 触发条件=点击/方向键，运动模型=cubic-bezier(.2,.8,.2,1)（快出慢收、无过冲），
+       时长=DUR，结束态=精确停在目标段、不回弹——分段控件是开关不是弹簧 */
+    transform: translateX(0);
+    transition: transform var(--dur) cubic-bezier(.2,.8,.2,1);
+  }
+
+  /* 内容区：证明它是「视图切换」而不是装饰——滑块动，下面这块钱也跟着换 */
+  .panel {
+    max-width: 420px; margin-top: 12px; padding: 14px;
+    background: #fff; border: 1px solid #e5e1d8; border-radius: 10px; min-height: 96px;
+  }
+  .panel[hidden] { display: none; }
+  .panel h3 { margin: 0 0 8px; font-size: 13px; }
+  .panel p { margin: 0; font-size: 12.5px; color: #6b675f; line-height: 1.7; }
+  .rows { display: flex; flex-direction: column; gap: 7px; }
+  .rows i { display: block; height: 9px; border-radius: 3px; background: #ece8e0; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .grid i { display: block; aspect-ratio: 1; border-radius: 6px; background: #ece8e0; }
+  .tl { border-left: 2px solid #d8d2c6; padding-left: 12px; display: flex; flex-direction: column; gap: 9px; }
+  .tl i { display: block; height: 9px; border-radius: 3px; background: #ece8e0; width: 70%; }
+  .tl i:nth-child(2) { width: 90%; }
+  .tl i:nth-child(3) { width: 52%; }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：时长归零、直接落终态。选中逻辑、roving tabindex、aria 状态全部保留——
+       减少动效砍的是「怎么动」，不是「动完是什么」 */
+    .ind, .seg button { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>文件视图 · Segmented Control 演示</h1>
+    <p>演示词条 C-09。点任意一段（或按 <b>←/→</b> 方向键）切换，白色滑块用
+       <code>transform</code> 平移到目标段——注意它<b>没有</b>逐帧改 left/width，
+       所以整条轨道不会重排。下面那块内容也跟着换，证明它是<b>视图切换</b>而不是一排按钮。
+       键盘试：<b>Tab</b> 一次进入控件、方向键移动、再 <b>Tab</b> 一次离开（roving tabindex）。</p>
+    <div id="readout"></div>
+
+    <p class="step">文件视图</p>
+    <div class="seg" id="seg" role="tablist" aria-label="文件视图">
+      <span class="ind" id="ind" aria-hidden="true"></span>
+      <button type="button" role="tab" id="t0" aria-selected="true"  aria-controls="p0" tabindex="0">列表</button>
+      <button type="button" role="tab" id="t1" aria-selected="false" aria-controls="p1" tabindex="-1">网格</button>
+      <button type="button" role="tab" id="t2" aria-selected="false" aria-controls="p2" tabindex="-1">时间线</button>
+    </div>
+
+    <div class="panel" id="p0" role="tabpanel" aria-labelledby="t0" tabindex="0">
+      <h3>列表视图</h3>
+      <div class="rows"><i></i><i style="width:82%"></i><i style="width:64%"></i><i style="width:73%"></i></div>
+    </div>
+    <div class="panel" id="p1" role="tabpanel" aria-labelledby="t1" tabindex="0" hidden>
+      <h3>网格视图</h3>
+      <div class="grid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="panel" id="p2" role="tabpanel" aria-labelledby="t2" tabindex="0" hidden>
+      <h3>时间线视图</h3>
+      <div class="tl"><i></i><i></i><i></i></div>
+    </div>
+  </main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DUR": 220, "RADIUS": 10, "PAD": 3 };
+  /* ui-dict:params:end */
+
+  const seg = document.getElementById("seg");
+  const ind = document.getElementById("ind");
+  const tabs = Array.from(seg.querySelectorAll('[role="tab"]'));
+  const panels = tabs.map(function (t) { return document.getElementById(t.getAttribute("aria-controls")); });
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // 三个参数各有一个消费点，且都回写成 CSS 变量：DUR 喂滑块位移、RADIUS 喂轨道与分段圆角、
+  // PAD 喂内边距并参与滑块圆角与宽度的推导。单一来源——滑杆改一次三处同步，
+  // 不存在「轨道圆角变了、滑块圆角没变」这种第二实现
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--dur", PARAMS.DUR + "ms");
+  rootStyle.setProperty("--radius", PARAMS.RADIUS + "px");
+  rootStyle.setProperty("--pad", PARAMS.PAD + "px");
+  rootStyle.setProperty("--n", String(tabs.length));
+
+  const readout = document.getElementById("readout");
+  function report(i) {
+    readout.innerHTML =
+      "当前参数：DUR = " + PARAMS.DUR + " ms · RADIUS = " + PARAMS.RADIUS + " px · PAD = " + PARAMS.PAD + " px"
+      + "<br>滑块位移 = <b>transform: translateX(" + (i * 100) + "%)</b>"
+      + "（width = (100% - PAD×2) ÷ " + tabs.length + "）　|　减少动效：" + (reduce ? "开" : "关");
+  }
+
+  let index = 0;
+
+  function select(next, focusTab) {
+    next = Math.max(0, Math.min(next, tabs.length - 1));
+    index = next;
+    tabs.forEach(function (t, i) {
+      const on = i === next;
+      t.setAttribute("aria-selected", String(on));
+      // ★ roving tabindex：只给当前段 tabindex=0，其余 -1。
+      // 不这样做的话键盘用户要按 N 次 Tab 才能穿过这个控件（坑 #2）
+      t.tabIndex = on ? 0 : -1;
+      panels[i].hidden = !on;
+    });
+    // 位移写 transform 而不是 left：translateX 的百分比以「滑块自身宽度」为基准，
+    // 而滑块宽正是容器内宽的 1/N——段数或容器宽度一变，位移自动跟着对，
+    // 不需要在 JS 里重算 px（坑 #4 的解法就藏在这一行里）
+    ind.style.transform = "translateX(" + (next * 100) + "%)";
+    report(next);
+    if (focusTab) tabs[next].focus();
+  }
+
+  tabs.forEach(function (t, i) {
+    // 分段控件是点击语义，触屏与鼠标走同一条路径——不需要 hover 分支，
+    // 这正是它比「一排 tab + 悬停下划线」更适合移动端的原因
+    t.addEventListener("click", function () { select(i); });
+  });
+
+  // 方向键：左右移动并立即选中（自动激活模式），Home/End 跳首尾。
+  // 用 keydown 而不是 keypress——方向键在多数浏览器里不产生 keypress
+  seg.addEventListener("keydown", function (e) {
+    const k = e.key;
+    if (k === "ArrowRight" || k === "ArrowDown") { e.preventDefault(); select(index + 1, true); }
+    else if (k === "ArrowLeft" || k === "ArrowUp") { e.preventDefault(); select(index - 1, true); }
+    else if (k === "Home") { e.preventDefault(); select(0, true); }
+    else if (k === "End") { e.preventDefault(); select(tabs.length - 1, true); }
+  });
+
+  // 字体度量会撑动 flex 分配：系统字体与自定义字体宽度不同，首帧测量的位置可能差半格。
+  // 等字体就绪后重落一次状态（此处位移是百分比，本可免疫，但真实项目里若用 px 就必须重算）
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { select(index); });
+  }
+  select(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>灯箱 Lightbox · ui-dict C-12</title>
+<style>
+  :root { --dur: 240ms; --dim: 0.82; }   /* 由 PARAMS 回写：开关动画时长与遮罩浓度 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  body.locked { overflow: hidden; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 18px; line-height: 1.7; }
+
+  .wall { column-count: 3; column-gap: 12px; }
+  .card {
+    break-inside: avoid; margin: 0 0 12px;
+    background: #fff; border: 1px solid #eae6dd; border-radius: 12px;
+    overflow: hidden; padding: 0; border: 0; display: block; width: 100%;
+    cursor: zoom-in; text-align: left; font: inherit; color: inherit;
+  }
+  .card:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  .card .img { display: block; width: 100%; overflow: hidden; }
+  .card .img svg { display: block; width: 100%; height: auto;
+    transition: transform var(--dur) cubic-bezier(.2,.8,.2,1); }
+  .card .cap { display: flex; align-items: baseline; justify-content: space-between;
+    padding: 9px 12px 11px; }
+  .card .cap b { font-size: 13px; }
+  .card .cap small { font-size: 11px; color: #9a958b; }
+  .card .cap { opacity: .78; transition: opacity var(--dur) ease; }
+  .card:hover .img svg, .card:focus-visible .img svg { transform: scale(1.045); }
+  .card:hover .cap { opacity: 1; }
+
+  .lb { position: fixed; inset: 0; z-index: 50; visibility: hidden; }
+  .lb.open { visibility: visible; }
+  .lb-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,var(--dim));
+    opacity: 0; transition: opacity var(--dur) ease-out; }
+  .lb.open .lb-backdrop { opacity: 1; }
+
+  .lb-stage { position: absolute; inset: 0; margin: 0;
+    display: grid; place-items: center; padding: 48px 64px; pointer-events: none; }
+  .lb-figure { pointer-events: auto; max-width: 90vw; max-height: 84vh;
+    display: flex; flex-direction: column; gap: 12px; align-items: center;
+    opacity: 0; transform: scale(.96);
+    transition: opacity var(--dur) ease-out, transform var(--dur) cubic-bezier(.2,.8,.2,1); }
+  .lb.open .lb-figure { opacity: 1; transform: scale(1); }
+  .lb-art { max-width: 90vw; max-height: 72vh; border-radius: 10px; overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,.5); }
+  .lb-art svg { display: block; width: 100%; height: auto; max-height: 72vh; }
+  .lb-caption { color: #e8e4dc; font-size: 14px; text-align: center; }
+  .lb-caption small { display: block; color: #9a958b; font-size: 12px; margin-top: 3px;
+    font-variant-numeric: tabular-nums; }
+
+  .lb-close, .lb-nav {
+    position: absolute; z-index: 2;
+    border: 0; border-radius: 999px; cursor: pointer;
+    background: rgba(255,255,255,.12); color: #fff;
+    transition: background .15s ease, transform .15s ease;
+  }
+  .lb-close { top: 18px; right: 20px; width: 44px; height: 44px; font-size: 22px; line-height: 1; }
+  .lb-nav { top: 50%; width: 46px; height: 46px; font-size: 18px;
+    transform: translateY(-50%); }
+  .lb-prev { left: 20px; } .lb-next { right: 20px; }
+  .lb-close:hover, .lb-nav:hover { background: rgba(255,255,255,.24); }
+  .lb-close:focus-visible, .lb-nav:focus-visible { outline: 2px solid #8ecbff; outline-offset: 2px; }
+
+  @media (max-width: 640px) {
+    .wall { column-count: 2; }
+    .lb-stage { padding: 24px 16px 40px; }
+    .lb-prev { left: 8px; } .lb-next { right: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lb-backdrop, .lb-figure, .card .img svg, .card .cap { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <h1>旅行图集 · Lightbox</h1>
+  <p class="lead">演示词条 C-12。点击任意一张缩略图：灯箱浮起、大图居中、背景锁滚；
+     <b>Esc / 右上角 × / 点暗处</b>三种方式都能退出，<b>← →</b> 或两侧圆钮切换上一张下一张。</p>
+
+  <div class="wall" id="wall"></div>
+
+  <div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="图片查看器">
+    <div class="lb-backdrop" data-close></div>
+    <div class="lb-stage">
+      <figure class="lb-figure">
+        <div class="lb-art" id="lbArt" aria-hidden="true"></div>
+        <figcaption class="lb-caption">
+          <span id="lbCap"></span>
+          <small id="lbCount"></small>
+        </figcaption>
+      </figure>
+    </div>
+    <button class="lb-close" id="lbClose" type="button" aria-label="关闭查看器">×</button>
+    <button class="lb-nav lb-prev" id="lbPrev" type="button" aria-label="上一张">←</button>
+    <button class="lb-nav lb-next" id="lbNext" type="button" aria-label="下一张">→</button>
+  </div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "DUR": 240, "DIM": 0.82 };
+  /* ui-dict:params:end */
+
+  const root = document.documentElement.style;
+  root.setProperty("--dur", PARAMS.DUR + "ms");
+  root.setProperty("--dim", String(PARAMS.DIM));
+
+  // 八张扁平插画（内联 SVG），高度刻意不一——瀑布流的错落来自内容
+  const ART = [
+    { vb: 140, svg: '<rect width="200" height="140" fill="#cfe0e6"/><circle cx="150" cy="40" r="19" fill="#e8b96a"/><path d="M0 90 L48 54 L96 90 Z" fill="#5b7f8c"/><path d="M70 90 L120 46 L172 90 Z" fill="#3f5f6b"/><rect y="90" width="200" height="50" fill="#2f4a52"/>' },
+    { vb: 200, svg: '<rect width="200" height="200" fill="#f0d6c0"/><circle cx="58" cy="52" r="24" fill="#d9764a"/><path d="M0 150 L56 110 L112 150 L168 118 L200 140 V200 H0 Z" fill="#a2716a"/><path d="M0 176 Q50 156 100 176 T200 176 V200 H0 Z" fill="#6d4a52"/>' },
+    { vb: 120, svg: '<rect width="200" height="120" fill="#2b3a4a"/><circle cx="148" cy="34" r="15" fill="#d9e2e8"/><path d="M0 84 L52 54 L104 84 Z" fill="#22303d"/><path d="M76 84 L130 48 L186 84 Z" fill="#17222c"/><rect y="84" width="200" height="36" fill="#0f1720"/>' },
+    { vb: 170, svg: '<rect width="200" height="170" fill="#d9e6d2"/><circle cx="52" cy="42" r="17" fill="#c9d98a"/><path d="M0 112 L60 72 L120 112 Z" fill="#6f8f63"/><path d="M88 112 L142 66 L200 112 Z" fill="#4a6b45"/><rect y="112" width="200" height="58" fill="#2f4a30"/>' },
+    { vb: 150, svg: '<rect width="200" height="150" fill="#e6ecf0"/><circle cx="146" cy="38" r="17" fill="#ffffff"/><path d="M0 104 L54 68 L108 104 Z" fill="#b8c8d2"/><path d="M80 104 L136 62 L194 104 Z" fill="#8fa4b2"/><rect y="104" width="200" height="46" fill="#6b8090"/>' },
+    { vb: 210, svg: '<rect width="200" height="210" fill="#f2e3c8"/><circle cx="62" cy="46" r="21" fill="#e0a85c"/><path d="M0 140 L58 104 L116 140 Z" fill="#c9a06a"/><path d="M92 140 L146 100 L200 140 Z" fill="#9c7448"/><rect y="140" width="200" height="70" fill="#6f5233"/>' },
+    { vb: 130, svg: '<rect width="200" height="130" fill="#e3d2f0"/><circle cx="100" cy="38" r="14" fill="#f6f0fa"/><path d="M0 92 L44 62 L88 92 Z" fill="#8a6fae"/><path d="M70 92 L118 58 L166 92 Z" fill="#6a4f8e"/><rect y="92" width="200" height="38" fill="#43315e"/>' },
+    { vb: 180, svg: '<rect width="200" height="180" fill="#f6e7b8"/><circle cx="146" cy="44" r="18" fill="#d9a53e"/><path d="M0 118 L56 80 L112 118 Z" fill="#c9b06a"/><path d="M84 118 L138 76 L200 118 Z" fill="#a2884a"/><rect y="118" width="200" height="62" fill="#756032"/>' }
+  ];
+  const CAPS = ["千岛湖 · 晨雾", "落日脊线", "北岸夜航", "林间小径", "雪后垭口", "沙丘正午", "暮色湖湾", "金色牧场"];
+
+  const render = (i) =>
+    '<svg viewBox="0 0 200 ' + ART[i].vb + '" preserveAspectRatio="xMidYMid slice" role="img" aria-label="' + CAPS[i] + '">' + ART[i].svg + '</svg>';
+
+  const wall = document.getElementById("wall");
+  ART.forEach(function (a, i) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "card";
+    b.setAttribute("aria-label", "放大查看：" + CAPS[i]);
+    b.dataset.index = String(i);
+    b.innerHTML = '<span class="img">' + render(i) + '</span>' +
+      '<span class="cap"><b>' + CAPS[i] + '</b><small>0' + (i + 1) + ' / 0' + ART.length + '</small></span>';
+    wall.appendChild(b);
+  });
+
+  const lb = document.getElementById("lb");
+  const lbArt = document.getElementById("lbArt");
+  const lbCap = document.getElementById("lbCap");
+  const lbCount = document.getElementById("lbCount");
+  const lbClose = document.getElementById("lbClose");
+  let cur = 0, opener = null;
+
+  function show(i) {
+    cur = (i + ART.length) % ART.length;
+    lbArt.innerHTML = render(cur);
+    lbCap.textContent = CAPS[cur];
+    lbCount.textContent = (cur + 1) + " / " + ART.length;
+  }
+  function open(i, from) {
+    opener = from;
+    show(i);
+    lb.classList.add("open");
+    document.body.classList.add("locked");
+    document.body.style.paddingRight = (innerWidth - document.documentElement.clientWidth) + "px";
+    lbClose.focus();
+  }
+  function close() {
+    lb.classList.remove("open");
+    document.body.classList.remove("locked");
+    document.body.style.paddingRight = "";
+    setTimeout(function () { if (!lb.classList.contains("open")) lb.style.visibility = ""; }, 0);
+    if (opener && opener.isConnected) opener.focus();
+    opener = null;
+  }
+
+  wall.addEventListener("click", function (e) {
+    const card = e.target.closest(".card");
+    if (card) open(Number(card.dataset.index), card);
+  });
+  lbClose.addEventListener("click", close);
+  document.querySelector(".lb-backdrop").addEventListener("click", close);
+  document.getElementById("lbPrev").addEventListener("click", function () { show(cur - 1); });
+  document.getElementById("lbNext").addEventListener("click", function () { show(cur + 1); });
+  addEventListener("keydown", function (e) {
+    if (!lb.classList.contains("open")) return;
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") show(cur - 1);
+    else if (e.key === "ArrowRight") show(cur + 1);
+    else if (e.key === "Tab") {
+      const ring = [lbClose, document.getElementById("lbPrev"), document.getElementById("lbNext")];
+      const idx = ring.indexOf(document.activeElement);
+      e.preventDefault();
+      ring[(idx + (e.shiftKey ? ring.length - 1 : 1)) % ring.length].focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

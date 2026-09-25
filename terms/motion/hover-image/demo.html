@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>悬停图片预览 Hover Image · ui-dict M-07</title>
+<style>
+  :root { --size: 160px; }   /* 由 PARAMS.SIZE 回写：缩略图宽，高按 0.62 比例 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: grid; place-items: center; padding: 24px;
+  }
+  .page { width: min(520px, 100%); }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .page > p { font-size: 13.5px; color: #6b675f; margin: 0 0 18px; line-height: 1.7; }
+
+  .projects { display: flex; flex-direction: column; }
+  .project {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    padding: 18px 6px; border-top: 1px solid #e3dfd6; cursor: pointer;
+    transition: opacity .35s ease;
+  }
+  .project:last-child { border-bottom: 1px solid #e3dfd6; }
+  .project .title { font-size: 20px; font-weight: 600; letter-spacing: -.01em;
+    transition: transform .45s cubic-bezier(.2,.8,.2,1); }
+  .project .label { font-size: 13px; color: #8a857c;
+    transition: transform .45s cubic-bezier(.2,.8,.2,1); }
+  .project:hover { opacity: .45; }
+  .project:hover .title { transform: translateX(-10px); }
+  .project:hover .label { transform: translateX(10px); }
+
+  /* 跟随缩略图：fixed 定位（视口坐标 = clientX/Y），lerp 插值跟手。
+     pointer-events:none 是命脉——它悬在指针正下方，可点的话会自己截胡 mousemove */
+  .thumb {
+    position: fixed; left: 0; top: 0; z-index: 9;
+    width: var(--size); height: calc(var(--size) * .62);
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 18px 40px -12px rgba(0,0,0,.35);
+    pointer-events: none;
+    will-change: transform;
+  }
+  /* 图片栈：4 张纵向堆叠，translateY(-100% × index) 切换——
+     每张高度严格等于容器高，切换才不会露缝 */
+  .stack { height: 100%; transition: transform .38s cubic-bezier(.2,.8,.2,1); }
+  .pic { width: 100%; height: 100%; }
+  .pic-1 { background: linear-gradient(135deg, #0b4f6c 0%, #3a8fb0 60%, #dce9ee 100%); }
+  .pic-2 { background: radial-gradient(circle at 70% 30%, #f2d9c4 0%, #c98a5e 45%, #5e3a28 100%); }
+  .pic-3 { background: linear-gradient(160deg, #2e6b3e 0%, #7fb08a 55%, #eef3ea 100%); }
+  .pic-4 { background: linear-gradient(150deg, #43315e 0%, #8a6fae 55%, #e9e2f2 100%); }
+
+  @media (hover: none) { .thumb { display: none; } }   /* 触屏无 hover 语义：整个跟随层退场 */
+  @media (prefers-reduced-motion: reduce) {
+    .stack, .project .title, .project .label { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>精选项目 · Hover Image</h1>
+    <p>演示词条 M-07。把鼠标移到任意项目行上——一张缩略图会以 lerp 插值跟到手边；
+       行间移动时图片栈平滑换图，移出列表整体缩没。触屏设备自动退化为普通列表。</p>
+    <div class="projects" id="projects">
+      <div class="project" data-index="0">
+        <span class="title">云栖酒店</span><span class="label">品牌官网 · 2026</span>
+      </div>
+      <div class="project" data-index="1">
+        <span class="title">山雾茶室</span><span class="label">空间设计 · 2025</span>
+      </div>
+      <div class="project" data-index="2">
+        <span class="title">青苔计划</span><span class="label">视觉识别 · 2025</span>
+      </div>
+      <div class="project" data-index="3">
+        <span class="title">夜航西飞</span><span class="label">数字展览 · 2024</span>
+      </div>
+    </div>
+  </main>
+
+  <div class="thumb" id="thumb" aria-hidden="true">
+    <div class="stack" id="stack">
+      <div class="pic pic-1"></div>
+      <div class="pic pic-2"></div>
+      <div class="pic pic-3"></div>
+      <div class="pic pic-4"></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "LERP": 0.12, "SIZE": 160 };
+  /* ui-dict:params:end */
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const touch = matchMedia("(hover: none)").matches;
+  const thumb = document.getElementById("thumb");
+  const stack = document.getElementById("stack");
+  const list = document.getElementById("projects");
+
+  document.documentElement.style.setProperty("--size", PARAMS.SIZE + "px");
+
+  if (touch) { thumb.remove(); return; }   // 无 hover 语义：跟随层整个退场，列表保持可用
+
+  let tx = 0, ty = 0, x = 0, y = 0, s = 0, ts = 0, raf = null;
+
+  function frame() {
+    // lerp 指数趋近：每帧向目标走 LERP 比例——平滑度唯一来源是插值系数，
+    // 与 mousemove 的触发频率无关（事件只负责更新目标点）
+    const k = reduce ? 1 : PARAMS.LERP;
+    x += (tx - x) * k;
+    y += (ty - y) * k;
+    s += (ts - s) * (reduce ? 1 : 0.16);
+    thumb.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px) translate(-50%,-50%) scale(" + s.toFixed(3) + ")";
+    const settled = Math.abs(tx - x) < .1 && Math.abs(ty - y) < .1 && Math.abs(ts - s) < .002;
+    if (settled) {
+      x = tx; y = ty; s = ts;
+      thumb.style.transform = "translate(" + x + "px," + y + "px) translate(-50%,-50%) scale(" + s + ")";
+      raf = null;                          // 静止即停 rAF，不常驻烧电池（与磁吸按钮同一纪律）
+    } else {
+      raf = requestAnimationFrame(frame);
+    }
+  }
+  const kick = () => { if (raf === null) raf = requestAnimationFrame(frame); };
+
+  list.addEventListener("mousemove", function (e) {
+    // clientX/Y（视口坐标）配 position:fixed；用 pageX 的话一滚动就对不上
+    tx = e.clientX; ty = e.clientY;
+    kick();
+  });
+  list.addEventListener("mouseleave", function () { ts = 0; kick(); });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".project"), function (p) {
+    p.addEventListener("mouseenter", function () {
+      stack.style.transform = "translateY(" + (-100 * Number(p.dataset.index)) + "%)";
+      ts = 1; kick();
+    });
+  });
+})();
+</script>
+</body>
+</html>

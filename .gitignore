@@ -1,11 +1,26 @@
+# ---- 构建产物 / 依赖 ----
 node_modules/
 dist/
 build/
 .astro/
 src/generated/
+
+# 构建期由 terms/ 生成的派生产物（逐字节同源，构建时重新生成，不入库）
 public/demos/
 public/ui-dict.md
+
+# ---- 调研档案（含竞品威胁评估与内部策略判断）----
+# 按 DEPLOY.md 方案 A：不进公开仓库，留在本地
+research/
+.research-backup/
+
+# ---- 本地工具与运行痕迹 ----
 .playwright-cli/
 replay/
 *.log
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db

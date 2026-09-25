@@ -1,0 +1,80 @@
+{
+  "id": "z-stack-cards",
+  "no": "L-05",
+  "category": "layout",
+  "nameZh": "滚动叠卡",
+  "nameEn": "Z-Stack Cards",
+  "aliases": [
+    "卡片一张张盖上去",
+    "像翻一叠卡纸",
+    "滚着滚着前面那张被压小了",
+    "苹果产品页那种一层层堆",
+    "顶部露出几条边",
+    "滚到底是一摞卡片"
+  ],
+  "definition": "滚动叠卡（Z-Stack Cards）：一组卡片在滚动中依次被钉住（position: sticky + 逐张递增的 top），后一张从下方滑上来盖住前一张，被压住的卡逐层缩小、变淡，靠\"盖住\"这件事骗出 Z 轴纵深——Apple 产品页、Linear、Stripe 的滚动分段常见。与粘性分区（Sticky Section）的区别：后者钉住的是分区标题这条薄边、内容是穿过它滚动的，钉住物是\"一条线\"；前者钉住的是整张卡片本体、被后来者覆盖，钉住物是\"一整块面\"。与滚动叙事（Scrollytelling）的区别：后者的滚动进度驱动叙事状态变化（讲到哪一段了），叠卡只是纯视觉堆叠，不承载任何叙事语义。",
+  "whenNotToUse": [
+    "卡片之间需要横向对比（定价档位、参数表）→ 叠卡天生只露最上面一张，其余全被埋掉，对比变成记忆游戏",
+    "卡片少于 3 张或页面滚动行程不足 → 第二张还没滚到自己的钉住线页面就到底了，只剩两张尴尬地错位摞着",
+    "移动端短视口 + 卡片本身很高 → 钉住位吃掉视口，实际可读区只剩一条缝，不如老实退化成纵向列表",
+    "需要打印或线性阅读的正文 → 叠卡把内容切成互斥的视口，打印出来是一串互相覆盖的卡片，读屏顺序也失去上下文"
+  ],
+  "confusedWith": ["sticky-section", "scrollytelling", "parallax"],
+  "anatomy": [
+    { "part": "卡片 Card", "note": "被钉住的单位是整张卡本身，不是标题——这是它与 Sticky Section 的第一处分界" },
+    { "part": "粘性堆叠位 position: sticky", "note": "卡片相对滚动容器吸附；吸附范围 = 父容器（.stack）的下缘，滚到容器底整叠一起离开" },
+    { "part": "层叠偏移 top 递增", "note": "第 i 张 top = STICKY_TOP + i × STEP；差值 STEP 就是前一张露出的那条边的宽度" },
+    { "part": "缩放与透明度衰减", "note": "被压住的卡 scale(1 − depth × SCALE_STEP) + opacity 轻微下降，\"变小变淡\"是 Z 轴的唯一线索" },
+    { "part": "收尾 Tail", "note": "容器底部预留一段空白行程，否则最后一张还没滚到钉住线页面就结束了，叠不成一叠" }
+  ],
+  "promptTemplate": {
+    "core": "一组滚动叠卡（Z-Stack Cards）：5 张卡片作为同一个 .stack 容器的直接子元素顺序排列，每张都是 position: sticky，top 为 calc({STICKY_TOP}px + i × {STEP}px)，第 i 张的钉住线比前一张低 STEP，钉住后正好露出前一张顶部 STEP 高的一条边。卡片紧邻排布（不留 margin 行程），滚动时后一张从下方滑上来覆盖前一张；同 z-index:auto 下定位元素按 DOM 顺序绘制，后一张天然盖住前一张，不要手写 z-index。被压住的卡片做衰减：transform: scale(1 − depth × {SCALE_STEP})（transform-origin: top center，保证顶边不动）+ opacity(1 − depth × 0.14)，depth = 压在它上面的已钉住卡数，过渡 220ms ease；结束态是被压卡稳定在缩小变淡的位置、顶边仍对齐钉住线。容器底部补约 55vh 的空白行程，保证最后一张能滚到自己的钉住线。prefers-reduced-motion 下只保留 sticky 堆叠，去掉 scale/opacity。",
+    "stack": "纯 CSS position: sticky + 递增 top 就能成立（零 JS 也堆得起来）；JS 只做可选增强——用 getBoundingClientRect 读渲染结果判断钉住深度、写 --s/--o 两个自定义属性做衰减，以及点击卡片推进一张。",
+    "constraints": [
+      "不要在卡片容器或它的任何祖先上写 overflow: hidden/auto/scroll——最近滚动祖先一变，sticky 就改向那个看不见在滚的盒子吸附，整组叠卡直接失灵；这与 Sticky Section 是同一个头号坑，只是这次失灵的是整块面，比标题失灵刺眼得多",
+      "卡片之间不要用 margin/gap 撑行程：行程交给容器底部的 tail 空白，用 margin 撑会把每张卡的静止位一起往下推，钉住线差值被吃掉，最后叠不成一叠而是一串错位的砖",
+      "衰减只能用 transform: scale 与 opacity 这类合成器属性，不要动 width/height/font-size——每帧重排会让滚动直接掉帧，而且重排会反过来改变卡片高度、让钉住判定自己抖起来",
+      "transform-origin 必须是 top center：默认 origin 在中心，缩小后卡片顶边会跟着下移，那条\"露出的边\"逐层变窄直至消失，观感是卡片在抖而不是在摞",
+      "不要在祖先上留 transform/filter/will-change——它们创建新的包含块，sticky 被关进那个小盒子，页面级吸附降级成局部抽搐",
+      "prefers-reduced-motion 下必须去掉 scale/opacity 衰减（位移叠缩放是晕动症重灾区），但 sticky 堆叠本身要保留——它只是定位，不是动画"
+    ],
+    "verify": [
+      "向下滚动：5 张卡依次被钉住，每张都在前一张下面留出约 STEP 高的一条边，逐渐堆成一叠",
+      "后一张滑上来时把前一张盖住，被盖住的卡肉眼可见地缩小并变淡，压得越深缩得越小",
+      "滚到容器末尾：整叠卡一起向上滚走（sticky 到父容器下缘就解脱），不会永远赖在视口里",
+      "拖动参数滑杆：STICKY_TOP 整体平移钉住线；STEP 改变露出边的宽度；SCALE_STEP 改变衰减幅度",
+      "系统开启减少动效：只剩 sticky 堆叠，卡片不再缩放变淡，堆叠关系依然成立"
+    ],
+    "reference": "参考气质：Apple 产品页的分段卡片、Linear 的 feature 叠层、Stripe 首页的能力卡。安静、克制，让 Z 轴自己说话，不靠渐变和阴影抢戏。",
+    "variants": [
+      { "label": "深色首张", "delta": "第一张用 #141414 深底反白，被压住变淡时明暗层次最明显，其余保持白卡——只改第一张的底色，机制不动" },
+      { "label": "原生滚动时间轴版", "delta": "改用 animation-timeline: view() + animation-range 把衰减交给滚动驱动动画，零 JS 且与滚动严格同步；但 Safari 尚未落地该特性，必须保留 sticky 版做回退层，不能只留一条路" }
+    ]
+  },
+  "params": [
+    { "key": "STICKY_TOP", "label": "首张 sticky top (px)", "def": 12, "min": 0, "max": 60, "step": 2, "hint": "整叠卡离视口顶的距离；有吸顶导航时要留出导航高度" },
+    { "key": "STEP", "label": "逐张递增 (px)", "def": 18, "min": 0, "max": 48, "step": 2, "hint": "等于前一张露出的那条边的宽度；0 就是完全盖死、看不出层数" },
+    { "key": "SCALE_STEP", "label": "每层缩放衰减", "def": 0.03, "min": 0, "max": 0.08, "step": 0.005, "hint": "每多压一层缩小的比例；0.08 时 4 层就缩到 0.68，Z 轴夸张但文字开始发虚" }
+  ],
+  "scenarios": [
+    "产品官网的滚动卖点分段（Apple 产品页、Linear、Stripe 首页）",
+    "定价页的档位卡逐张盖上来（免费 / 专业 / 团队 / 企业）",
+    "教程或引导页的步骤卡（一步步推进，每步盖住上一步）",
+    "作品集项目卡的分段展示（一屏一张，越滚越深）"
+  ],
+  "pitfalls": [
+    "position: sticky 只相对\"最近滚动祖先\"吸附：卡片容器或任何中间祖先一旦写了 overflow: hidden/auto/scroll，吸附就发生在那个不可见容器里，全页看就是完全不粘——排查 sticky 不生效的第一步是 grep 全部祖先的 overflow，和 Sticky Section 是同一个翻车点，只是整块面失灵比标题失灵更难被误认成\"设计如此\"",
+    "递增 top 的叠卡必须让卡片紧邻排布、行程交给容器底部的 tail 空白：用 margin-bottom 撑行程会把每张卡的静止位一起往下推，相邻两张的钉住线差值被吃掉，最终不是一叠而是等距错位的一串砖——行程是\"容器末尾的空白\"，不是\"卡片之间的间隙\"",
+    "被压住卡的缩放要把 transform-origin 设在 top center：默认 origin 在中心，scale 一缩顶边就跟着下移，那条露出的边逐层变窄直至消失，用户看到的是卡片在抖而不是在摞——顶边必须钉死，缩的只能是底边",
+    "钉住深度不能只看 scrollTop 硬算：钉住后的元素用 getBoundingClientRect 读到的 top 会等于钉住线（它已被吸附），要靠 top 与预期钉住线相等来判定\"这张已钉住\"，再数它后面还有几张进入了钉住态才是真实 depth——用卡片索引当 depth 会在滚动不到位的区间提前衰减，整叠看起来像一直在抖",
+    "不要在卡片上写 z-index：同 top 的定位元素按 DOM 顺序绘制，后一张天然盖住前一张，手写 z-index 反而容易把顺序写反、出现\"新卡钻到旧卡底下\"；只有给收尾或首张特殊层级时才显式声明，且要连带声明全部卡片的层级关系"
+  ],
+  "related": ["sticky-section", "scrollytelling", "bento-grid"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/position",
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Scroll-driven_animations"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

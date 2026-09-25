@@ -1,0 +1,82 @@
+{
+  "id": "segmented-control",
+  "no": "C-09",
+  "category": "component",
+  "nameZh": "分段控件",
+  "nameEn": "Segmented Control",
+  "aliases": [
+    "一排连体的按钮，选中的那块浮起来",
+    "iOS 设置页里那排浅灰的切换条",
+    "拨过去就换一套内容的小胶囊",
+    "同一块地方换视图用的拨杆",
+    "像老式收音机的波段切换键",
+    "两个选项之间滑来滑去的那个小滑块"
+  ],
+  "definition": "把 2-5 个互斥选项并排连成一条等宽的轨道，选中项由一块共享滑块（indicator）在轨道内平滑滑到它下面的控件；切换的是同一层级的视图或口径，不是跳去另一个页面。它的工程核心不是样式而是那块滑块：位移必须用 transform、时长与曲线要有规格，否则每一段切换都在重排。与 Tabs 的辨析：Tabs 是导航语义——切换内容区、可以有任意多个、放不下还能滚动或折行；Segmented Control 是同层级视图的互斥切换，段数被限制在 2-5、每段等宽、没有「可滚动」这一说。与 Radio Group 的辨析：Radio Group 是表单取值——用户填完表单再提交，选中是「数据」；Segmented Control 是即时的视图切换，选中即刻改变眼前看到的东西，不经过提交。",
+  "whenNotToUse": [
+    "选项超过 5 个、或标签文字长短不一 → 用 Tabs 或 Select（等宽是它的形态前提，段一多每段就挤成两个字）",
+    "选中是「表单数据」、要随表单一起提交 → 用 Radio Group（语义是取值，不是切换视图）",
+    "选项之间不是互斥关系（可以同时开多个）→ 用 Toggle Group / Checkbox 组，滑块的存在本身就宣告了「只能选一个」",
+    "切换会改变 URL 或需要前进后退 → 用 Tabs + 路由，Segmented Control 不进历史栈",
+    "内容区很大很复杂、切换代价高 → 分段控件适合轻量视图，重内容该用 Tabs 明确标出「这里会换一整块东西」"
+  ],
+  "confusedWith": ["tabs", "toggle-group", "radio-group"],
+  "anatomy": [
+    { "part": "Track 容器", "note": "整条浅灰轨道，圆角与内边距由 RADIUS/PAD 控制；它决定每段等宽的基准（flex:1 1 0）" },
+    { "part": "Segment 分段", "note": "每个选项，等宽、文字不换行；只有当前段 tabindex=0，其余 -1（roving tabindex）" },
+    { "part": "Indicator 滑块", "note": "唯一的共享选中态：绝对定位、宽 = 容器内宽 / 段数，位移只写 transform: translateX(段序号 × 100%)" },
+    { "part": "选中态", "note": "aria-selected=true + 文字加深加粗；视觉选中由滑块承载，不要给每段各画一份背景" },
+    { "part": "内容区", "note": "滑块下方随选中项切换的那块视图；role=tabpanel 且 aria-labelledby 指回对应分段" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个分段控件（Segmented Control）：轨道容器宽 100%、max-width 420px、内边距 {PAD}px、圆角 {RADIUS}px、背景 #ece8e0；内部 3 段等宽（flex: 1 1 0 且 min-width: 0，文字 white-space: nowrap），每段高 34px、圆角 calc({RADIUS}px - {PAD}px)、字号 13px。容器内绝对定位一块共享滑块 Indicator：宽 = 容器内宽 ÷ 段数、高 = 容器内高，圆角与分段一致，白底 + 0 1px 3px rgba(0,0,0,.18) 投影。★ 滑块位移只写 transform: translateX(段序号 × 100%)，绝不用 left 或 width 逐帧改（那会每帧触发重排，低端机上切换直接掉帧）。触发条件与运动模型：点击任一段后，选中态立即切换，滑块以 {DUR}ms cubic-bezier(.2,.8,.2,1) 平移到目标段；结束态为精确停在目标段中心、无过冲无回弹（分段控件是「开关」不是「弹簧」，别加弹跳）。键盘：容器 role=tablist，每段 role=tab，左右方向键在段间移动并立即选中，Home/End 跳首尾，roving tabindex——只有当前段 tabindex=0、其余 -1，Tab 键一次就能走出整个控件；每段 aria-selected 标出选中，aria-controls 指向下方对应内容面板。选中段下方切换一块内容区（role=tabpanel，aria-labelledby 指回当前段），证明它是视图切换而非装饰。触屏直接点击即可（本控件本来就是点击语义，不依赖 hover）。",
+    "stack": "原生 CSS + 原生 JS（transform 位移 + roving tabindex + 方向键处理），零组件库。",
+    "constraints": [
+      "不要用 left/width/margin-left 动画滑块——那是逐帧重排；transform 才走合成器，60fps 与省电都靠它",
+      "不要给每段各画一份选中背景再让它淡入淡出——滑块之所以是「一块」共享元素，就是为了让位移被看见；两份背景交叉淡入只会糊成一团",
+      "不要漏做 roving tabindex——所有段都留 tabindex=0 时，键盘用户要按 N 次 Tab 才能穿过这个控件，工具栏里放两个分段控件就足以让人放弃",
+      "不要在没有 tabpanel 的纯装饰场景硬套 role=tab——读屏会播报「标签页 1/3」却找不到对应面板；此时改用 role=radiogroup + role=radio",
+      "不要加弹簧过冲与回弹——分段控件切换的是「已经确定的状态」，过冲会读成「没停稳」，与 iOS/Material 的原生手感相反",
+      "不要省略 prefers-reduced-motion 降级（时长归零直接落终态，选中逻辑与 aria 状态完全保留）"
+    ],
+    "verify": [
+      "点击中间那段，白色滑块以 DUR 毫秒平滑滑到它下面并精确停住，没有过冲",
+      "滑块位移期间用开发者工具看 Layer 面板，只有合成层在动、没有触发布局重排",
+      "按左右方向键，选中段与滑块同步移动；按 Home/End 跳到首段/末段",
+      "按一次 Tab 键就能进入控件、再按一次就能离开——不会在三个分段之间挨个停",
+      "切换后下方内容区随之更换，且该面板的 role=tabpanel 与 aria-labelledby 指回当前段"
+    ],
+    "reference": "参考气质：iOS 系统设置里的「浅色/深色/自动」分段条、Material 3 Segmented Button——同一块地方换视图，滑块跟手、不炫技、不弹跳。",
+    "variants": [
+      { "label": "3 段 → 5 段", "delta": "段数上限 5（iOS HIG）；超过就说明该换成 Tabs 或 Select，别把标签压成两个字" },
+      { "label": "文字 → 图标+文字", "delta": "每段左图标右文字、仍等宽；图标段失去文字承载时要补 aria-label，否则读屏只剩一个空按钮" }
+    ]
+  },
+  "params": [
+    { "key": "DUR", "label": "滑块位移时长 (ms)", "def": 220, "min": 0, "max": 600, "step": 20, "hint": "0=瞬移（减少动效下的等价物）；>400 会让点击显得迟疑" },
+    { "key": "RADIUS", "label": "轨道圆角 (px)", "def": 10, "min": 0, "max": 999, "step": 1, "hint": "999=全圆胶囊（iOS 风）；滑块的圆角由它减 PAD 推导，不用另配" },
+    { "key": "PAD", "label": "容器内边距 (px)", "def": 3, "min": 0, "max": 16, "step": 1, "hint": "0=滑块与轨道同宽（硬边）；>10 滑块会瘦成一条，像轨道里嵌了颗糖" }
+  ],
+  "scenarios": [
+    "iOS 系统设置的「浅色 / 深色 / 自动」外观切换",
+    "Google 日历顶部的「日 / 周 / 月」视图粒度切换",
+    "电商列表页的「综合 / 销量 / 价格」排序口径切换",
+    "App Store 排行榜的「免费 / 付费」榜切换",
+    "股票 App 的「分时 / 日K / 周K」图表粒度切换"
+  ],
+  "pitfalls": [
+    "滑块用 left/width 做过渡而不是 transform，每帧都要重新布局整条轨道，因为 left 是布局属性、改它会让浏览器重算轨道内所有段的盒子——低端机上切换直接掉成幻灯片；transform 只动合成层，代价是滑块「悬空」不参与布局，所以它必须是绝对定位的独立元素而不是某一段的背景",
+    "roving tabindex 漏做（每段都留着 tabindex=0），键盘用户要按 N 次 Tab 才能穿过一个 3 段控件，因为浏览器把每个可聚焦元素都当成一次独立的 Tab 停靠点——正确做法是只给当前段 tabindex=0、其余 -1，并在方向键移动时同步搬运这个 0",
+    "给没有内容面板的纯装饰切换硬套 role=tab，读屏会播报「标签页 1/3」却找不到对应的 tabpanel，因为 tab 语义承诺了「下面有一块内容」——要么把内容区补上并给 aria-controls/aria-labelledby 配对，要么改用 role=radiogroup + role=radio（后者只承诺互斥取值，不需要面板）",
+    "滑块宽度写死 px 或百分比基数搞错，段数一变或容器换宽度就与分段对不齐，因为「等宽」来自 flex:1 1 0 的分配结果而不是一个可以硬编码的数——正确做法是绝对定位滑块取 100%/段数，位移写 translateX(序号 × 100%)（这里的 100% 是滑块自身宽度，天然跟随容器）",
+    "滑块初始位置在字体尚未加载完时测量，首帧错位到半格，因为系统字体与自定义字体的度量不同、文字宽度变化会撑动 flex 分配——把初始定位放在 DOMContentLoaded 之后，并在 fonts.ready 与 resize 时各重算一次；Safari 上旧版 flex 基线对齐另有偏差，别只测 Chrome"
+  ],
+  "related": ["ripple", "tabs", "radio-group"],
+  "refs": [
+    "https://m3.material.io/components/segmented-buttons/overview",
+    "https://developer.apple.com/design/human-interface-guidelines/segmented-controls"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.3)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}

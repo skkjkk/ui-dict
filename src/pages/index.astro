@@ -17,33 +17,41 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
 ---
 <Base>
   <!-- 报头 -->
-  <header class="rule pb-4 mb-2 flex items-end justify-between flex-wrap gap-2">
+  <header class="rule pb-5 mb-3 flex items-end justify-between flex-wrap gap-3">
     <div>
       <h1 class="mast-title m-0">UI 词典 <span class="mast-sub">UI Lexicon</span></h1>
-      <p class="m-0 mt-1.5 text-[13.5px] mast-tagline">
+      <p class="m-0 mt-2 text-[16.5px] mast-tagline">
         输入你想要的感觉，找到它的<b>名字、提示词和能跑的代码</b>。
       </p>
     </div>
     <div class="text-right">
-      <div class="num">{total} 词条收录</div>
-      <div class="text-[11px] mono" style="color:var(--color-muted)">v0.1 · MMXXVI</div>
+      <div class="num" style="font-size:14px">{total} 词条收录</div>
+      <div class="text-[13px] mono mt-0.5" style="color:var(--color-muted)">v0.1 · MMXXVI</div>
     </div>
   </header>
 
-  <!-- 目录行：分类计数即导航 -->
-  <nav class="flex flex-wrap gap-x-5 gap-y-1 text-[11.5px] mono py-3 mb-6" style="color:var(--color-muted)">
-    {byCat.map((c, i) => (
-      <a href={`#${c.key}`} class="hover:text-[var(--color-ink)] no-underline">
-        <span class="num" style="margin-right:5px">{ROMAN[i]}</span>
-        <b style="color:var(--color-ink)">{c.items.length}</b> {c.label} {c.key}
-      </a>
-    ))}
-  </nav>
+  <!-- 主区：左导航 + 右内容 -->
+  <div class="page-grid grid gap-x-12 gap-y-8 lg:grid-cols-[250px_minmax(0,1fr)]">
+    <!-- 左侧分类导航（点击筛选，粘性跟随） -->
+    <aside class="side-nav self-start lg:sticky lg:top-8" aria-label="分类导航">
+      <div class="eyebrow mb-4">分类 · INDEX</div>
+      <nav class="side-list">
+        <button type="button" class="side-item active" data-cat-filter="all">
+          <span class="num">◎</span><span class="flex-1 text-left">全部词条</span><span class="side-count">{total}</span>
+        </button>
+        {byCat.map((c, i) => (
+          <button type="button" class="side-item" data-cat-filter={c.key}>
+            <span class="num">{ROMAN[i]}</span><span class="flex-1 text-left">{c.label} <i class="side-key">{c.key}</i></span><span class="side-count">{c.items.length}</span>
+          </button>
+        ))}
+      </nav>
+    </aside>
 
+    <main>
   <!-- 发刊词 + 四步翻译层（页边注式双栏） -->
-  <section class="grid md:grid-cols-[1.4fr_1fr] gap-x-12 gap-y-6 mb-12 pb-10 border-b hair">
+  <section class="grid md:grid-cols-[1.4fr_1fr] gap-x-14 gap-y-6 mb-14 pb-12 border-b hair">
     <div>
-      <div class="eyebrow mb-3">发刊词 · PREFACE</div>
+      <div class="eyebrow mb-4">发刊词 · PREFACE</div>
       <p class="preface">
         vibe-coding 时代最真实的断点：脑子里有一个效果——"鼠标靠近就被吸过去"——
         但叫不出它的名字（磁吸按钮 Magnetic Button），于是无法精确地描述给 AI。
@@ -56,7 +64,7 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
       </p>
     </div>
     <aside class="margin-note" aria-label="四步翻译层">
-      <div class="eyebrow mb-2">四步 · THE PIPELINE</div>
+      <div class="eyebrow mb-3">四步 · THE PIPELINE</div>
       <ol class="m-0 pl-0 list-none steps">
         <li><span>感觉</span>"鼠标吸过去"</li>
         <li><span>词汇</span>磁吸按钮 Magnetic Button</li>
@@ -70,36 +78,38 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
   <!-- 反查搜索 -->
   <div id="search-root" class="mb-2">
     <input id="q" type="search" autocomplete="off"
-      class="w-full text-[15px] py-2.5 px-3.5 bg-white border hair rounded-sm outline-none"
+      class="w-full text-[18px] py-4 px-5 bg-white border hair rounded-sm outline-none"
       style="font-family:var(--font-serif)"
       placeholder="试试输入「鼠标吸过去」「一闪一闪的光」「半屏弹窗」…">
-    <div class="text-[11.5px] mt-1.5 mono" style="color:var(--color-muted)">
+    <div class="text-[14.5px] mt-2 mono" style="color:var(--color-muted)">
       按<b>描述反查</b>：说人话即可命中词条 · 命中别名 / 定义 / 场景全文
     </div>
   </div>
-  <div id="no-result" class="hidden text-[14px] py-6" style="color:var(--color-muted)">
+  <div id="no-result" class="hidden text-[15.5px] py-6" style="color:var(--color-muted)">
     没有命中。试试「淡入」或 Fade，或换个口语说法。
   </div>
 
-  <!-- 分节词条墙 -->
+  <!-- 分节词条墙（点分类时其他分类整节隐藏） -->
   {byCat.map((c, ci) => c.items.length > 0 && (
-    <section class="cat-section mt-10" id={c.key} data-cat={c.key}>
-      <div class="flex items-baseline gap-3 mb-1">
-        <span class="num" style="font-size:13px">{ROMAN[ci]}</span>
-        <h2 class="text-[17px] m-0 tracking-wide">{c.label} <span class="italic font-normal" style="color:var(--color-muted)">{c.key}</span></h2>
-        <span class="mono text-[11px]" style="color:var(--color-muted)">{c.items.length} 条</span>
+    <section class="cat-section mt-14 first:mt-0" id={c.key} data-cat={c.key}>
+      <div class="flex items-baseline gap-3 mb-2">
+        <span class="num" style="font-size:16px">{ROMAN[ci]}</span>
+        <h2 class="text-[25px] m-0 tracking-wide">{c.label} <span class="italic font-normal text-[18px]" style="color:var(--color-muted)">{c.key}</span></h2>
+        <span class="mono text-[14px]" style="color:var(--color-muted)">{c.items.length} 条</span>
         <span class="hair flex-1" style="border-bottom:1px solid var(--color-line)"></span>
       </div>
-      <div class="wall grid gap-4 mt-4" style={`grid-template-columns:repeat(auto-fill,minmax(288px,1fr))`}>
+      <div class="wall grid gap-8 mt-8" style={`grid-template-columns:repeat(auto-fill,minmax(540px,1fr))`}>
         {c.items.map((t) => (
-          <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug}>
-            <iframe data-demo={t.slug} sandbox="allow-scripts" title={`${t.nameZh} 实时预览`} loading="lazy"></iframe>
-            <div class="p-3.5 pt-2.5">
-              <div class="num mb-0.5">{t.no} · {CATEGORY_LABELS[t.category]} {t.category}</div>
-              <div class="text-[16.5px] font-semibold">
-                {t.nameZh} <span class="text-[13px] italic font-normal" style="color:var(--color-muted)">{t.nameEn}</span>
+          <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug} data-cat={t.category}>
+            <iframe data-demo={t.slug} sandbox="allow-scripts" scrolling="no" title={`${t.nameZh} 实时预览`} loading="lazy"></iframe>
+            <div class="p-7 pt-5">
+              <div class="flex items-baseline justify-between gap-3">
+                <div class="text-[26px] font-semibold leading-snug">
+                  {t.nameZh} <span class="text-[19px] italic font-normal" style="color:var(--color-muted)">{t.nameEn}</span>
+                </div>
+                <div class="num whitespace-nowrap" style="font-size:14px">{t.no}</div>
               </div>
-              <div class="text-[12px] mt-0.5 truncate-2" style="color:var(--color-muted)">
+              <div class="text-[17px] mt-2.5 truncate-2 leading-relaxed" style="color:var(--color-muted)">
                 {t.aliases.slice(0, 3).join(" ／ ")}
               </div>
             </div>
@@ -110,44 +120,73 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
   ))}
 
   <!-- 编者按 -->
-  <section class="mt-14 border hair rounded-sm bg-white p-5 sm:p-7 grid sm:grid-cols-3 gap-5 text-[13.5px]">
+  <section class="mt-16 border hair rounded-sm bg-white p-7 sm:p-9 grid sm:grid-cols-3 gap-7 text-[15px]">
     <div>
-      <div class="eyebrow mb-2">编者按 · 词条解剖</div>
+      <div class="eyebrow mb-2.5">编者按 · 词条解剖</div>
       <p class="m-0" style="color:var(--color-muted)">名字+口语别名 · 含辨析的定义 · 该用/不该用 · 解剖 · Prompt 卡 · Live Demo · 零依赖代码 · 坑与场景。</p>
     </div>
     <div>
-      <div class="eyebrow mb-2">词条工厂</div>
+      <div class="eyebrow mb-2.5">词条工厂</div>
       <p class="m-0" style="color:var(--color-muted)">AI 按 schema 产词条 → 静态铁律自检 → 人工审校 → 合入即发布。全部词条过同一道闸（QA + zod）。</p>
     </div>
     <div>
-      <div class="eyebrow mb-2">开放承诺</div>
+      <div class="eyebrow mb-2.5">开放承诺</div>
       <p class="m-0" style="color:var(--color-muted)">免登录无墙，内容可被爬虫与 AI 直读；词条代码 MIT，永不追溯变更。</p>
     </div>
   </section>
+    </main>
+  </div>
 
   <script>
     import "@/scripts/home.js";
   </script>
 </Base>
 <style>
-  .mast-title { font-size: 34px; letter-spacing: .02em; }
-  .mast-sub { font-size: 15px; color: var(--color-muted); font-weight: 400; }
+  .mast-title { font-size: clamp(44px, 5vw, 64px); letter-spacing: .02em; }
+  .mast-sub { font-size: clamp(20px, 2.2vw, 28px); color: var(--color-muted); font-weight: 400; }
   .mast-tagline { color: var(--color-muted); }
-  .preface { font-size: 15px; max-width: 62ch; margin: 0 0 14px; }
+  .preface { font-size: 19px; line-height: 1.9; max-width: 70ch; margin: 0 0 18px; }
   .preface b { font-weight: 600; }
   .margin-note {
-    border-left: 2px solid var(--color-line); padding-left: 18px;
-    font-size: 12.5px; color: var(--color-muted);
+    border-left: 2px solid var(--color-line); padding-left: 24px;
+    font-size: 16px; color: var(--color-muted);
   }
-  .steps li { margin: 0 0 9px; padding-left: 0; line-height: 1.5; }
+  .steps li { margin: 0 0 12px; padding-left: 0; line-height: 1.6; }
   .steps li span {
-    display: inline-block; font-family: var(--font-mono); font-size: 10.5px;
+    display: inline-block; font-family: var(--font-mono); font-size: 13px;
     letter-spacing: .14em; color: var(--color-accent);
-    border: 1px solid var(--color-line); border-radius: 2px; padding: 0 6px; margin-right: 8px;
+    border: 1px solid var(--color-line); border-radius: 2px; padding: 1px 9px; margin-right: 11px;
   }
   .export-link {
-    display: inline-block; margin-top: 10px; font-family: var(--font-mono); font-size: 12px;
+    display: inline-block; margin-top: 14px; font-family: var(--font-mono); font-size: 15px;
     color: var(--color-accent); text-decoration: underline;
   }
   .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* 左侧分类导航：词典目录页的立体化 */
+  .side-nav { position: sticky; top: 2rem; }
+  .side-list { display: flex; flex-direction: column; gap: 2px; }
+  .side-item {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 10px 14px;
+    background: none; border: 1px solid transparent; border-radius: 3px;
+    font-family: var(--font-serif); font-size: 16.5px; color: var(--color-ink);
+    cursor: pointer; text-align: left; transition: background .14s, border-color .14s;
+  }
+  .side-item:hover { background: var(--color-tag); }
+  .side-item.active { background: #fff; border-color: var(--color-ink); }
+  .side-item .num { font-size: 13px; width: 20px; }
+  .side-key { font-family: var(--font-mono); font-style: italic; font-size: 13px; color: var(--color-muted); }
+  .side-count {
+    font-family: var(--font-mono); font-size: 13px;
+    color: var(--color-muted); background: var(--color-tag);
+    border-radius: 2px; padding: 1px 8px;
+  }
+  .side-item.active .side-count { background: var(--color-accent); color: #fff; }
+  /* 窄屏：侧导航横向滚动成一行 */
+  @media (max-width: 1023px) {
+    .side-nav { position: static; }
+    .side-list { flex-direction: row; flex-wrap: wrap; }
+    .side-item { width: auto; }
+  }
 </style>

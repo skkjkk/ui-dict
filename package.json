@@ -12,6 +12,8 @@
     "preview": "astro preview",
     "qa": "node scripts/sync-demofiles.mjs && node scripts/qa-demofiles.mjs",
     "regression": "node scripts/regression-check.mjs",
+    "verify:grid": "node scripts/verify-live-grid.mjs",
+    "verify:grid-edge": "node scripts/verify-live-edge.mjs",
     "replay": "node scripts/replay-test.mjs",
     "replay:dry": "node scripts/replay-test.mjs --all --dry-run",
     "replay:judge": "node scripts/replay-test.mjs --judge --all",

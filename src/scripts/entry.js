@@ -2,7 +2,7 @@
 import { DEMOS, TERMS } from "@/generated/site-data.js";
 import { setParams } from "@/lib/params.mjs";
 import { assemblePrompt, termMarkdown } from "@/lib/prompt.mjs";
-import { copyText, openStandalone, motionAwareSrcdoc } from "./frame.js";
+import { copyText, openStandalone, liveSrcdoc } from "./frame.js";
 
 // slug 直接取自 URL（/term/<slug>/），不依赖 body 上的属性
 const slug = (location.pathname.match(/\/term\/([^/]+)/) || [])[1];
@@ -25,16 +25,30 @@ function refresh() {
   const ov = overrides();
   for (const [k, el] of outputs) if (el) el.textContent = String(ov[k]);
   currentHtml = setParams(base, ov);
-  live.srcdoc = motionAwareSrcdoc(currentHtml);             // 渲染层尊重“减少动效”
+  live.srcdoc = liveSrcdoc(currentHtml);             // 渲染层尊重“减少动效”
   codeEl.textContent = currentHtml;                         // 展示 = 复制 = 下载，三态同源（原始源码）
   promptEl.textContent = assemblePrompt(t, ov);             // prompt 随参数实时重拼装
 }
-live.srcdoc = motionAwareSrcdoc(base);
+live.srcdoc = liveSrcdoc(base);
 codeEl.textContent = base;
 if (sliders.length) sliders.forEach((s) => s.addEventListener("input", refresh));
 document.querySelector("[data-replay]")?.addEventListener("click", refresh);
 // 页脚“减少动效”切换时，重挂 live demo 以即时生效
 addEventListener("ui-dict:motion", refresh);
+
+// ---------- 代码块展开全码 ----------
+// 默认由右列（参数 + 固定 420px 内滚代码块）定义行高，左列预览面板拉伸到同高（纯 CSS 网格 stretch）。
+// 点「展开全码」后右列变成上万像素，左列若继续跟随会被撑成巨幕——此时切 .code-expanded：
+// 左列改为 sticky 固定高度，滚动查看代码时预览停在视口里。
+const codeScroll = document.querySelector(".code-scroll");
+const codeToggle = document.querySelector("[data-code-toggle]");
+const liveGrid = document.querySelector(".live-grid");
+codeToggle?.addEventListener("click", () => {
+  const expanded = codeScroll.classList.toggle("expanded");
+  liveGrid?.classList.toggle("code-expanded", expanded);
+  codeToggle.textContent = expanded ? "收起代码 ↑" : "展开全码 ↓";
+  codeToggle.setAttribute("aria-expanded", String(expanded));
+});
 
 // ---------- 复制 / 独立页 ----------
 document.querySelector('[data-copy="prompt"]')?.addEventListener("click", function () {
@@ -47,3 +61,4 @@ document.querySelector('[data-copy="card"]')?.addEventListener("click", function
   copyText(this, termMarkdown(t, { overrides: overrides(), demoHtml: currentHtml }));
 });
 document.querySelector("[data-open-demo]")?.addEventListener("click", () => openStandalone(currentHtml));
+
