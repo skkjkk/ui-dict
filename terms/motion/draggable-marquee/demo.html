@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拖拽跑马灯 Draggable Marquee · ui-dict M-08</title>
+<style>
+  * { box-sizing: border-box; }
+  /* 竖直居中用 flex 列（justify-content），不能用 grid/place-items:center：
+     后者会把 grid 项的宽度算成 max-content，轨道一宽整列就被撑开、页面横向溢出。
+     flex 列默认 align-items:stretch，交叉轴（宽度）取容器宽，轨道再宽也只被 .marquee 裁掉 */
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex; flex-direction: column; justify-content: center;
+    overflow-x: hidden;
+  }
+  .page { width: 100%; padding: 26px 0 40px; }
+  .intro { width: min(760px, 100% - 48px); margin: 0 auto 22px; }
+  .intro h1 { font-size: 18px; margin: 0 0 8px; }
+  .intro p { font-size: 13.5px; color: #6b675f; margin: 0 0 12px; line-height: 1.75; }
+  .intro code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #readout { font-size: 12px; color: #999; font-variant-numeric: tabular-nums; }
+
+  /* 跑马灯：唯一的位移入口是 track 的 transform —— 不动布局，只动合成器层。
+     两侧渐隐靠 mask，让图片带「从边缘流出去」而不是被硬切一刀 */
+  .marquee {
+    position: relative; width: 100%; overflow: hidden;
+    padding: 10px 0; cursor: grab; touch-action: pan-y;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+  }
+  .marquee.is-dragging { cursor: grabbing; }
+  .marquee:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 4px; }
+
+  .track {
+    display: flex; align-items: center; gap: 24px; width: max-content;
+    will-change: transform;
+  }
+  .item { flex: 0 0 auto; }
+  .pic {
+    position: relative; width: 200px; height: 260px; border-radius: 16px;
+    overflow: hidden; box-shadow: 0 14px 34px -16px rgba(0,0,0,.4);
+  }
+  /* 照片感的暗角：不加它，纯渐变会读成色卡而不是图 */
+  .pic::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,.44) 100%);
+  }
+  .cap {
+    position: absolute; left: 14px; bottom: 12px; z-index: 1;
+    font-size: 12.5px; letter-spacing: .06em; color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  .pic-1 { background: linear-gradient(160deg, #0b4f6c 0%, #3a8fb0 55%, #dce9ee 100%); }
+  .pic-2 { background: radial-gradient(circle at 70% 25%, #f2d9c4 0%, #c98a5e 45%, #5e3a28 100%); }
+  .pic-3 { background: linear-gradient(165deg, #2e6b3e 0%, #7fb08a 55%, #eef3ea 100%); }
+  .pic-4 { background: linear-gradient(150deg, #43315e 0%, #8a6fae 55%, #e9e2f2 100%); }
+
+  /* 减少动效：不位移、交还原生横向滚动、副本隐藏 —— 内容仍可读，只是不再自己动 */
+  .marquee.is-reduced {
+    overflow-x: auto; cursor: default;
+    -webkit-mask-image: none; mask-image: none;
+  }
+  .marquee.is-reduced .track { transform: none !important; }
+  .marquee.is-reduced .item[data-copy="duplicate"] { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee { overflow-x: auto; cursor: default; -webkit-mask-image: none; mask-image: none; }
+    .track { transform: none !important; }
+    .item[data-copy="duplicate"] { display: none; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <div class="intro">
+      <h1>拖拽跑马灯 · Draggable Marquee</h1>
+      <p>演示词条 M-08。一排图片自动向左匀速滚动；按住拖动即可接管，松手后按甩动速度继续滑行并逐帧衰减到停。
+         轨道首尾拼接了副本，任何一份滚出视口都会被取模回绕到队尾——所以它永远滚不到头。
+         键盘用户 <code>Tab</code> 聚焦后可用左右方向键拨动。</p>
+      <div id="readout" class="readout">—</div>
+    </div>
+
+    <div class="marquee" id="marquee" tabindex="0" role="region"
+         aria-label="图片跑马灯。可拖拽，或用左右方向键拨动。">
+      <div class="track" id="track"></div>
+    </div>
+  </main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "SPEED": 1, "THROW": 2.8, "FRICTION": 0.975 };
+  /* ui-dict:params:end */
+
+  const ITEMS = [
+    { cap: "云栖 · 01", cls: "pic-1" },
+    { cap: "雾谷 · 02", cls: "pic-2" },
+    { cap: "青苔 · 03", cls: "pic-3" },
+    { cap: "夜航 · 04", cls: "pic-4" }
+  ];
+  // 副本份数：轨道总宽必须 ≥ 视口宽 + 一份序列宽，否则回绕到边界时队尾还没补到视口右侧，会露白
+  const REPEAT = 3;
+  const FRAME_MS = 1000 / 60;
+  // 甩动速度上限（px/帧）：不设上限，一次猛拖能把轨道甩出视野外很长一段
+  const MAX_THROW = 60;
+
+  const root = document.getElementById("marquee");
+  const track = document.getElementById("track");
+  const readout = document.getElementById("readout");
+
+  // 铺轨：原始序列 + 副本。副本标 aria-hidden，别把同一张图重复念给读屏
+  for (let c = 0; c < REPEAT; c++) {
+    for (let i = 0; i < ITEMS.length; i++) {
+      const el = document.createElement("div");
+      el.className = "item";
+      el.dataset.copy = c === 0 ? "original" : "duplicate";
+      if (c > 0) el.setAttribute("aria-hidden", "true");
+      const pic = document.createElement("div");
+      pic.className = "pic " + ITEMS[i].cls;
+      const cap = document.createElement("span");
+      cap.className = "cap";
+      cap.textContent = ITEMS[i].cap;
+      pic.appendChild(cap);
+      el.appendChild(pic);
+      track.appendChild(el);
+    }
+  }
+
+  readout.textContent = "速度 " + PARAMS.SPEED + " px/帧 · 甩动惯性 ×" + PARAMS.THROW + " · 逐帧衰减 " + PARAMS.FRICTION;
+
+  // 减少动效 → 自走位移整体关闭，交还原生横向滚动（内容仍可读、可手动拖）。
+  // 注意：这条只认操作系统偏好。rAF 驱动的位移不受 CSS transition 归零影响，
+  // 所以站点那个「减少动效」开关拦不住它——这是全站 rAF 类 demo 的共同边界。
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    root.classList.add("is-reduced");
+    return;
+  }
+
+  let setWidth = 0;      // 一份序列的宽（含间距）——回绕范围就是它
+  let x = 0;             // 轨道当前位移
+  let velocity = 0;      // 甩动速度（px/帧）
+  let dragging = false;
+  let raf = null;
+  let lastX = 0, lastT = 0;
+
+  const loopMin = () => -setWidth * 1.02;
+  const loopMax = () => 0;
+
+  // 取模回绕：把任意 x 折进 [min,max]。范围恰为一份序列宽，因此折回前后画面完全重合。
+  // 回绕同时治好了长期运行的浮点精度问题——不让 x 一路累加到 10^7 量级
+  function wrap(v, min, max) {
+    const range = max - min;
+    if (!(range > 0)) return v;
+    return min + ((((v - min) % range) + range) % range);
+  }
+
+  function measure() {
+    const kids = Array.from(track.children);
+    const per = Math.floor(kids.length / REPEAT);
+    const first = kids.slice(0, per);
+    if (!first.length) return;
+    const gap = parseFloat(getComputedStyle(track).columnGap || 0) || 0;
+    const sum = first.reduce((s, el) => s + el.getBoundingClientRect().width, 0);
+    setWidth = sum + gap * Math.max(0, first.length - 1);
+  }
+
+  let last = performance.now();
+  function tick(now) {
+    // 掉帧时按真实间隔补偿，最多补 3 帧——否则切回标签页会一次性跳跃一大段
+    const dt = Math.min((now - last) / FRAME_MS, 3);
+    last = now;
+
+    if (!dragging) {
+      x -= PARAMS.SPEED * dt;                       // 自动匀速
+      x += velocity * dt;                           // 甩动惯性
+      velocity *= Math.pow(PARAMS.FRICTION, dt);    // 帧率无关的衰减：60Hz 与 120Hz 停下的距离一致
+      if (Math.abs(velocity) < 0.01) velocity = 0;
+    }
+
+    x = wrap(x, loopMin(), loopMax());
+    track.style.transform = "translate3d(" + x.toFixed(2) + "px,0,0)";
+    raf = requestAnimationFrame(tick);
+  }
+  function start() {
+    if (raf === null) { last = performance.now(); raf = requestAnimationFrame(tick); }
+  }
+
+  // ---- 拖拽接管：按下即停自走，抬起交还并注入甩动速度 ----
+  root.addEventListener("pointerdown", function (e) {
+    dragging = true;
+    velocity = 0;
+    lastX = e.clientX; lastT = performance.now();
+    root.classList.add("is-dragging");
+    // 捕获指针：手滑出容器也不丢事件，否则拖到边缘就断
+    try { root.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  root.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    const now = performance.now();
+    const dx = e.clientX - lastX;
+    const dt = now - lastT;
+    x = wrap(x + dx, loopMin(), loopMax());
+    // 位移÷时间才是速度；上限必须有，否则「慢拖后急停」会算出一个负得离谱的瞬时值
+    if (dt > 0) {
+      const perFrame = (dx / dt) * FRAME_MS;
+      velocity = Math.max(-MAX_THROW, Math.min(MAX_THROW, perFrame * PARAMS.THROW));
+    }
+    lastX = e.clientX; lastT = now;
+  });
+
+  function release(e) {
+    if (!dragging) return;
+    dragging = false;
+    root.classList.remove("is-dragging");
+    try { root.releasePointerCapture(e.pointerId); } catch (_) {}
+  }
+  root.addEventListener("pointerup", release);
+  root.addEventListener("pointercancel", release);   // 触屏纵向滚动会取消水平手势，同样要交还
+
+  // ---- 键盘：聚焦后可拨动。跑马灯对键盘用户不能只是「看着它动」 ----
+  root.addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    x = wrap(x + (e.key === "ArrowLeft" ? 1 : -1) * root.clientWidth * 0.35, loopMin(), loopMax());
+    velocity = 0;
+  });
+
+  // ---- 尺寸回流：一份序列的宽变了，回绕范围必须跟着重算，否则接缝处会抖 ----
+  let resizeRaf = null;
+  function scheduleMeasure() {
+    if (resizeRaf) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(function () {
+      measure();
+      x = wrap(x, loopMin(), loopMax());
+    });
+  }
+  new ResizeObserver(scheduleMeasure).observe(track);
+  addEventListener("resize", scheduleMeasure, { passive: true });
+
+  measure();
+  start();
+})();
+</script>
+</body>
+</html>
