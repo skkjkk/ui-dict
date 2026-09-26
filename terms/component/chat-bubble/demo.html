@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>对话气泡 / 消息流 Chat Bubble · ui-dict C-20</title>
+<style>
+  /* 单文件铁律：系统字体栈、零网络请求、零依赖，双击即可运行。
+     AI 回复的"流式"用 setInterval 本地模拟逐 token 吐字——生产换成 SSE/fetch 流
+     （见脚本注释），demo 里绝不发请求。贴底不跳的主角是 CSS 原生 overflow-anchor。 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 30px; max-width: 560px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #paramline { font-size: 12px; color: #8f8a80; margin: 0 0 12px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+
+  /* ===== 消息流：一个反向滚动锚定的滚动容器 ===== */
+  #flow {
+    position: relative; height: 400px; overflow-y: auto;
+    background: #fff; border: 1px solid #e5e1d8; border-radius: 14px;
+    padding: 16px 14px; overscroll-behavior: contain;   /* 滚到顶/底不把滚动传给页面 */
+  }
+  /* 原生贴底锚定：视口底部的内容"钉住"，上方追加/长高不拽动视野。
+     浏览器默认就是 auto，这里显式写出来是词条的叙事本体；
+     关掉它（none）就能亲眼看到"往上翻被拽回去"的经典 bug。 */
+  .msg { overflow-anchor: auto; }
+  #anchor { overflow-anchor: auto; height: 1px; }        /* 尾部锚点：贴底的抓手 */
+
+  .daysep {
+    display: flex; align-items: center; gap: 10px;
+    margin: 6px 0 14px; font-size: 11.5px; color: #a09a8e;
+  }
+  .daysep::before, .daysep::after { content: ""; flex: 1; height: 1px; background: #efeae1; }
+
+  /* ===== 气泡行：用户右、AI 左 ===== */
+  .msg { display: flex; gap: 8px; margin: 0 0 var(--mgap, 4px); }
+  .msg.user { justify-content: flex-end; }
+  .ava {
+    flex: none; width: 26px; height: 26px; border-radius: 8px;
+    display: grid; place-content: center; font-size: 13px; color: #fff;
+  }
+  .msg.ai .ava { background: #0b4f6c; }
+  .msg .who { display: none; }
+  /* 分组：同角色连续消息，只第一条露头像，其余收紧间距（IM 标准态） */
+  .msg.grouped .ava { visibility: hidden; }
+  .msg.grouped { margin-top: 0; }
+
+  .bubble {
+    position: relative; max-width: min(var(--maxw, 42), 82%);
+    padding: 9px 13px; font-size: 13.5px; line-height: 1.75;
+    border-radius: var(--r, 12px); white-space: pre-wrap; word-break: break-word;
+  }
+  .msg.ai .bubble { background: #f1ede4; color: #26231e; border-bottom-left-radius: 4px; }
+  .msg.user .bubble { background: #0b4f6c; color: #fff; border-bottom-right-radius: 4px; }
+  /* 小尾巴：贴在下角的三角，用伪元素画（SVG 背景图是另一派，伪元素省一个请求位） */
+  .msg.ai .bubble::before {
+    content: ""; position: absolute; left: -5px; bottom: 0;
+    border: 5px solid transparent; border-right-color: #f1ede4; border-bottom: 0;
+  }
+  .msg.user .bubble::before {
+    content: ""; position: absolute; right: -5px; bottom: 0;
+    border: 5px solid transparent; border-left-color: #0b4f6c; border-bottom: 0;
+  }
+  .time { display: block; font-size: 10.5px; margin-top: 3px; opacity: .55; }
+
+  /* 流式光标：一个 blink 的方块，吐字结束由 JS 摘掉 */
+  .caret { display: inline-block; width: 7px; height: 14px; margin-left: 2px;
+    background: #0b4f6c; vertical-align: -2px; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* 回到底部浮钮：用户上翻时出现（IO 哨兵判定"贴底与否"） */
+  #bottomBtn {
+    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+    border: 1px solid #cfc9bd; background: #fff; color: #0b4f6c;
+    font: inherit; font-size: 12px; padding: 6px 14px; border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.12); cursor: pointer;
+    opacity: 0; pointer-events: none; transition: opacity .18s ease;
+  }
+  #bottomBtn.show { opacity: 1; pointer-events: auto; }
+
+  /* ===== 输入区 ===== */
+  .composer { display: flex; gap: 8px; margin-top: 12px; align-items: flex-end; }
+  #ta {
+    flex: 1; resize: none; border: 1px solid #cfc9bd; border-radius: 12px;
+    font: inherit; font-size: 13.5px; line-height: 1.7; padding: 9px 12px;
+    max-height: calc(1.7em * 3 + 20px);        /* ≤3 行自增高的硬顶 */
+    outline: none; background: #fff;
+  }
+  #ta:focus { border-color: #0b4f6c; box-shadow: 0 0 0 3px rgba(11,79,108,.12); }
+  #send {
+    flex: none; border: 0; border-radius: 12px; background: #141414; color: #fff;
+    font: inherit; font-size: 13.5px; padding: 10px 18px; cursor: pointer;
+  }
+  #send:disabled { opacity: .45; cursor: not-allowed; }
+  .tip { font-size: 11.5px; color: #8f8a80; margin: 8px 2px 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .caret { animation: none; }
+    #bottomBtn { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <h1>对话气泡 / 消息流 Chat Bubble / Message Flow</h1>
+  <p class="lead">演示词条 C-20。发一条消息 → AI <b>逐字吐出</b>回答（本地模拟流式，零请求）。
+    两个维度分开看：<b>气泡</b>是单条形态（尾巴、分组、左右角色）；<b>消息流</b>是容器行为
+    （贴底不跳——靠原生 <code>overflow-anchor</code>，往上翻历史不会被新消息拽回底部，
+    浮出「回到底部」钮）。<code>Enter</code> 发送、<code>Shift+Enter</code> 换行、输入框最多长到 3 行。</p>
+  <p id="paramline"></p>
+
+  <div id="flow" role="log" aria-live="polite" aria-label="对话消息流">
+    <div class="daysep" aria-hidden="true">今天 14:02</div>
+    <div class="msg ai">
+      <span class="ava" aria-hidden="true">✦</span>
+      <div class="bubble">你好，我是词典助手。发一条消息试试流式回复；往<span class="time">14:02</span></div>
+    </div>
+    <div class="msg user">
+      <div class="bubble">「鼠标靠近就被吸过去」的组件叫什么？<span class="time">14:03</span></div>
+    </div>
+    <div class="msg ai">
+      <span class="ava" aria-hidden="true">✦</span>
+      <div class="bubble">它叫磁吸按钮（Magnetic Button）——本词典 M-01 词条，别名里就有你这句话。<span class="time">14:03</span></div>
+    </div>
+    <div class="msg ai grouped">
+      <span class="ava" aria-hidden="true">✦</span>
+      <div class="bubble">要不要再发一条，观察连续消息的分组收紧效果？<span class="time">14:03</span></div>
+    </div>
+    <button id="bottomBtn" type="button">↓ 回到底部</button>
+    <div id="anchor" aria-hidden="true"></div>
+  </div>
+
+  <form class="composer" id="form">
+    <textarea id="ta" rows="1" placeholder="输入消息，Enter 发送 / Shift+Enter 换行" aria-label="消息输入框"></textarea>
+    <button id="send" type="submit">发送</button>
+  </form>
+  <p class="tip">生产接线：把打字机换成 fetch 流式响应逐 chunk append（代码里有注释位）；demo 零网络请求。</p>
+</main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "MAXW": 42, "RADIUS": 12, "TYPE_MS": 26 };
+  /* ui-dict:params:end */
+  // 参数样板（≤15 行）
+  const root = document.documentElement.style;
+  root.setProperty("--maxw", PARAMS.MAXW + "ch");
+  root.setProperty("--r", PARAMS.RADIUS + "px");
+  document.getElementById("paramline").textContent =
+    "当前参数：MAXW = " + PARAMS.MAXW + " ch · RADIUS = " + PARAMS.RADIUS +
+    " px · TYPE_MS = " + PARAMS.TYPE_MS + " ms/字符";
+
+  const flow = document.getElementById("flow");
+  const anchor = document.getElementById("anchor");
+  const btn = document.getElementById("bottomBtn");
+  const form = document.getElementById("form");
+  const ta = document.getElementById("ta");
+  const send = document.getElementById("send");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const REPLY = "这叫对话气泡（Chat Bubble），整条滚动容器叫消息流（Message Flow）。\n\n你现在正观察它的三个工程点：同角色连续消息分组收紧、流式逐字吐字、以及 overflow-anchor 贴底锚定——试着在下一条回复打到一半时往上滚动，视野不会被拽回底部。";
+  let busy = false, lastRole = "ai";
+
+  const hhmm = () => new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+
+  // ---- 追加一条消息：分组判定 + 可选贴底 ----
+  function push(role, text) {
+    const row = document.createElement("div");
+    row.className = "msg " + role + (role === lastRole ? " grouped" : "");
+    lastRole = role;
+    if (role === "ai") {
+      const ava = document.createElement("span");
+      ava.className = "ava"; ava.setAttribute("aria-hidden", "true"); ava.textContent = "✦";
+      row.append(ava);
+    }
+    const b = document.createElement("div");
+    b.className = "bubble";
+    b.append(text);
+    const t = document.createElement("span");
+    t.className = "time"; t.textContent = hhmm();
+    b.append(t);
+    row.append(b);
+    flow.insertBefore(row, btn);
+    if (atBottom) flow.scrollTop = flow.scrollHeight;   // 只有本来就贴底才跟到底
+    return b;
+  }
+
+  // ---- 贴底判定：IntersectionObserver 哨兵（挂在尾部 1px 锚点上）----
+  let atBottom = true;
+  new IntersectionObserver((es) => {
+    atBottom = es[0].isIntersecting;
+    btn.classList.toggle("show", !atBottom);
+  }, { root: flow, threshold: 0 }).observe(anchor);
+  btn.addEventListener("click", () => { flow.scrollTop = flow.scrollHeight; });
+
+  // ---- 打字机（本地模拟流式）。生产替换位：
+  //      const es = res.body.getReader(); while (chunk = await es.read()) bubble.append(解码)
+  //      两种来源对下游是同一条"边到边 append"路径，锚定行为完全一致。----
+  function streamInto(bubble, text) {
+    if (reduce) { bubble.insertBefore(document.createTextNode(text), bubble.firstChild); return finish(); }
+    const caret = document.createElement("span");
+    caret.className = "caret";
+    bubble.insertBefore(caret, bubble.querySelector(".time"));
+    let i = 0;
+    const timer = setInterval(() => {
+      // 每次 2~4 个码点：模拟 token 批量到达，不逐字母做作
+      const step = 2 + (i % 3 === 0 ? 1 : 0);
+      caret.before(document.createTextNode([...text].slice(i, i + step).join("")));
+      i += step;
+      if (atBottom) flow.scrollTop = flow.scrollHeight;   // 流式跟随：只在贴底时钉住底部
+      if (i >= text.length) { clearInterval(timer); caret.remove(); finish(); }
+    }, PARAMS.TYPE_MS);
+  }
+  function finish() { busy = false; send.disabled = false; ta.focus(); }
+
+  // ---- 发送 ----
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = ta.value.trim();
+    if (!text || busy) return;
+    busy = true; send.disabled = true;
+    push("user", text);
+    ta.value = ""; grow();
+    const b = push("ai", "");
+    setTimeout(() => streamInto(b, REPLY), 420);   // 首 token 延迟的手感（TTFT）
+  });
+  // Enter 发送 / Shift+Enter 换行
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {   // isComposing：输入法组词中不发送
+      e.preventDefault(); form.requestSubmit();
+    }
+  });
+  // textarea 自增高 ≤3 行
+  const grow = () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 96) + "px"; };
+  ta.addEventListener("input", grow);
+
+  flow.scrollTop = flow.scrollHeight;
+})();
+</script>
+</body>
+</html>

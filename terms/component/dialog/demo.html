@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模态对话框 Modal Dialog · ui-dict C-13</title>
+<style>
+  /* 单文件铁律：系统字体栈、零网络请求、零依赖，双击即可运行。
+     本 demo 的"模态五件套"（top-layer / 遮罩 / Esc / 焦点陷阱 / 背景 inert）
+     全部由 <dialog> + showModal() 白送，JS 只负责"点遮罩关"的降级与状态回显。 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 44px; max-width: 620px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #paramline { font-size: 12px; color: #8f8a80; margin: 0 0 18px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+  .card {
+    background: #fff; border: 1px solid #e5e1d8; border-radius: 12px; padding: 18px;
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .row p { margin: 0; font-size: 13.5px; }
+  .row small { display: block; color: #8f8a80; font-size: 12px; margin-top: 3px; line-height: 1.6; }
+  button.act {
+    border: 1px solid #b3392f; background: #fff; color: #b3392f;
+    padding: 8px 14px; border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; flex: none;
+  }
+  button.act:hover { background: #b3392f; color: #fff; }
+  button.act:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  #result { margin: 14px 0 0; font-size: 13px; color: #44403a; }
+  #result b { color: #0b4f6c; }
+  #result b.no { color: #8f8a80; }
+  .hintline { font-size: 12px; color: #8f8a80; margin: 14px 0 0; line-height: 1.9; }
+  .hintline b { color: #0b4f6c; font-weight: 600; }
+
+  /* ===== dialog 本体 =====
+     UA 默认给 dialog 加了居中与 max-width；padding:0 是因为圆角归容器、内部再分节留白。 */
+  dialog#dlg {
+    border: 1px solid #e5e1d8; border-radius: var(--r, 14px); padding: 0;
+    width: min(420px, calc(100vw - 32px));
+    color: #1a1a1a; background: #fff;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .22);
+  }
+  .dlg-head { padding: 20px 22px 0; }
+  .dlg-head h2 { font-size: 16.5px; margin: 0 0 6px; }
+  .dlg-head p { font-size: 13.5px; color: #6b675f; margin: 0; line-height: 1.75; }
+  .danger {
+    margin: 16px 22px 0; padding: 12px 14px; border-radius: calc(var(--r, 14px) - 6px);
+    background: #fdf3f2; border: 1px solid #f0d8d5;
+    font-size: 13px; color: #8a3a2e; line-height: 1.7;
+  }
+  .dlg-foot {
+    margin-top: 20px; padding: 14px 22px; display: flex; justify-content: flex-end; gap: 10px;
+    border-top: 1px solid #f0ece4; background: #fbfaf7;
+    border-radius: 0 0 var(--r, 14px) var(--r, 14px);
+  }
+  .dlg-foot button {
+    font: inherit; font-size: 13.5px; cursor: pointer; padding: 9px 16px; border-radius: 8px;
+    border: 1px solid #cfc9bd; background: #fff; color: #1a1a1a;
+  }
+  .dlg-foot button:hover { background: #f1ede4; }
+  .dlg-foot button.primary { border-color: #b3392f; background: #b3392f; color: #fff; }
+  .dlg-foot button.primary:hover { background: #9c2f26; }
+  .dlg-foot button:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+
+  /* 遮罩：SCRIM 参数只认这个变量。showModal 自带 ::backdrop，不需要手写遮罩 div。 */
+  dialog#dlg::backdrop { background: rgba(10, 8, 6, var(--scrim, .45)); }
+
+  /* ===== 开合动画：@starting-style + allow-discrete，整段包 @supports =====
+     不支持时 dialog 瞬开瞬合、功能不受影响（降级可见原则）。
+     dialog 显隐是 display 级别的切换，必须 allow-discrete 才谈得上下滑入场。 */
+  @supports (transition-behavior: allow-discrete) {
+    dialog#dlg, dialog#dlg::backdrop {
+      transition: opacity var(--dur, 220ms) ease,
+                  transform var(--dur, 220ms) cubic-bezier(.2,.8,.2,1),
+                  overlay var(--dur, 220ms) allow-discrete,
+                  display var(--dur, 220ms) allow-discrete;
+    }
+    dialog#dlg { opacity: 0; transform: translateY(10px) scale(.98); }
+    dialog#dlg::backdrop { opacity: 0; }
+    dialog#dlg[open] { opacity: 1; transform: none; }
+    dialog#dlg[open]::backdrop { opacity: 1; }
+    @starting-style {
+      dialog#dlg[open] { opacity: 0; transform: translateY(10px) scale(.98); }
+      dialog#dlg[open]::backdrop { opacity: 0; }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    dialog#dlg, dialog#dlg::backdrop { transition: none !important; transform: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <h1>模态对话框 Modal Dialog</h1>
+  <p class="lead">演示词条 C-13。点「删除」唤出一个<b>真</b> <code>&lt;dialog&gt;</code>：
+    按 <code>Esc</code> 能关、按 <code>Tab</code> 会发现焦点被困在弹窗里（背景页面读屏都到不了）、
+    点遮罩能关、底部两个按钮——<b>取消 / 确认删除都是 <code>&lt;form method="dialog"&gt;</code>
+    的原生 0 JS 关闭</b>，页面只监听一个 <code>close</code> 事件读结果。
+    打开按钮走 <code>commandfor="dlg" command="show-modal"</code>（invoker commands，
+    Chrome 135+ / Safari 26+ / Firefox 144+），未 ship 的浏览器由 JS 兜底绑 click——
+    两条路互斥，否则 showModal 会抛 InvalidStateError。</p>
+  <p id="paramline"></p>
+
+  <div class="card">
+    <div class="row">
+      <p>永久删除这条记录？
+        <small>删除后无法恢复，相关订单记录一并清除。</small>
+      </p>
+      <button class="act" type="button" id="openBtn" commandfor="dlg" command="show-modal">删除</button>
+    </div>
+    <p id="result">当前状态：<b class="no">未操作</b></p>
+    <p class="hintline">本浏览器三条轨道：<b id="trackCmd"></b> ｜ <b id="trackClosed"></b> ｜ showModal 的遮罩/Esc/焦点陷阱/inert 永远白送。</p>
+  </div>
+
+  <!-- closedby="any"：任意退路（遮罩/Esc/失焦）皆可关（Chrome 134+，支持面窄）。
+       未支持时由 JS 做"点在 dialog 矩形外 = 关闭"的坐标判定兜底。 -->
+  <dialog id="dlg" aria-labelledby="dlgTitle" closedby="any">
+    <form method="dialog">
+      <div class="dlg-head">
+        <h2 id="dlgTitle">删除这条记录？</h2>
+        <p>这个动作不可撤销。关联的 12 条订单明细会一并移除。</p>
+      </div>
+      <p class="danger">确认后记录立即消失，导出任务与共享链接同时失效。</p>
+      <div class="dlg-foot">
+        <!-- value 即 close 事件里的 returnValue：表单原生，0 JS 关闭 -->
+        <button value="cancel" type="submit">取消</button>
+        <button value="confirm" type="submit" class="primary">确认删除</button>
+      </div>
+    </form>
+  </dialog>
+</main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "RADIUS": 14, "SCRIM": 0.45, "DUR": 220 };
+  /* ui-dict:params:end */
+  // 参数样板（≤15 行，不计入 jsLines 承诺）：滑杆值 → CSS 变量，全站单一来源
+  const root = document.documentElement.style;
+  root.setProperty("--r", PARAMS.RADIUS + "px");
+  root.setProperty("--scrim", String(PARAMS.SCRIM));
+  root.setProperty("--dur", PARAMS.DUR + "ms");
+  document.getElementById("paramline").textContent =
+    "当前参数：RADIUS = " + PARAMS.RADIUS + " px · SCRIM = " + PARAMS.SCRIM +
+    " · DUR = " + PARAMS.DUR + " ms";
+
+  const dlg = document.getElementById("dlg");
+  const openBtn = document.getElementById("openBtn");
+  const result = document.getElementById("result");
+
+  // ---- 能力探测：三条轨道各写一句人话，降级对用户可见 ----
+  const supportsInvoker = "commandFor" in HTMLButtonElement.prototype;
+  const supportsClosedBy = "closedBy" in HTMLDialogElement.prototype;
+  document.getElementById("trackCmd").textContent =
+    supportsInvoker ? "commandfor 支持 → 开弹窗 0 行 JS" : "commandfor 未 ship → JS click 兜底";
+  document.getElementById("trackClosed").textContent =
+    supportsClosedBy ? "closedby 支持 → 点遮罩关平台包办" : "closedby 未 ship → JS 坐标判定兜底";
+
+  // ---- 开关：声明式优先，未支持才绑 JS（两条都跑会双触发）----
+  if (!supportsInvoker) {
+    openBtn.addEventListener("click", () => dlg.showModal());
+  }
+
+  // ---- 点遮罩关闭的降级路径 ----
+  // 原理：点击 ::backdrop 时事件目标是 dialog 本身（backdrop 不是元素节点），
+  // 再拿 client 坐标和 getBoundingClientRect 比对，矩形外 = 点在遮罩上。
+  if (!supportsClosedBy) {
+    dlg.addEventListener("click", (e) => {
+      if (e.target !== dlg) return;
+      const r = dlg.getBoundingClientRect();
+      const outside =
+        e.clientX < r.left - 8 || e.clientX > r.right + 8 ||
+        e.clientY < r.top - 8 || e.clientY > r.bottom + 8;
+      if (outside) dlg.close("cancel");
+    });
+  }
+
+  // ---- 唯一的交互 JS：读 returnValue 回显状态。
+  //      焦点陷阱、滚动锁、背景 inert、Esc、焦点归还——一行都没写，全是 showModal 白送。----
+  dlg.addEventListener("close", () => {
+    const rv = dlg.returnValue || "cancel";
+    result.innerHTML = rv === "confirm"
+      ? "当前状态：<b>已删除</b>（returnValue = \"" + rv + "\"）"
+      : "当前状态：<b class='no'>已取消</b>（returnValue = \"" + rv + "\"）";
+  });
+})();
+</script>
+</body>
+</html>

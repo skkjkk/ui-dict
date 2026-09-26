@@ -1,0 +1,90 @@
+{
+  "id": "switch",
+  "no": "C-17",
+  "category": "component",
+  "nameZh": "开关",
+  "nameEn": "Switch / Toggle",
+  "aliases": [
+    "啪嗒拨过去的小开关",
+    "on/off 滑块",
+    "设置页右边那一排圆钮",
+    "拨一下变蓝的那个条",
+    "能不能收到通知的那个钮",
+    "Toggle Switch"
+  ],
+  "definition": "一个拨动即改变并立刻执行的系统状态控件：轨道 + 可滑旋钮两态（on/off），拨下去的那一刻事情就生效，不需要「保存」按钮。它与复选框的分工是 APG 写进规范的行为分界——Switch = 即时生效（设置页、通知开关），Checkbox = 提交生效（表单里勾选、点提交才算数）；形态能互相模仿，语义轴看「生效时机」这一条。实现上它是零依赖绿区之王：appearance:none 重绘一个原生 checkbox，状态、键盘、表单、读屏全白送，交互 JS 0 行（Uiverse 社区 260+ 个 toggle 存量件证明这是开发者最强共鸣点）。隐藏 input 必须用 clip-path 不许 display:none——后者会连键盘焦点和读屏播报一起丢掉。",
+  "whenNotToUse": [
+    "值要连同表单一起提交、点提交才生效 → 用 Checkbox，给即时生效的 Switch 语义会骗人",
+    "选项多于两个或需要「三态」（开/关/跟随系统）→ 用 Radio Group 或 Select，两态滑块装不下第三种状态",
+    "动作是「执行一下」而不是「停在某态」（点赞、收藏瞬间）→ 用按钮，Switch 的旋钮会骗用户以为可以拨回来",
+    "需要承载原因/后果说明的复杂授权（如「允许所有 Cookie」）→ 用带解释文案的 Radio 对或弹层确认，滑块太安静、压不住决策重量",
+    "同一屏幕一堆开关全部即时写服务器 → 不是控件选型问题，但词条提醒：即时生效 = 每次拨动一次请求，批量场景先攒 diff 再提交（或改回 Checkbox + 保存按钮）"
+  ],
+  "confusedWith": ["checkbox", "segmented-control", "otp-input"],
+  "anatomy": [
+    { "part": "Track 轨道", "note": "胶囊底槽；label 的 ::before 伪元素画，宽度 {W}px、颜色随选中态过渡" },
+    { "part": "Thumb 旋钮", "note": "圆形滑块，::after 画；位移只走 transform: translateX(轨道宽-旋钮宽的一半)，禁 left/margin 逐帧" },
+    { "part": "Hidden input 状态寄存器", "note": "真 checkbox，clip-path 藏身；checked 状态、空格切换、表单值、aria-checked 映射全由它白送" },
+    { "part": "Label 热区", "note": "for 指到 input，整块 label（含 8px padding 补出来的 44px 触控高）都是可点区" },
+    { "part": "状态文案", "note": "可选的旁边说明；用 :has(:checked) 纯 CSS 改写 ::after 内容，即时生效的可见证据" }
+  ],
+  "nativePath": "css-only",
+  "implSchool": ["css-state", "semantic-native"],
+  "jsLines": 0,
+  "promptTemplate": {
+    "core": "实现一个 Switch 开关（设置页形态，0 行交互 JS）：每行左标题右开关；开关本体是一个视觉隐藏的 <input type=\"checkbox\" role=\"switch\">（用 position:absolute + clip-path:inset(50%) 隐藏，禁 display:none——会丢键盘焦点与读屏播报）紧跟一个 <label for> 画皮：label 用 inline-grid 叠放两个伪元素，::before 是轨道（宽 {W}px、高 {D}+4px、圆角 999px、灰底 #d8d2c6），::after 是白色旋钮（{D}px 圆、阴影 0 1px 3px rgba(0,0,0,.28)、默认 translateX 偏左）。状态样式用兄弟选择器 input:checked ~ .sw 改写：轨道变主色 #0b4f6c、旋钮 translateX 到右，过渡 {DUR}ms cubic-bezier(.2,.8,.2,1)——位移只允许 transform。热区：label 带 8px padding 补出 ≥44px 触控高。行为证据：页脚一行「邮件摘要：{状态文案}」用 body:has(#s1:checked) .status::after{content:\"已开启 · …\"} 改写，默认「已关闭」——这行字实时变化就是「开关即时生效」语义的可见演示（生产里此处接 change→PATCH 请求）。附一个未重绘的原生 checkbox「同意服务条款」作对照：Checkbox=提交生效 vs Switch=即时生效，两行同屏。含一个 disabled 态（opacity .45 + not-allowed）。键盘：空格切换、focus-visible 轨道外描边 2px 主色——全部原生白送，验收清单逐项检查。prefers-reduced-motion 下 transition 归零。",
+    "stack": "纯 HTML + 纯 CSS（checkbox 状态机 + :checked~ + :has()）；交互 JS 0 行，参数滑杆样板除外。",
+    "constraints": [
+      "不要用 display:none 隐藏 input——焦点、读屏、表单提交三者全丢；clip-path/宽度 1px 的「视觉隐藏」才是正解",
+      "不要用 div + JS 管一个布尔态——原生 checkbox 已经把键盘空格、表单值、aria-checked（role=switch 映射）办完，自管只该出现在需要 indeterminate 三态或异步确认的场景",
+      "旋钮位移不要写 left/right/width 过渡——逐帧重排掉帧；transform: translateX 单属性合成器友好",
+      "不要用 role=\"switch\" 配 <button> 然后忘管 aria-checked——借 checkbox 语义时 role 是补丁不是装饰；如果非 button 不可（需要提交前拦截），aria-checked 必须随点击同步",
+      "label 的 for 必须指到 input 的 id——忘写 for 时点 label 不切换，只剩 1px 的 input 本体可点，移动端直接不可用",
+      "不要把「即时生效」的开关放进一个还带『保存』按钮的表单——两种生效心智同屏打架；全部即时就删保存，要保存就全换 checkbox",
+      "不要漏 disabled 与 :focus-visible 两态——设置页一半的开关在某些账号下是关不掉的"
+    ],
+    "verify": [
+      "拨动开关，旋钮平滑滑到另一端、轨道变主色；再拨回，全部逆动作对称",
+      "Tab 聚焦开关有 2px 外描边；空格键切换（不需要鼠标）；读屏播报「邮件摘要，开，开关」（可开 DevTools Accessibility 树复验 role=switch）",
+      "页脚状态行随第一个开关实时变化（「已关闭」↔「已开启 · …」），全程无 JS——DevTools 禁用 JS 后全部行为不变（参数滑杆除外）",
+      "disabled 的第三行点不动、Tab 跳过、视觉半透明",
+      "对照行的原生复选框是方框皮且无即时文案——两种生效心智肉眼可辨",
+      "移动端模拟下点击整行右侧 44px 高度区域都能命中切换"
+    ],
+    "reference": "参考气质：iOS 设置页的一排开关（绿轨道白旋钮、跟手回弹克制）；GitHub 通知设置行（左标题右滑块、行分隔线）。安静、即时、不弹窗道歉。",
+    "variants": [
+      { "label": "异步确认版", "delta": "拨动后先回弹到原位 + 轨道内转 spinner，请求成功才落位（失败 revert 并 toast）——代价是必须上 JS（fetch + aria-checked 同步），0 行承诺作废，写清这是「即时生效语义」的诚实代价" },
+      { "label": "三态 indeterminate", "delta": "父开关接 checkbox 的 .indeterminate 属性（仅 JS 可设）：全选/半选/全不选——开关本体两态为铁律，三态需求请改 Radio/Checkbox 树，此变体演示「为什么 Switch 规范不收三态」" }
+    ]
+  },
+  "params": [
+    { "key": "W", "label": "轨道宽 (px)", "def": 44, "min": 32, "max": 64, "step": 2, "hint": "iOS 标准 51、Material 36；<40 时旋钮行程短到看不出拨过" },
+    { "key": "D", "label": "旋钮径 (px)", "def": 24, "min": 16, "max": 34, "step": 2, "hint": "≈ 轨道高-4；旋钮比轨道大是 Material 3 的新皮，两套规范别混" },
+    { "key": "DUR", "label": "拨动时长 (ms)", "def": 180, "min": 0, "max": 400, "step": 10, "hint": ">280 会显得「拨不动」；开关要的是啪嗒一下的手感" }
+  ],
+  "scenarios": [
+    "iOS / Android 系统设置页的全部功能开关（飞行模式、通知、定位）",
+    "GitHub 设置 → Notifications 的逐项开关行",
+    "应用内「深色模式 / 自动播放 / 节省流量」偏好开关",
+    "后台功能灰度开关（配合 disabled 态锁给部分角色）",
+    "反面对照：注册页「我已阅读并同意条款」——那是 Checkbox（提交生效）的主场，别用 Switch"
+  ],
+  "pitfalls": [
+    "隐藏 input 用 display:none 是 0 JS 流派的第一号事故：Chrome 与 Firefox 会把不可见表单控件整个踢出 Tab 序与可访问性树——鼠标能点、键盘与读屏全瞎，而且测试用鼠标点两轮根本发现不了；正解是「视觉隐藏」四件套（position:absolute + 1px + clip-path:inset(50%) + margin:-1px），控件还在树上只是看不见的",
+    "appearance:none 之后 checkbox 在 iOS Safari 有历史强制（旧版最小 24px 点击区强改），而完全重绘后轨道尺寸归你管——但热区仍然要 ≥44px：拇指命中率和视觉尺寸是两件事，label 的 padding 就是热区，轨道小不打紧",
+    "role=\"switch\" 加在原生 checkbox 上是白送的语义映射：读屏按 switch 模式播报「开/关」而不是「已勾选」，aria-checked 随 checked 属性自动同步——反过来用 <button role=switch> 就得自己同步 aria-checked，漏一次读写屏就说错话；「借原生控件的语义、只重绘皮」正是开关成为 0 JS 标本的原因",
+    "CSS 永远改不了 ARIA 属性：:checked 能改伪元素 content、能改兄弟样式，改不动 aria-expanded 这类 DOM 属性——所以开关可以 0 JS（checked↔aria-checked 是原生联动），而 Tabs/手风琴的 0 JS 版本都欠语义债；这条分界线就是「什么时候 0 JS 是真的、什么时候是假象」的判据",
+    "即时生效的开关每一次拨动都是一次写请求：批量设置页（十几个开关）逐条 PATCH 会让用户感觉「拨一下卡一下」，正解是 debounce 合并 + 失败 revert（变体里那版异步确认）；嫌麻烦就把整页改回 checkbox + 保存按钮——生效时机是产品决策，控件只是它的翻译",
+    "indeterminate 三态不是开关的属性是复选框的：HTML 里它是 .indeterminate DOM 属性（仅 JS 可设、无对应标记属性、语义=「子项有选有不选」）——把它安在 Switch 上会得到一个「拨了不知道去哪」的控件；两态滑块 + 三态需求 = 选型错误，该换 Checkbox 树"
+  ],
+  "related": ["checkbox", "segmented-control", "tag-input", "file-upload"],
+  "refs": [
+    "https://www.w3.org/WAI/ARIA/apg/patterns/switch/",
+    "https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/switch_role",
+    "https://m3.material.io/components/switch/guidelines"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.4)", "reviewer": "skkjkk", "date": "2026-09-27" }
+  ],
+  "verifiedWith": "Qwen3.8-Flash · replay 2026-09-26 · 1/1 生成通过"
+}

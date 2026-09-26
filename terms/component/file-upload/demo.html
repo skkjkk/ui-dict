@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文件上传 / 拖放区 File Upload · ui-dict C-19</title>
+<style>
+  /* 单文件铁律：系统字体栈、零网络请求、零依赖，双击即可运行。
+     本页绝不发网络请求：预览走 FileReader.readAsDataURL（本地读盘 → data: URI）。
+     生产接口的样子写在 drop 处理的注释里，不实现。 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 46px; max-width: 620px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #paramline { font-size: 12px; color: #8f8a80; margin: 0 0 18px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+  .card { background: #fff; border: 1px solid #e5e1d8; border-radius: 14px; padding: 18px; }
+
+  /* ===== 拖放区：既是 label（点它开系统文件框，0 JS）又是 drop 目标 =====
+     双身份是本词条最漂亮的一处：label 代理给了"无 JS 也能选文件"的底座，
+     JS 只负责加拖放与预览两条增强。 */
+  #zone {
+    display: grid; place-items: center; gap: 4px;
+    min-height: var(--dz, 160px); padding: 18px;
+    border: var(--bw, 2px) dashed #cfc9bd; border-radius: 12px;
+    background: #fbfaf7; color: #6b675f; cursor: pointer; text-align: center;
+    transition: border-color .18s ease, background .18s ease, transform .18s cubic-bezier(.2,.8,.2,1);
+  }
+  #zone:hover { border-color: #0b4f6c; color: #1a1a1a; }
+  #zone.drag {                          /* 拖入高亮态：JS 用计数法维护这个类 */
+    border-color: #0b4f6c; border-style: solid; background: #eef4f7;
+    transform: scale(1.01); color: #0b4f6c;
+  }
+  #zone .big { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+  #zone .small { font-size: 12.5px; line-height: 1.8; }
+  #zone .ico { font-size: 26px; line-height: 1; opacity: .75; }
+  #zone:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+
+  /* 真 input 视觉隐藏但可聚焦（键盘/读屏要它活着） */
+  #ipt { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); margin: -1px; }
+
+  /* ===== 缩略图网格 ===== */
+  #grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  figure { margin: 0; width: var(--thumb, 92px); }
+  figure img {
+    width: var(--thumb, 92px); height: var(--thumb, 92px); object-fit: cover;
+    border-radius: 8px; border: 1px solid #e5e1d8; background: #f1ede4; display: block;
+  }
+  figure.noimg {
+    width: var(--thumb, 92px); height: var(--thumb, 92px); border-radius: 8px;
+    border: 1px solid #e5e1d8; background: #f1ede4;
+    display: grid; place-content: center; gap: 2px; text-align: center;
+  }
+  figure.noimg .fi { font-size: 22px; }
+  figure.noimg .ft { font-size: 11px; color: #8f8a80; }
+  figcaption { font-size: 11px; color: #8f8a80; margin-top: 4px; line-height: 1.5; word-break: break-all; }
+
+  /* 文件名回显 chip（上传组件的子模式：文件列表行） */
+  #chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .fchip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #eef4f7; border: 1px solid #cfdfe8; color: #0b4f6c;
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  }
+  #readout { font-size: 12.5px; color: #44403a; margin: 14px 0 0; line-height: 1.8; }
+  #readout b { color: #0b4f6c; }
+  #readout .bad { color: #b3392f; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #zone { transition: none !important; transform: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <h1>文件上传 / 拖放区 File Upload · Dropzone</h1>
+  <p class="lead">演示词条 C-19。三条通道收同一份 <code>FileList</code>：
+    ① <b>点虚线框</b>开系统文件框（label 代理，0 JS 就能用）；
+    ② <b>把图片拖进来</b>（dragenter/dragleave 计数法判"真的离开了"）；
+    ③ <b>Ctrl/Cmd+V 粘贴</b>截图。
+    图片用 <code>FileReader.readAsDataURL</code> 本地读成缩略图——<b>全程零网络请求</b>，
+    生产上传是 drop 之后另一步（注释里给了 fetch 表单的正确姿势）。非图片文件回退成文件图标 + 大小。</p>
+  <p id="paramline"></p>
+
+  <div class="card">
+    <!-- label 包 input：点 label = 点 input，这是"零 JS 可用底座" -->
+    <label id="zone" for="ipt" tabindex="0" role="button"
+           aria-label="把图片拖到此处，或点击选择文件；也支持粘贴">
+      <span class="ico" aria-hidden="true">⬆︎</span>
+      <span class="big">把图片拖到这里</span>
+      <span class="small">或点击选择 · 支持粘贴截图 · 单文件 ≤ 5 MB</span>
+    </label>
+    <input id="ipt" type="file" multiple accept="image/*">
+
+    <div id="chips"></div>
+    <div id="grid"></div>
+    <p id="readout">当前：<b>0 个文件</b> · 累计 0 KB</p>
+  </div>
+</main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "ZONE_H": 160, "THUMB": 92, "BORDER": 2 };
+  /* ui-dict:params:end */
+  // 参数样板（≤15 行）
+  const root = document.documentElement.style;
+  root.setProperty("--dz", PARAMS.ZONE_H + "px");
+  root.setProperty("--thumb", PARAMS.THUMB + "px");
+  root.setProperty("--bw", PARAMS.BORDER + "px");
+  document.getElementById("paramline").textContent =
+    "当前参数：ZONE_H = " + PARAMS.ZONE_H + " px · THUMB = " + PARAMS.THUMB +
+    " px · BORDER = " + PARAMS.BORDER + " px";
+
+  const zone = document.getElementById("zone");
+  const ipt = document.getElementById("ipt");
+  const grid = document.getElementById("grid");
+  const chips = document.getElementById("chips");
+  const readout = document.getElementById("readout");
+  const KB = (n) => (n / 1024).toFixed(n < 10240 ? 1 : 0);
+  const files = [];
+
+  // ===== 拖放：dragenter/dragleave 计数法 =====
+  // 子元素（图标、文字）也会各自触发 enter/leave，直接判 leave 会让高亮疯狂闪烁；
+  // 所以 enter ++ / leave --，归零才是"真的离开了这个区域"。
+  let depth = 0;
+  zone.addEventListener("dragenter", (e) => { e.preventDefault(); depth++; zone.classList.add("drag"); });
+  zone.addEventListener("dragover",  (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+  zone.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; zone.classList.remove("drag"); } });
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    depth = 0; zone.classList.remove("drag");
+    accept(e.dataTransfer.files);
+    // 生产形态（本 demo 不发请求，铁律）：
+    //   const fd = new FormData(); fd.append("file", file);
+    //   fetch("/api/upload", { method: "POST", body: fd });
+  });
+  document.addEventListener("dragover", (e) => e.preventDefault());   // 拦"浏览器直接打开文件"
+  document.addEventListener("drop", (e) => e.preventDefault());
+
+  // ===== 整页粘贴：截图直接进来 =====
+  document.addEventListener("paste", (e) => {
+    const list = Array.from(e.clipboardData?.files ?? []);
+    if (list.length) accept(list);
+  });
+
+  // ===== 统一入口：校验 → 存数组 → 渲染 =====
+  function accept(list) {
+    let rejected = 0;
+    for (const f of list) {
+      if (f.size > 5 * 1024 * 1024) { rejected++; continue; }   // 5 MB 闸门
+      files.push(f);
+    }
+    render();
+    if (rejected) flashRejected(rejected);
+  }
+  function flashRejected(n) {
+    readout.innerHTML = '<span class="bad">已拒绝 ' + n + ' 个超过 5 MB 的文件</span> · 当前：<b>' +
+      files.length + ' 个文件</b> · 累计 ' + KB(total()) + ' KB';
+  }
+  const total = () => files.reduce((s, f) => s + f.size, 0);
+
+  function render() {
+    grid.textContent = ""; chips.textContent = "";
+    files.forEach((f, i) => {
+      // 文件名回显 chip：删除入口也在这里（事件委托，见下）
+      const c = document.createElement("span");
+      c.className = "fchip";
+      c.innerHTML = '<span aria-hidden="true">📄</span>' + escapeHtml(f.name) +
+        " (" + KB(f.size) + " KB)　<a href=\"#\" data-rm=\"" + i + "\" aria-label=\"移除 " + escapeHtml(f.name) + "\">移除</a>";
+      chips.append(c);
+
+      if (f.type.startsWith("image/")) {
+        const fig = document.createElement("figure");
+        const img = document.createElement("img");
+        img.alt = "预览：" + f.name;
+        const cap = document.createElement("figcaption");
+        cap.textContent = f.name.slice(0, 18);
+        fig.append(img, cap); grid.append(fig);
+        const rd = new FileReader();
+        rd.onload = () => { img.src = rd.result; };   // data: URL，本地读盘，零请求
+        rd.readAsDataURL(f);
+      } else {
+        const box = document.createElement("figure");
+        box.className = "noimg";
+        box.innerHTML = '<span class="fi" aria-hidden="true">🗎</span><span class="ft">' +
+          escapeHtml(f.type || "未知类型") + "</span><figcaption>" + f.name.slice(0, 18) + "</figcaption>";
+        grid.append(box);
+      }
+    });
+    // 拒绝提示在 render() 之后覆盖写（accept 里的顺序保证了它赢）
+    readout.innerHTML = "当前：<b>" + files.length + ' 个文件</b> · 累计 ' + KB(total()) + " KB";
+  }
+  const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (ch) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+  // 移除：容器委托 + preventDefault 掉锚点跳转
+  chips.addEventListener("click", (e) => {
+    const a = e.target.closest("[data-rm]");
+    if (!a) return;
+    e.preventDefault();
+    files.splice(Number(a.dataset.rm), 1);
+    render();
+  });
+
+  // 键盘：label 有 tabindex=0，回车/空格打开系统文件框
+  zone.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ipt.click(); }
+  });
+  ipt.addEventListener("change", () => accept(Array.from(ipt.files)));   // label 路径汇到同一入口
+})();
+</script>
+</body>
+</html>

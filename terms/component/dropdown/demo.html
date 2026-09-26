@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>下拉菜单 Dropdown Menu · ui-dict C-14</title>
+<style>
+  /* 单文件铁律：系统字体栈、零网络请求、零依赖，双击即可运行。
+     开关 0 行 JS（popover + popovertarget）；定位交给 anchor()；
+     JS 只做「键盘方向键导航 + aria 语义补齐 + 无 anchor 支持时的定位兜底」。 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 46px; max-width: 620px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #paramline { font-size: 12px; color: #8f8a80; margin: 0 0 6px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+  #trackline { font-size: 12px; color: #8f8a80; margin: 0 0 18px; line-height: 1.8; }
+  #trackline b { color: #0b4f6c; }
+
+  .toolbar {
+    background: #fff; border: 1px solid #e5e1d8; border-radius: 12px;
+    padding: 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .toolbar .title { font-size: 13.5px; font-weight: 600; flex: 1; }
+  #result { margin: 14px 0 0; font-size: 13px; color: #44403a; }
+  #result b { color: #0b4f6c; }
+  .spacer { height: 38vh; display: grid; place-items: center; text-align: center;
+    font-size: 12.5px; color: #a09a8e; line-height: 1.9; }
+
+  /* ===== 触发按钮 ===== */
+  #ddBtn {
+    anchor-name: --dd-anchor;            /* 给弹层当锚点用（新平台定位派） */
+    border: 1px solid #cfc9bd; background: #fff; color: #1a1a1a;
+    padding: 8px 12px; border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px; flex: none;
+  }
+  #ddBtn:hover { background: #f1ede4; }
+  #ddBtn:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  #ddBtn .caret { font-size: 10px; color: #8f8a80; transition: transform .16s ease; }
+
+  /* ===== 菜单本体：popover 派 =====
+     popover="auto" 白送四件事：进 top-layer（祖先 overflow/transform 不再裁它）、
+     点外部自动关、Esc 关、焦点管理。popovertarget 按钮白送开关——0 行 JS。
+     注意：top-layer 会把它从原渲染位置摘出去，所以定位要么靠 anchor()，要么靠 JS。 */
+  #menu {
+    popover: auto;
+    width: var(--w, 200px);
+    margin: 0; padding: 6px; border: 1px solid #e5e1d8; border-radius: 10px;
+    background: #fff; box-shadow: 0 12px 30px rgba(0, 0, 0, .16);
+    opacity: 0; transform: translateY(-4px) scale(.985);
+    transition: opacity .16s ease, transform .16s cubic-bezier(.2,.8,.2,1),
+                overlay .16s allow-discrete, display .16s allow-discrete;
+  }
+  #menu:popover-open { opacity: 1; transform: none; }
+  @starting-style { #menu:popover-open { opacity: 0; transform: translateY(-4px) scale(.985); } }
+
+  /* ===== 定位：第一派 anchor() + position-try（整段包 @supports）=====
+     position-try-fallbacks: flip-block = 下方空间不足自动翻到上方，
+     这在手写派里是一整段 getBoundingClientRect + 分支判断。 */
+  @supports (anchor-name: --a) and (position-try-fallbacks: flip-block) {
+    #menu {
+      position-anchor: --dd-anchor;
+      /* 菜单右缘贴按钮右缘（工具栏菜单惯例）；垂直放下方、留 GAP。
+         left 必须显式 auto——UA 给 popover 的默认 inset:0 会让 left:0
+         与 right 同场过约束，left 赢、right 被无视，菜单整体飞到左缘 */
+      top: anchor(bottom); right: anchor(right); left: auto;
+      margin-top: var(--gap, 6px);
+      position-try-fallbacks: flip-block, flip-inline;
+    }
+  }
+  /* 降级派：无 anchor 支持时，JS 用 getBoundingClientRect 写 --x/--y 两变量。
+     两条路径产出同一个观感，验收清单两条都要能过。 */
+  @supports not (anchor-name: --a) {
+    #menu { position: fixed; top: var(--y, 0px); left: var(--x, 0px); }
+  }
+
+  /* ===== 菜单项 ===== */
+  #menu .mi {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 13.5px; color: #1a1a1a;
+    padding: 0 10px; height: var(--ih, 34px); border-radius: 6px;
+  }
+  #menu .mi:hover, #menu .mi:focus-visible { background: #f0ece4; outline: none; }
+  #menu .mi kbd { font: inherit; font-size: 11.5px; color: #a09a8e; letter-spacing: .02em; }
+  #menu .mi.danger { color: #b3392f; }
+  #menu .mi.danger:hover, #menu .mi.danger:focus-visible { background: #fdf3f2; }
+  #menu .mi[disabled] { opacity: .45; cursor: not-allowed; }
+  #menu .sep { height: 1px; margin: 6px 4px; background: #efeae1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #menu, #ddBtn .caret { transition: none !important; transform: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <h1>下拉菜单 Dropdown Menu</h1>
+  <p class="lead">演示词条 C-14。点「更多操作」→ 菜单浮起。<b>开关、点外关闭、Esc 全是 0 行 JS</b>
+    （<code>popover="auto"</code> + <code>popovertarget</code> 白送）；位置在支持的浏览器里由
+    <code>anchor()</code> + <code>position-try-fallbacks: flip-block</code> 算，
+    不支持时退化成 JS 读 <code>getBoundingClientRect()</code> 摆放——同一观感，两条路。
+    往下滚到视口底缘再开，能看到它自动翻到按钮上方。
+    菜单项是<b>动作</b>（点了立即执行并回显），这是它和 Select（选值）的分界。
+    键盘：<code>↓↑</code> 移动、<code>Home/End</code> 首尾、<code>Enter</code> 执行、<code>Esc</code> 退出。</p>
+  <p id="paramline"></p>
+  <p id="trackline">定位轨道：<b id="track"></b></p>
+
+  <div class="toolbar">
+    <span class="title">季度报表.xlsx</span>
+    <button id="ddBtn" type="button"
+            popovertarget="menu" popovertargetaction="toggle"
+            aria-haspopup="menu" aria-expanded="false" aria-controls="menu">
+      更多操作<span class="caret" aria-hidden="true">▾</span>
+    </button>
+  </div>
+  <p id="result">最近动作：<b class="none">（还没有）</b></p>
+
+  <div class="spacer">↓ 把这行按钮推到视口下缘，再开菜单看它向上翻转 ↓</div>
+
+  <div id="menu" role="menu" aria-labelledby="ddBtn" popover="auto">
+    <button class="mi" role="menuitem" type="button" data-act="重命名">重命名<kbd>F2</kbd></button>
+    <button class="mi" role="menuitem" type="button" data-act="复制链接">复制链接<kbd>⌘C</kbd></button>
+    <button class="mi" role="menuitem" type="button" data-act="移动到" disabled>移动到…</button>
+    <div class="sep" role="separator"></div>
+    <button class="mi danger" role="menuitem" type="button" data-act="删除文件">删除此文件</button>
+  </div>
+</main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "WIDTH": 200, "ITEM_H": 34, "GAP": 6 };
+  /* ui-dict:params:end */
+  // 参数样板（≤15 行，不计入 jsLines 承诺）
+  const root = document.documentElement.style;
+  root.setProperty("--w", PARAMS.WIDTH + "px");
+  root.setProperty("--ih", PARAMS.ITEM_H + "px");
+  root.setProperty("--gap", PARAMS.GAP + "px");
+  document.getElementById("paramline").textContent =
+    "当前参数：WIDTH = " + PARAMS.WIDTH + " px · ITEM_H = " + PARAMS.ITEM_H +
+    " px · GAP = " + PARAMS.GAP + " px";
+
+  const menu = document.getElementById("menu");
+  const btn = document.getElementById("ddBtn");
+  const result = document.getElementById("result");
+  const items = () => Array.from(menu.querySelectorAll('.mi:not([disabled])'));
+
+  // ---- 定位轨道：无 anchor() 支持时的 JS 兜底（getBoundingClientRect + 翻转）----
+  const hasAnchor = CSS.supports("anchor-name", "--a") &&
+                    CSS.supports("position-try-fallbacks", "flip-block");
+  document.getElementById("track").textContent = hasAnchor
+    ? "anchor() + position-try-fallbacks（CSS 派，0 行定位 JS）"
+    : "anchor() 未 ship → JS getBoundingClientRect 兜底（含手动翻转）";
+  function placeFallback() {
+    if (hasAnchor) return;
+    const r = btn.getBoundingClientRect();
+    let top = r.bottom + PARAMS.GAP;
+    // 下方不足 → 翻到上方（这正是 position-try-fallbacks: flip-block 干的事）
+    if (top + menu.offsetHeight > innerHeight - 8) top = r.top - menu.offsetHeight - PARAMS.GAP;
+    let left = r.right - PARAMS.WIDTH;
+    if (left < 8) left = 8;                       // 水平钳位
+    menu.style.setProperty("--x", left + "px");
+    menu.style.setProperty("--y", Math.max(8, top) + "px");
+  }
+  menu.addEventListener("beforetoggle", (e) => { if (e.newState === "open") placeFallback(); });
+
+  // ---- 语义与键盘：popover 白送显隐，但 menu 语义（aria-expanded / 方向键 / 焦点进菜单）得自己补 ----
+  menu.addEventListener("toggle", (e) => {
+    btn.setAttribute("aria-expanded", e.newState === "open" ? "true" : "false");
+    if (e.newState === "open") {
+      // 打开后把焦点送进第一项：popover 只负责显隐，不负责"焦点落在哪"
+      requestAnimationFrame(() => { const f = items()[0]; if (f) f.focus(); });
+    } else {
+      btn.focus();                                 // 关闭归还焦点（popover 不自动做）
+    }
+  });
+
+  menu.addEventListener("keydown", (e) => {
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    const go = (n) => { e.preventDefault(); list[(n + list.length) % list.length].focus(); };
+    if (e.key === "ArrowDown") go(i + 1);
+    else if (e.key === "ArrowUp") go(i - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(list.length - 1);
+    else if (e.key === "Tab") e.preventDefault();  // 菜单内 Tab 无效（APG：用方向键）
+  });
+
+  // ---- 动作执行：容器事件委托，不给每个菜单项单独绑监听 ----
+  menu.addEventListener("click", (e) => {
+    const it = e.target.closest(".mi");
+    if (!it || it.disabled) return;
+    result.innerHTML = "最近动作：<b>" + it.dataset.act + "</b>";
+    menu.hidePopover();                            // 0 JS 之外唯一的 hidePopover：执行完自然收起
+  });
+})();
+</script>
+</body>
+</html>

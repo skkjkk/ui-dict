@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>下拉选择器 Select · ui-dict C-15</title>
+<style>
+  /* 单文件铁律：系统字体栈、零网络请求、零依赖，双击即可运行。
+     本 demo 的交互 JS = 0 行：换皮靠 @supports，回显靠 :has(option:checked)。 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 40px; max-width: 780px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #paramline { font-size: 12px; color: #8f8a80; margin: 0 0 4px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+  #trackline { font-size: 12px; color: #8f8a80; margin: 0 0 2px; line-height: 1.8; }
+  #trackline b { color: #0b4f6c; font-weight: 600; }
+  .echo { font-size: 12.5px; color: #444; margin: 14px 0 0; line-height: 1.8; }
+  .echo b { color: #0b4f6c; }
+
+  .cols { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; }
+  .card {
+    flex: 1 1 300px; min-width: 280px; background: #fff;
+    border: 1px solid #e5e1d8; border-radius: 12px; padding: 16px;
+  }
+  .card h2 { font-size: 13px; margin: 0 0 2px; }
+  .card .cap { font-size: 12px; color: #8f8a80; margin: 0 0 14px; line-height: 1.7; }
+  label { display: block; font-size: 12.5px; font-weight: 600; margin: 0 0 6px; }
+
+  /* ===== 原生派底座：两列共享的"最小成本重绘" =====
+     appearance:none 只重绘触发器本体——自绘箭头（data-URI SVG，零外链）、
+     圆角/内边距/高度全部吃滑杆回写的 CSS 变量。accent-color 给原生弹层的
+     选中高亮上色，这是白送的；弹层的"形"没有任何 CSS 能碰（坑 #1）。 */
+  select {
+    appearance: none; -webkit-appearance: none;
+    display: block; width: 100%;
+    height: var(--h, 40px);
+    padding: 0 calc(var(--p, 10px) + 26px) 0 var(--p, 10px);
+    border: 1px solid #cfc9bd; border-radius: var(--r, 8px);
+    background-color: #fff; color: #1a1a1a; font: inherit; font-size: 13.5px;
+    accent-color: #0b4f6c;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%236b675f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right var(--p, 10px) center;
+    transition: border-color .16s ease, box-shadow .16s ease;
+  }
+  select:hover { border-color: #0b4f6c; }
+  select:focus-visible { outline: 2px solid #0b4f6c; outline-offset: 2px; }
+  optgroup { font-style: normal; font-weight: 600; color: #8f8a80; }
+  option { color: #1a1a1a; }
+
+  /* base-select 未 ship 的引擎里，右列 select 天然吃上面的换皮底座（同一份规则），
+     与左列等价——"降级态 = 对照组"正是本 demo 的对照实验。
+     自定义触发器槽（<button> + <selectedcontent>）在跨 UA 行为尚未收敛的当下
+     是破相高发区，demo 有意不用：关闭态永远由 UA 渲染、只定制弹层。 */
+
+  /* ===== base-select 派（本轮裁掉，留档说明）=====
+     曾在此定制 ::picker(select) 弹层与 option 富内容。实测 Chromium 153：
+     UA 把 option 摊进 select 扁平树（全部 h=0）、关闭态触发槽由替代渲染绘制，
+     author CSS 的 nowrap/picker-icon 均压不平"文字+箭头两行"的破相——
+     槽位行为在 Chromium 135→153 间仍在震荡，跨 UA 稳定前不配进 demo。
+     词条正文保留两条轨道的叙事与选型决策树；demo 收敛为：
+     左列 = 换皮原生 select（生产可直接用的 0 JS 方案），
+     右列 = 同一份底座 + optgroup/disabled 变体，展示"重绘的边界在哪"。 */
+  #sCustom:disabled { opacity: .55; }
+
+  /* ===== 0 JS 回显：:has(option:checked) 改 ::after 文案 =====
+     :checked 不只属于 input，也匹配被选中的 option；:has() 把它升到祖先查询。
+     反模式清单第 7 条：:has 不支持时整条规则失效是"错效果"不是"没效果"，
+     所以必须 @supports selector(:has(*)) 包住，外面留兜底文案。 */
+  .v::after { content: "（本浏览器 :has() 不可用：CSS 回显停用，但值照常随表单提交）"; }
+  @supports selector(:has(*)) {
+    .v::after { content: "—"; }
+    body:has(#sNative option[value=""]:checked)    .v1::after { content: "未选 · value 为空串（required 表单要拦）"; }
+    body:has(#sNative option[value="hz"]:checked)  .v1::after { content: "杭州（value=hz）"; }
+    body:has(#sNative option[value="sh"]:checked)  .v1::after { content: "上海（value=sh）"; }
+    body:has(#sNative option[value="gz"]:checked)  .v1::after { content: "广州（value=gz）"; }
+    body:has(#sCustom option[value=""]:checked)      .v2::after { content: "未选 · value 为空串"; }
+    body:has(#sCustom option[value="push"]:checked)  .v2::after { content: "App 推送（value=push）"; }
+    body:has(#sCustom option[value="sms"]:checked)   .v2::after { content: "短信（value=sms）"; }
+    body:has(#sCustom option[value="email"]:checked) .v2::after { content: "邮件摘要（value=email）"; }
+    body:has(#sCustom option[value="weekly"]:checked).v2::after { content: "周报（value=weekly）"; }
+  }
+
+  /* 引擎轨道徽章：全靠 @supports 换文案，0 JS。如实告知 base-select 为何不在 demo 里 */
+  .tbadge::after { content: "本页全部走原生轨道（appearance:none 换皮）；base-select 定制弹层待 Chromium 槽位行为收敛后再入库"; }
+  @supports (appearance: base-select) {
+    .tbadge::after { content: "本浏览器支持 appearance: base-select（Chromium 135+ 先跑）——但其 UA 触发槽行为未收敛，demo 仍走原生轨道，叙事见词条正文"; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* 降级：过渡全部归零，:open 状态、picker 显隐、回显、accent-color 等功能语义保留 */
+    select, #sCustom .caret, #sCustom::picker(select) { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <h1>表单两兄弟 · Select 演示</h1>
+    <p class="lead">演示词条 C-15。并排两个 <code>&lt;select&gt;</code> 走同一份表单语义
+      （label 关联、值随提交走、键盘原生）与同一份换皮底座：<b>左列</b>是最小成本重绘
+      （<code>appearance:none</code> + 自绘箭头 + <code>accent-color</code>），
+      <b>右列</b>验证同一底座的边界（optgroup / disabled / 长文本）。
+      本页<b>交互 JS 为 0 行</b>——选中回显用 <code>:has(option:checked)</code>。
+      base-select 定制弹层为何不进 demo：见词条正文「两条轨道」一节（Chromium 槽位行为未收敛）。</p>
+    <p id="paramline"></p>
+    <p id="trackline">引擎轨道：<b class="tbadge"></b></p>
+
+    <div class="cols">
+      <section class="card">
+        <h2>左列 · 原生派</h2>
+        <p class="cap"><code>appearance:none</code> 重绘触发器 + 自绘箭头 +
+           <code>accent-color</code> 给弹层高亮上色。弹层本体（桌面浮层 / iOS 滚轮 /
+           Android 全屏）仍是 UA 黑盒——这是它的头号坑，也是它的零维护红利。
+           注意 optgroup 分组与 disabled 选项。</p>
+        <label for="sNative">收货城市</label>
+        <select id="sNative" name="city">
+          <option value="" disabled selected>请选择城市…</option>
+          <optgroup label="华东">
+            <option value="hz">杭州</option>
+            <option value="sh">上海</option>
+          </optgroup>
+          <optgroup label="华南">
+            <option value="gz">广州</option>
+            <option value="sz" disabled>深圳（暂不可选）</option>
+          </optgroup>
+        </select>
+      </section>
+
+      <section class="card">
+        <h2>右列 · 同一底座的变体</h2>
+        <p class="cap">同一份换皮底座换内容与尺寸参数，验证「重绘的边界」：
+           optgroup 分组在自绘箭头下是否仍可读、disabled 项置灰、
+           长选项文本不顶破箭头位。base-select 定制弹层的叙事见词条正文——
+           Chromium 槽位行为未收敛前，demo 只交付生产可放心粘贴的形态。</p>
+        <label for="sCustom">通知渠道</label>
+        <select id="sCustom" name="channel">
+          <option value="" disabled selected>请选择渠道…</option>
+          <optgroup label="即时">
+            <option value="push">App 推送 · 秒达</option>
+            <option value="sms">短信 · 每条 ¥0.05</option>
+          </optgroup>
+          <optgroup label="延迟">
+            <option value="email">邮件摘要 · 每日一封</option>
+            <option value="weekly">周报 · 每周一 09:00</option>
+            <option value="fax" disabled>传真（2026 年已停用）</option>
+          </optgroup>
+        </select>
+      </section>
+    </div>
+
+    <p class="echo">表单当前值（纯 CSS 读出，0 行 JS）：城市 = <b class="v v1"></b>　｜　模式 = <b class="v v2"></b></p>
+  </main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "RADIUS": 8, "PAD": 10, "H": 40 };
+  /* ui-dict:params:end */
+  // 参数样板（≤15 行、不计入 jsLines 承诺）：把滑杆值回写成 CSS 变量，
+  // 两列 select 的皮肤只认这些变量——单一来源，不存在"第二实现"。
+  const s = document.documentElement.style;
+  s.setProperty("--r", PARAMS.RADIUS + "px");
+  s.setProperty("--p", PARAMS.PAD + "px");
+  s.setProperty("--h", PARAMS.H + "px");
+  document.getElementById("paramline").textContent =
+    "当前参数：RADIUS = " + PARAMS.RADIUS + " px · PAD = " + PARAMS.PAD + " px · H = " + PARAMS.H + " px　|　交互 JS：0 行";
+})();
+</script>
+</body>
+</html>

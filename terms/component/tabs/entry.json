@@ -1,0 +1,89 @@
+{
+  "id": "tabs",
+  "no": "C-16",
+  "category": "component",
+  "nameZh": "标签页",
+  "nameEn": "Tabs",
+  "aliases": [
+    "横排页签",
+    "切内容的那排按钮",
+    "浏览器上面那一排",
+    "点一个换一块下面的内容",
+    "账号设置里那一排分类",
+    "Tab Bar"
+  ],
+  "definition": "一排并列的页签各管一块内容区，点/按方向键切换时只换面板不换页面——用一次点击在同一页内搬运互不相干的几堆内容（概览/设置/历史）。它和 Segmented Control 的分界是语义而不是长相：Tabs 是「页面内导航」，每页是一块独立领地、值得拥有 URL 深链（#permissions）；分段控件是「同一视图的取值切换」，即时生效、无导航语义。和浏览器的 Tab Strip 也不是一回事——那是窗口管理，页内 Tabs 是内容组织。标准目录至今没有原生 <tab> 元素（Open UI 列为平台缺口），所以 ARIA 正装派（role=tablist + roving tabindex）是唯一能同时满足键盘与读屏的路；radio+:checked 的 0 JS 派切得了内容却切不出 aria-selected，是本站「能 0 JS 但别在这省」的标本。",
+  "whenNotToUse": [
+    "几个选项切的是同一视图的取值/过滤（日/周/月、网格/列表）→ 用 Segmented Control，别给取值切换安上「导航」的权重",
+    "内容之间互相引用、用户会来回对照 → 直接摊开成滚动长页或折叠面板（Accordion），藏在页签后是双倍点击",
+    "每页内容少到两三行 → 合成一张卡，页签的分组感会夸大信息量",
+    "页签多到一行放不下要横向滚 → 先反思 IA：多半是分组错了，而不是缺一个可滚 Tab 条",
+    "切换动作要即时保存偏好（开关类）→ 用 Radio/Checkbox 表单语义，Tabs 的「选中」不随表单提交"
+  ],
+  "confusedWith": ["segmented-control", "accordion", "dropdown"],
+  "anatomy": [
+    { "part": "Tablist 页签栏", "note": "role=tablist 的容器，兼指示器的定位上下文（position:relative 住它）" },
+    { "part": "Tab 页签", "note": "role=tab 的按钮，挂 aria-selected 与 aria-controls；roving tabindex 让全组只有一个 Tab 停靠点" },
+    { "part": "Indicator 指示器", "note": "跟着选中页签滑动的墨线/底色块——JS 量出 left/width 写成 CSS 变量，动画只走 transform" },
+    { "part": "Tabpanel 面板", "note": "role=tabpanel + aria-labelledby 回指；隐藏用 hidden 属性；tabindex=0 让键盘能进面板滚动" },
+    { "part": "Active State 选中态", "note": "页签本身的颜色/字重变化——与指示器二选一或叠加，全都没有则用户不知身在何处" }
+  ],
+  "nativePath": "lite-js",
+  "implSchool": ["css-state", "active-compute", "semantic-native"],
+  "jsLines": 30,
+  "promptTemplate": {
+    "core": "实现一个 Tabs 标签页组件：卡片顶部一排 3 个页签（概览 / 修订历史 / 权限），页签间距 {GAP}px，选中页签下方有一根 {INK}px 粗的指示墨线，切换时墨线以 {DUR}ms cubic-bezier(.2,.8,.2,1) 从旧页签滑到新页签（指示器基准宽 1px，用 translateX(测量x) + scaleX(测量宽) 单条 transform 实现，禁逐帧改 left/width）。ARIA 正装：容器 role=tablist（挂 aria-label），页签 button role=tab 挂 aria-selected 与 aria-controls，面板 role=tabpanel 挂 aria-labelledby 与 tabindex=\"0\"；隐藏面板用 hidden 属性。roving tabindex：全组只有选中页签 tabindex=0，其余 -1——Tab 键进页签组一次即过，组内移动交给方向键。键盘规格（APG）：← → 切换并激活（焦点跟随选中，循环回绕），Home/End 跳首尾，Enter/Space 不需要（选中即激活是本页签派的决定，手动激活模式写进注释说明差异）。点击页签同样 select()。窗口 resize 时重测指示器位置（CSS 变量是测量值，不重算会错位）。`prefers-reduced-motion` 下指示器无过渡瞬移。",
+    "stack": "原生 CSS + 原生 JS（getBoundingClientRect 测量 + keydown 方向键），ARIA 语义手写；不引组件库。",
+    "constraints": [
+      "不要用 radio+:checked 做纯 CSS 版当生产方案——它能切内容但 aria-selected 永远写不出正确值（CSS 改不了 ARIA），读屏不知道当前选中哪页、也没法实现 roving tabindex；0 JS 版只配当对照实验",
+      "不要用 :target / URL hash 版做默认——可深链是真优点，但每点一次页签写一条历史，用户后退要在页签间爬 N 层；做深链请 history.replaceState + 读初始 hash",
+      "不要把隐藏面板用 visibility:hidden 或仅移出视口留在可 Tab 区——panel 里所有按钮会被键盘无声访问到；hidden 属性或 display:none 才真摘出去",
+      "不要让每个页签都 tabindex=0——Tab 键要在页签组只停一次（WAI 模式），组内导航是方向键的职责；全 0 会让 10 个页签吃掉 10 次 Tab",
+      "指示器不要用 left/width 做 transition——逐帧重排掉帧，正确姿势 translateX+scaleX 单 transform（与分段控件共享滑块同一课）",
+      "CSS 变量指示器必须监听 resize 重测（字体加载完也要重测一次，rAF 或 document.fonts.ready），否则首帧量到的是回退字体宽度",
+      "不要漏面板的 tabindex=\"0\"：读屏与键盘用户要能 Tab 进面板滚动长内容"
+    ],
+    "verify": [
+      "三个页签切换时下方内容区整块更换，指示墨线平滑滑到新页签正下方且宽度等于新页签宽",
+      "按 Tab 键：焦点从页签组直接进入当前面板，不会在三个页签间逐个停靠；← → 在页签间循环移动并即时激活",
+      "Home/End 跳首尾页签；用 DevTools 查看非选中页签的 tabindex 均为 -1",
+      "隐藏的面板带 hidden 属性且内部按钮不可 Tab 到达；当前面板 aria-labelledby 与页签 id 互指正确",
+      "缩放窗口或切换 DevTools 设备宽度后，指示线位置自动重算无错位",
+      "系统开启减少动效后切换页签，墨线瞬移但一切行为不变"
+    ],
+    "reference": "参考气质：macOS 系统设置的页签条（指示线细、字重变化克制）；GitHub 仓库页的 Code/Issues/PRs 导航（深链、内容整块更换）。",
+    "variants": [
+      { "label": "手动激活", "delta": "方向键只移焦点、Enter/Space 才激活面板——页签切换代价高（异步加载大表格）时用这套 APG 备选规格" },
+      { "label": "底色块指示", "delta": "删掉墨线，选中页签整体变白底圆角 + 阴影浮起（iOS 分段风），代价是与 Segmented Control 的视觉分界变糊" }
+    ]
+  },
+  "params": [
+    { "key": "INK", "label": "指示线粗 (px)", "def": 2.5, "min": 0, "max": 6, "step": 0.5, "hint": "0=纯字重指示（最含蓄档）；>4 在矮页签上像进度条" },
+    { "key": "GAP", "label": "页签间距 (px)", "def": 4, "min": 0, "max": 24, "step": 2, "hint": "0=连排版（下划线要断开处）；>16 已经像一排按钮不像页签" },
+    { "key": "DUR", "label": "滑动时长 (ms)", "def": 220, "min": 0, "max": 500, "step": 20, "hint": ">300 时「线还在跑、内容已换完」会脱节；0=瞬移（减少动效等价）" }
+  ],
+  "scenarios": [
+    "GitHub 仓库页的 Code / Issues / Pull requests / Settings 导航（每个页签可深链）",
+    "macOS/Windows 应用首选项窗口的页签组（常规 / 高级 / 关于）",
+    "后台详情页的 基本信息 / 操作日志 / 权限设置 分区",
+    "VS Code 编辑器的文件页签条（注意：那是窗口管理变体，页签可关可拖序）",
+    "定价页的 月付 / 年付 对照——更接近 Segmented Control 的边界案例"
+  ],
+  "pitfalls": [
+    "CSS-only 的 radio+:checked 版 Tabs 是「形似神不似」的头号标本：`:checked ~ .panel` 能换内容，但 aria-selected 是 DOM 属性、CSS 改不动它——读屏永远播报「第 1 页 已选中」；roving tabindex 同理，键盘焦点管理在纯声明里不存在。所以本词条立场：0 JS 派留给「值切换」（radio 语义天然的 Segmented/Rating），「视图切换」必须 ARIA+JS",
+    "指示器宽度用 scaleX 而不是直接 width：基准 1px 的条 translateX 到页签左缘再 scaleX(页签宽)，全程一个合成属性；写 width 过渡则每帧重排、低端机掉帧——和 C-09 分段控件共享滑块是同一根线的两个用法（那边的教训原话：别碰 left/width）",
+    "getBoundingClientRect 量指示器要防两个「量早了」：字体未加载完量到回退宽度、容器带滚动条时量到抖动——首帧 rAF 再量一次 + 监听 resize 重测，CSS 变量记的是测量值不是声明值，环境变了它就得重算",
+    "隐藏面板用 display:none 会丢失面板内部状态（表单填一半、滚动位置）：普通场景 hidden 属性即可（同样是 display:none 家族）；状态必须保留时才用 visibility+position:absolute 摘出可 Tab 区，代价是 a11y 要自己补 inert/aria-hidden 三连——「懒挂载」话术的真实成本在这",
+    "选中即激活 vs 方向键移焦点+Enter 激活，是 APG 写进规范的两条路：前者适合轻量面板（本 demo），后者留给切换代价高的场景（每页是一个异步大表格）——把两套混着用（方向键也触发加载）会得到「按一下就卡一下」的体验，constraints 里要二选一写死",
+    "页签多到溢出时别急着加横向滚动：先数一数是不是 6 个以上——NN/g 的页签研究表明超过 6–7 个页签的找回率断崖下跌，正确处方是重组合并或升级为侧栏导航；横向可滚的 tablist 记得滚动容器 + 键盘滚动（方向键激活时 scrollIntoView）"
+  ],
+  "related": ["segmented-control", "accordion", "dropdown", "command-palette"],
+  "refs": [
+    "https://www.w3.org/WAI/ARIA/apg/patterns/tabs/",
+    "https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/tab_role"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.4)", "reviewer": "skkjkk", "date": "2026-09-27" }
+  ],
+  "verifiedWith": "Qwen3.8-Flash · replay 2026-09-26 · 1/1 生成通过"
+}

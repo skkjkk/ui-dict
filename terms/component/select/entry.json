@@ -1,0 +1,91 @@
+{
+  "id": "select",
+  "no": "C-15",
+  "category": "component",
+  "nameZh": "下拉选择器",
+  "nameEn": "Select",
+  "aliases": [
+    "点一下选一行的框",
+    "表单里带小箭头的那个下拉",
+    "从列表里挑一个的控件",
+    "收货城市那种下拉",
+    "Customizable Select",
+    "选择条"
+  ],
+  "definition": "从一个固定的候选列表里选出一个（或多个）取值的表单控件：收起时显示当前值与一个箭头，展开时列出候选项，选中后值随表单提交走。它是「取值」控件，不是「执行动作」的控件——这是它和 Dropdown Menu 的分界：Select 选完连同表单一起提交或触发 change，菜单里每一项都是一个立即执行的命令。2026 年它有了两条并存的路：原生 `<select>`（键盘、表单、无障碍白送，但桌面浮层 / iOS 滚轮 / Android 全屏三种弹层形态你一律无权过问），以及 `appearance: base-select`（Chromium 135+ 先跑）把弹层交给 `::picker(select)` 用 CSS 画。与 Combobox 的区别：Select 只能选列表里的项，Combobox 允许自由输入。",
+  "whenNotToUse": [
+    "候选是一组要立即执行的动作（复制 / 删除 / 导出）→ 用 Dropdown Menu，别用 Select 装动作",
+    "候选超过 20 项且用户知道自己要什么 → 用可搜索的 Combobox，滚轮里翻 30 行是折磨",
+    "选项只有 2–5 个且需要一眼看全 → 用 Radio Group 或 Segmented Control，隐藏式下拉多一次点击且丢失可比性",
+    "需要「输入即新增一个不存在的选项」→ Select 语义不成立，用 Combobox / Tag Input",
+    "要跨浏览器完全一致的弹层外观 → 原生与 base-select 都做不到，只有自绘 `role=listbox` 那条浮层库路线可以，代价是键盘与焦点自己扛"
+  ],
+  "confusedWith": ["dropdown", "tag-input", "tabs"],
+  "anatomy": [
+    { "part": "Trigger 触发器", "note": "收起态那一行：当前值 + 箭头；base-select 派里它由首个子元素（如 `<button>`）替换渲染" },
+    { "part": "Picker 弹层", "note": "候选列表容器。原生派是 UA 黑盒（桌面浮层 / iOS 滚轮 / Android 全屏），base-select 派里它是 `::picker(select)` 伪元素，可上圆角阴影" },
+    { "part": "Option 选项", "note": "可选项，`value` 是提交值、文本是显示值；base-select 派允许塞富内容（emoji、副标题、两行）" },
+    { "part": "Optgroup 分组", "note": "候选超过 7 项时的分隔语义（华东 / 华南），原生与自绘两派都支持" },
+    { "part": "Placeholder 占位项", "note": "惯用 `<option value=\"\" disabled selected>请选择…</option>`；配 required 才能拦住「没选就提交」" },
+    { "part": "SelectedContent 回显位", "note": "base-select 派官方槽位（`<selectedcontent>` 自动镜像富内容）——Chromium 槽位行为未收敛，demo 有意不用；原生派用 CSS `:has(option:checked)` 做近似回显" }
+  ],
+  "nativePath": "css-only",
+  "implSchool": ["semantic-native", "active-compute"],
+  "jsLines": 0,
+  "promptTemplate": {
+    "core": "实现一个「下拉选择器 Select」的对照 demo，同一页并排两个 `<select>`，走同一份表单语义（label for 关联、值随表单提交、键盘原生可选）与同一份换皮底座：`appearance:none` 重绘触发器（高度 {H}px、内边距 {PAD}px、圆角 {RADIUS}px），右侧自绘一个下拉箭头（用 data-URI SVG 或 CSS 三角形，禁外链），加 `accent-color` 给弹层选中高亮上色。左列「基础形态」：`<optgroup>` 分组 + 一个 `disabled` 项 + 占位项 `<option value=\"\" disabled selected>`；右列「边界形态」：同一底座换内容与参数，验证 optgroup 在自绘箭头下仍可读、disabled 置灰、长选项文本不顶破箭头位（padding-right = 留白 + 箭头宽之和）。当前选中值要在页面下方以「城市 = X ｜ 渠道 = Y」的形式回显出来，且这条回显必须由 CSS 完成（`body:has(#id option[value=..]:checked)` 改写 `::after` 文案，整段包 `@supports selector(:has(*))`），不许用 change 事件写 JS。页面上放一行引擎徽章文字（靠 @supports 切换 ::after 内容），如实告知当前浏览器对 base-select 的支持状态与本 demo 所走轨道。`prefers-reduced-motion` 下把过渡清零。",
+    "stack": "原生 HTML `<select>` 表单语义 + 原生 CSS（appearance / @supports / :has()）；交互逻辑 0 行 JS，仅参数滑杆需要 ≤15 行样板把值写成 CSS 变量。",
+    "constraints": [
+      "不要用 div + JS 自绘一个假下拉——本词条的立场是把「原生 vs 自绘」的决策树讲清楚，demo 必须先证明原生路线能做到什么程度",
+      "不要依赖 `option` 的跨浏览器外观一致：iOS 是滚轮弹层、Android 是全屏列表，写死「弹层里两行富文本一定显示」的实现到 iOS 上就碎了",
+      "不要把 base-select 相关声明裸写：未 ship 的浏览器里 `:open`、`::picker`、`selectedcontent` 全部无效，必须 `@supports (appearance: base-select)` 包裹并让降级态等价于原生派皮肤",
+      "不要用 `:has()` 而不包 `@supports selector(:has(*))`：不支持时整条规则失效是「错效果」不是「没效果」，回显文案会停在错误态",
+      "占位项统一用 `<option value=\"\" disabled selected>` 并在 `<select>` 上写 `required`——只 disabled 不加 required，空串照样提交",
+      "不要把参数化写成多份内联 style：所有皮肤只认 `--r/--p/--h` 三个 CSS 变量，由参数块一处写入"
+    ],
+    "verify": [
+      "页面上并排两个下拉，收起态外观一致（同一份底座皮肤：自绘箭头、圆角、内边距）",
+      "右列选「App 推送 · 秒达」后，页面下方「渠道 = App 推送（value=push）」同步变化",
+      "禁用 JavaScript 后上述回显依然成立（可复验 0 行交互 JS 的承诺）",
+      "键盘可达：Tab 进入下拉、上下键移动选项、Enter 确认、Esc 关闭弹层（原生行为，无需实现）",
+      "optgroup「即时 / 延迟」分组可见、disabled 项（传真）置灰不可选、占位项「请选择…」为初始态",
+      "左列选一个超长城市名，文本不会盖到自绘箭头上（padding-right 留位生效）"
+    ],
+    "reference": "参考气质：macOS 系统设置里带图标的一行行下拉（原生派的上限）；Stripe Dashboard 的币种/单位选择器（克制、带副标题、不抢戏）。",
+    "variants": [
+      { "label": "base-select 定制弹层（激进档）", "delta": "右列改走 `@supports (appearance: base-select)` + `::picker(select)` 圆角阴影 + option 富内容 + `<selectedcontent>` 回显——Chromium 135+ 轨道；注意 135→153 的 UA 触发槽行为仍在震荡，上线前必须在目标引擎实测「文字与 picker-icon 是否两行破相」" },
+      { "label": "更保守", "delta": "删掉右列，只留原生 `<select>` + accent-color + 自绘箭头，词条退化成「20 行 CSS 换皮」的 hello world" }
+    ]
+  },
+  "params": [
+    { "key": "RADIUS", "label": "圆角 (px)", "def": 8, "min": 0, "max": 20, "step": 1, "hint": "0=工程感方角；>14 在小尺寸上会挤出「胶囊按钮不像表单控件」的错觉" },
+    { "key": "PAD", "label": "内边距 (px)", "def": 10, "min": 4, "max": 20, "step": 1, "hint": "同时决定箭头与右缘的留白；小于 6px 时文字会顶到自绘箭头" },
+    { "key": "H", "label": "触发器高 (px)", "def": 40, "min": 28, "max": 56, "step": 2, "hint": "移动端低于 44px 会踩 iOS 点击区下限；与相邻输入框同高是第一原则" }
+  ],
+  "scenarios": [
+    "电商结算页的「收货城市 / 发票类型」下拉（optgroup 按大区分组）",
+    "SaaS 设置页的「性能模式 / 主题 / 语言」单选偏好（选项带 emoji 与副标题说明）",
+    "后台筛选栏的「状态：全部 / 待审 / 已通过」——选项 ≤5 个时更该用 Radio 把候选摊开",
+    "表单里「国家 / 币种 / 时区」这类上百项取值（超过 20 项就该升级为可搜索 Combobox）",
+    "数据看板的「时间粒度：日 / 周 / 月」切换（同层级即时切换更接近 Segmented Control 的语义）"
+  ],
+  "pitfalls": [
+    "`<select>` 的弹层在三大平台上是三种不同的东西——桌面是贴着触发器浮起的小列表、iOS Safari 是屏幕下半部滚轮、Android Chrome 是居中全屏对话框；差这么多是因为它属于「UA 渲染的特权控件」，CSS 只能碰触发器那一只脚。凡是把「弹层里两行富文本」「弹层圆角」当必然成立的实现，到 iOS 上都会碎；要富弹层就必须换到 base-select 或自绘轨道",
+    "`appearance: base-select` 是 Chromium 135+ 先跑（caniuse ≈71.56%），Safari 与 Firefox 未 ship，MDN 还点名「一些 JS 框架与 SSR hydration 会让这些特性失效」——本站是 Astro 静态站不受影响，但用户把代码拷进 Next/Vite 项目可能整段不生效，所以所有相关声明必须包在 `@supports (appearance: base-select)` 里，让不支持的浏览器安静退回原生派皮肤而不是碎样式",
+    "占位项用 `<option value=\"\" disabled selected>请选择…</option>` 但没加 `required`，用户「没选」也能提交且后端收到空串——因为 disabled 只禁止「选它」，不禁止「保持它被 selected 的初始态」，空串照样进 FormData；拦法是在 `<select>` 上写 `required`，浏览器才会在提交时把它判为无效",
+    "0 JS 的选中回显靠 `body:has(#id option[value=\"x\"]:checked)` 逐值写规则——`:checked` 在这里匹配的是「被选中的 option」而不是 input，这个组合能跑，但每加一个选项多一行 CSS，选项上百时自动作废（正确姿势是 base-select 的 `<selectedcontent>`，它自动镜像富内容）；`:has()` 方案最适合做演示、最不适合做生产",
+    "自绘箭头用 `background-image` + `padding-right` 留位时，padding 右值必须是「留白 + 箭头宽」之和，否则长文本盖在箭头上；而 `appearance:none` 之后 UA 的箭头一并消失，不补这张 data-URI 图，用户就看不出这是可点开的下拉——这是所有「重绘表单控件」词条共享的第一课",
+    "`optgroup` 在 iOS 滚轮形态下会被压平成普通项（分组标题变成滚轮里一行不可选的文字），不能把「分组可读性」当作原生派必然提供的能力；跨端一致的分组语义只有自绘 listbox 才保得住",
+    "base-select 的「自定义触发器槽」是 2026 年最不稳的新能力面：本站在 Chromium 153 实测，UA 把 option 摊进 select 扁平树（getBoundingClientRect 全为 0 高）、关闭态由替代渲染绘制，author 的 white-space/picker-icon 样式压不平「文字 + 箭头两行破相」——槽位行为在 Chromium 135→153 间仍在震荡，跨 UA 稳定前把 ::picker 定制留在 @supports 激进档，生产 demo 走换皮原生轨道"
+  ],
+  "related": ["dropdown", "tag-input", "tabs", "segmented-control", "command-palette"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select",
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/:has",
+    "https://www.w3.org/WAI/ARIA/apg/patterns/listbox/"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.4)", "reviewer": "skkjkk", "date": "2026-09-27" }
+  ],
+  "verifiedWith": "Qwen3.8-Flash · replay 2026-09-26 · 1/1 生成通过"
+}

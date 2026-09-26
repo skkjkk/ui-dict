@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标签页 Tabs · ui-dict C-16</title>
+<style>
+  /* 单文件铁律：系统字体栈、零网络请求、零依赖，双击即可运行。
+     本 demo 走 ARIA 正装派（roving tabindex + 滑动指示器）：
+     0 JS 的 radio 派能"切内容"却切不出 aria-selected 与键盘语义——
+     这正是要写进词条的"0 JS 不够"标本。交互 JS ≈26 行。 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 46px; max-width: 640px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #paramline { font-size: 12px; color: #8f8a80; margin: 0 0 18px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+
+  .card { background: #fff; border: 1px solid #e5e1d8; border-radius: 14px; overflow: hidden; }
+
+  /* ===== tablist：一排"页签"本体 ===== */
+  [role="tablist"] {
+    position: relative; display: flex; gap: var(--gap, 4px);
+    padding: 8px 10px 0; border-bottom: 1px solid #efeae1; background: #fbfaf7;
+  }
+  [role="tab"] {
+    appearance: none; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 13.5px; color: #6b675f;
+    padding: 9px 14px calc(9px + var(--ink, 2.5px)); border-radius: 8px 8px 0 0;
+    position: relative; z-index: 1; transition: color .15s ease, background .15s ease;
+  }
+  [role="tab"]:hover { color: #1a1a1a; background: #f3efe7; }
+  [role="tab"][aria-selected="true"] { color: #0b4f6c; font-weight: 600; }
+  [role="tab"]:focus-visible { outline: 2px solid #0b4f6c; outline-offset: -2px; }
+
+  /* ===== 滑动指示器：一根跟着选中页签跑的墨线 =====
+     宽度与位移由 JS 量出来后写进 --x/--w——只用 transform，不碰 left/width，
+     避免逐帧重排（这是所有"共享滑块"家族的共同写法）。 */
+  #ink {
+    position: absolute; left: 0; bottom: 0; width: 1px; height: var(--ink, 2.5px);
+    background: #0b4f6c; border-radius: 2px;
+    transform: translateX(var(--x, 0px)) scaleX(var(--w, 0));
+    transform-origin: 0 50%;
+    transition: transform var(--dur, 220ms) cubic-bezier(.2,.8,.2,1);
+    will-change: transform;
+  }
+
+  /* ===== 面板 ===== */
+  [role="tabpanel"] { padding: 20px 22px 24px; min-height: 150px; }
+  [role="tabpanel"][hidden] { display: none; }
+  [role="tabpanel"] h3 { margin: 0 0 8px; font-size: 15.5px; }
+  [role="tabpanel"] p { margin: 0 0 10px; font-size: 13.5px; color: #55514a; line-height: 1.8; max-width: 56ch; }
+  [role="tabpanel"] .tagline { font-size: 12px; color: #8f8a80; }
+  .mini { display: flex; gap: 8px; margin-top: 12px; }
+  .mini i {
+    display: block; height: 44px; border-radius: 8px; background: #f1ede4;
+    border: 1px solid #e5e1d8; flex: 1; font-style: normal;
+    font-size: 11.5px; color: #8f8a80; display: grid; place-items: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #ink, [role="tab"] { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <h1>标签页 Tabs</h1>
+  <p class="lead">演示词条 C-16。三个页签各管一块内容区。<b>键盘规格（APG Tabs 模式）</b>：
+    <code>Tab</code> 只会停在"当前选中页签"一个停靠点（roving tabindex），进得来就得让位给方向键；
+    <code>←→</code> 切换页签、<code>Home/End</code> 跳首尾、Enter/Space 无需按（选中即激活）。
+    指示墨线跟着选中页签滑过去（transform 位移，不重排）。
+    页内注释交代了 radio+:checked 的 0 JS 派为什么不够：它切得了内容，切不出
+    <code>aria-selected</code> 与"面板对读屏可见"的语义。</p>
+  <p id="paramline"></p>
+
+  <div class="card">
+    <div role="tablist" aria-label="文档版本">
+      <button role="tab" id="t1" aria-controls="p1" aria-selected="true"  tabindex="0">概览</button>
+      <button role="tab" id="t2" aria-controls="p2" aria-selected="false" tabindex="-1">修订历史</button>
+      <button role="tab" id="t3" aria-controls="p3" aria-selected="false" tabindex="-1">权限</button>
+      <span id="ink" aria-hidden="true"></span>
+    </div>
+    <div role="tabpanel" id="p1" aria-labelledby="t1" tabindex="0">
+      <h3>概览</h3>
+      <p>面板必须与页签互指：tab 挂 aria-controls 指面板，面板挂 aria-labelledby 回指 tab；隐藏的面板用 hidden 属性（display:none 会连读屏都摘掉——这是"懒挂载"话术的原生形态）。</p>
+      <p class="tagline">Tab 聚焦面板后可滚动，这是面板 tabindex="0" 的作用。</p>
+      <div class="mini"><i>文档标题</i><i>3 位协作者</i><i>更新于今天</i></div>
+    </div>
+    <div role="tabpanel" id="p2" aria-labelledby="t2" tabindex="0" hidden>
+      <h3>修订历史</h3>
+      <p>切到本面板时，上一个面板只是被 hidden 隐藏，DOM 仍在——真正的大列表面板才需要延迟挂载/卸载，普通场景 hidden 足够且保留内部状态。</p>
+      <div class="mini"><i>v12 · 今天 14:02</i><i>v11 · 昨天</i><i>v10 · 周一</i></div>
+    </div>
+    <div role="tabpanel" id="p3" aria-labelledby="t3" tabindex="0" hidden>
+      <h3>权限</h3>
+      <p>与 Segmented Control 的分界就在这块内容上：Tabs 是"页面内导航"（每页一块不相干的事，值得深链 #permissions），分段控件是"同一视图的取值切换"（即时、无导航语义）。</p>
+      <div class="mini"><i>可编辑 2 人</i><i>可查看 8 人</i><i>公开链接 关</i></div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "INK": 2.5, "GAP": 4, "DUR": 220 };
+  /* ui-dict:params:end */
+  // 参数样板（≤15 行，不计入 jsLines 承诺）
+  const root = document.documentElement.style;
+  root.setProperty("--ink", PARAMS.INK + "px");
+  root.setProperty("--gap", PARAMS.GAP + "px");
+  root.setProperty("--dur", PARAMS.DUR + "ms");
+  document.getElementById("paramline").textContent =
+    "当前参数：INK = " + PARAMS.INK + " px · GAP = " + PARAMS.GAP +
+    " px · DUR = " + PARAMS.DUR + " ms";
+
+  const tablist = document.querySelector('[role="tablist"]');
+  const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+  const ink = document.getElementById("ink");
+
+  // 指示器：translateX+scaleX 单 transform（left/width 逐帧改会重排，这是滑块家族通病）
+  function moveInk(tab) {
+    const r = tab.getBoundingClientRect(), pr = tablist.getBoundingClientRect();
+    ink.style.setProperty("--x", (r.left - pr.left) + "px");
+    ink.style.setProperty("--w", String(r.width));    // 基准宽 1px → scaleX=目标宽（无单位数）
+  }
+  function select(tab, focus) {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", String(on));
+      t.tabIndex = on ? 0 : -1;                     // roving tabindex：全组仅一个 Tab 停靠点
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    }
+    moveInk(tab);
+    if (focus) tab.focus();
+  }
+
+  tablist.addEventListener("click", (e) => {
+    const tab = e.target.closest('[role="tab"]');
+    if (tab) select(tab, true);
+  });
+  tablist.addEventListener("keydown", (e) => {
+    const i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const map = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 };
+    if (e.key in map) {
+      e.preventDefault();
+      const n = ((map[e.key] % tabs.length) + tabs.length) % tabs.length;   // 负数回绕
+      select(tabs[n], true);
+    }
+  });
+  addEventListener("resize", () => {
+    const cur = tabs.find((t) => t.getAttribute("aria-selected") === "true");
+    if (cur) moveInk(cur);                          // resize 重测：CSS 变量是测量值不是声明值
+  });
+  select(tabs[0], false);                           // 初始定位（rAF 前量不到字体排版完成后的宽度）
+  requestAnimationFrame(() => select(tabs[0], false));
+})();
+</script>
+</body>
+</html>

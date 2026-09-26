@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>开关 Switch · ui-dict C-17</title>
+<style>
+  /* 单文件铁律：系统字体栈、零网络请求、零依赖，双击即可运行。
+     交互 JS = 0 行：状态由原生 checkbox 白送（空格切换/表单提交/读屏播报），
+     皮是 appearance:none + ::before，"即时生效"的回显文字靠 :has() 纯 CSS。 */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #f6f5f2; color: #1a1a1a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .page { padding: 22px 20px 46px; max-width: 560px; margin: 0 auto; }
+  .page h1 { font-size: 18px; margin: 0 0 6px; }
+  .lead { font-size: 13.5px; color: #6b675f; margin: 0 0 10px; line-height: 1.75; }
+  .page code { background: #ece8e0; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  #paramline { font-size: 12px; color: #8f8a80; margin: 0 0 18px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+  .card { background: #fff; border: 1px solid #e5e1d8; border-radius: 14px; padding: 6px 18px; }
+  .srow {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px 0; border-bottom: 1px solid #f0ece4;
+  }
+  .srow:last-child { border-bottom: 0; }
+  .srow .lab { font-size: 14px; }
+  .srow .lab small { display: block; color: #8f8a80; font-size: 12px; margin-top: 2px; line-height: 1.6; }
+  .foot { font-size: 12.5px; color: #44403a; margin: 16px 2px 0; line-height: 1.9; }
+
+  /* ===== 开关本体：label 双伪元素重绘 =====
+     input 是 .sw 的兄弟（不是子代——伪元素选择器方向别搞反）。
+     隐藏用 clip 而不是 display:none——display:none 会丢键盘焦点与
+     读屏播报（0 JS 流派的第一课）；label 用 for 指到 input，整行都是热区。 */
+  .swbox > input {
+    position: absolute; width: 1px; height: 1px;
+    clip-path: inset(50%); overflow: hidden; margin: -1px;
+  }
+  .sw {
+    position: relative; flex: none; cursor: pointer;
+    /* 44px 最小热区：iOS/Android 触控规范；视觉轨道可以比它小，热区靠 padding 补 */
+    display: inline-grid; place-items: center; padding: 8px;
+  }
+  .sw::before {  /* 轨道 track */
+    content: ""; grid-area: 1 / 1;
+    width: var(--w, 44px); height: calc(var(--d, 24px) + 4px);
+    border-radius: 999px; background: #d8d2c6;
+    transition: background var(--dur, 180ms) cubic-bezier(.2,.8,.2,1);
+  }
+  .sw::after {   /* 旋钮 thumb：负 inset 居中，位移只走 transform */
+    content: ""; grid-area: 1 / 1;
+    width: var(--d, 24px); height: var(--d, 24px); border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.28);
+    transform: translateX(calc((var(--w, 44px) - var(--d, 24px)) / -2));
+    transition: transform var(--dur, 180ms) cubic-bezier(.2,.8,.2,1);
+  }
+  /* input 与开关是兄弟（input 藏在 label 前），靠 :checked ~ 把状态送到皮上。
+     注意伪元素选择器方向：CSS 状态改不了 ARIA——role=switch 的 aria-checked
+     由原生 checkbox 语义映射白送，这正是"借 checkbox 当状态寄存器"的红利。 */
+  .swbox { display: inline-flex; align-items: center; }
+  .swbox input:checked ~ .sw::before { background: #0b4f6c; }
+  .swbox input:checked ~ .sw::after {
+    transform: translateX(calc((var(--w, 44px) - var(--d, 24px)) / 2));
+  }
+  .swbox input:focus-visible ~ .sw { outline: 2px solid #0b4f6c; outline-offset: 2px; border-radius: 999px; }
+  .swbox input:disabled ~ .sw { opacity: .45; cursor: not-allowed; }
+  .swbox input:disabled ~ .sw::after { box-shadow: none; }
+
+  /* ===== "即时生效"行为课：状态文字用 CSS 计数器式改写，0 JS =====
+     开关 vs 复选框的 APG 分界——开关拨下去的那一刻事情就发生了，
+     这行随拨动实时变的文字就是这个语义的可见证据。 */
+  .status { font-weight: 600; color: #8f8a80; }
+  .status::after { content: "已关闭"; }
+  body:has(#s1:checked) .status { color: #0b4f6c; }
+  body:has(#s1:checked) .status::after { content: "已开启 · 邮件摘要将每天 9:00 发到 jia@example.com"; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sw::before, .sw::after { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <h1>开关 Switch / Toggle</h1>
+  <p class="lead">演示词条 C-17。<b>整页交互 JS 为 0 行</b>：状态存在原生
+    <code>&lt;input type="checkbox"&gt;</code> 里（空格切换、表单提交、读屏播报全白送），
+    皮是 label 双伪元素纯 CSS 重绘（input 用 clip-path 藏、不 display:none——那会丢焦点），
+    下面那行状态文字靠 <code>:has(:checked)</code>
+    实时改写。行为辨析：<b>开关 = 拨下即生效，复选框 = 提交才生效</b>（APG 规范级分界）——
+    注意第三个开关是 disabled 态、第四个是「像开关但其实是复选框」的对照样本。</p>
+  <p id="paramline"></p>
+
+  <div class="card">
+    <div class="srow">
+      <span class="lab">邮件摘要<small>每天一封，汇总你的动态</small></span>
+      <span class="swbox"><input type="checkbox" id="s1" role="switch" aria-label="邮件摘要" checked><label class="sw" for="s1"></label></span>
+    </div>
+    <div class="srow">
+      <span class="lab">桌面通知<small>键盘按到一半弹提醒，慎用</small></span>
+      <span class="swbox"><input type="checkbox" id="s2" role="switch" aria-label="桌面通知"><label class="sw" for="s2"></label></span>
+    </div>
+    <div class="srow">
+      <span class="lab">实验特性<small>当前账号无权限（disabled 态演示）</small></span>
+      <span class="swbox"><input type="checkbox" id="s3" role="switch" aria-label="实验特性" disabled><label class="sw" for="s3"></label></span>
+    </div>
+    <div class="srow">
+      <span class="lab">同意服务条款<small>这条是复选框：勾选 ≠ 生效，提交表单才生效——形态与语义的对照组（原生 checkbox 未重绘，保持方框皮）</small></span>
+      <input type="checkbox" id="s4" aria-label="同意服务条款" style="width:20px;height:20px;accent-color:#0b4f6c;flex:none">
+    </div>
+  </div>
+
+  <p class="foot">邮件摘要：<span class="status" aria-live="polite"></span></p>
+</main>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "W": 44, "D": 24, "DUR": 180 };
+  /* ui-dict:params:end */
+  // 参数样板（≤15 行）：滑杆只写 CSS 变量；本页交互逻辑 JS = 0 行
+  const root = document.documentElement.style;
+  root.setProperty("--w", PARAMS.W + "px");
+  root.setProperty("--d", PARAMS.D + "px");
+  root.setProperty("--dur", PARAMS.DUR + "ms");
+  document.getElementById("paramline").textContent =
+    "当前参数：W = " + PARAMS.W + " px · D = " + PARAMS.D + " px · DUR = " + PARAMS.DUR +
+    " ms　|　交互 JS：0 行";
+})();
+</script>
+</body>
+</html>

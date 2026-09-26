@@ -1,0 +1,93 @@
+{
+  "id": "dialog",
+  "no": "C-13",
+  "category": "component",
+  "nameZh": "模态对话框",
+  "nameEn": "Modal Dialog",
+  "aliases": [
+    "挡住页面的弹窗",
+    "必须点确定才能继续的框",
+    "点外面能不能关的那种遮罩窗",
+    "居中弹出来问确认的窗",
+    "背景变灰的那层弹层",
+    "Dialog 弹窗"
+  ],
+  "definition": "居中浮起、压暗整页背景、要求用户先处理完它才能回到页面的一种打断式浮层，用来承载「必须做决定」的内容（确认删除、补全必填、同意条款）。判断要不要用它，看的是打断度：需要用户停下来给一个答案 → Dialog；只是补充上下文、不打断 → Popover；移动端可随手下滑收走 → Bottom Sheet。2026 年它最该被词典记录的事实是「不用再手写」：`<dialog>` + `showModal()` 一个元素白送了模态五件套——渲染在 top-layer（z-index 战争终结）、`::backdrop` 遮罩、Esc 关闭、焦点陷阱、背景内容 `inert`（Tab 与读屏都进不去）；开关本身还能 0 JS（`<button commandfor=\"dlg\" command=\"show-modal\">`，Chrome 135+/Safari 26+/Firefox 144+），关闭也能 0 JS（`<form method=\"dialog\">` 的按钮 value 就是 returnValue）。手写 div 那派（Portal + 自管 focus trap + 滚动锁）今天只剩「需要跨到 2023 年浏览器」与「要完全自定义进出场」两条理由。",
+  "whenNotToUse": [
+    "内容可随手忽略、不该打断用户手头的事 → 用 Popover 或 Tooltip，Dialog 会强制中断并把页面锁在背后",
+    "移动端、内容偏长、用户可能想边看底图边操作 → 用 Bottom Sheet，居中弹窗在小屏上遮得太多且拇指够不到顶部按钮",
+    "只是「操作成功了」的反馈、不需要用户做下一步 → 用 Snackbar/Toast，Dialog 要求一次多余的点击来关掉一个好消息",
+    "只是一组即时动作清单（复制 / 删除 / 导出） → 用 Dropdown Menu 或 Context Menu，别把菜单装进模态里",
+    "内容会长期停留、且用户需要来回对照页面数据 → 用 Drawer 或非模态侧栏，模态锁住底图反而碍事"
+  ],
+  "confusedWith": ["popover", "bottom-sheet", "drawer", "snackbar"],
+  "anatomy": [
+    { "part": "Dialog 容器", "note": "真 `<dialog>` 元素本体，渲染在 top-layer；圆角/宽度/阴影都归它" },
+    { "part": "Scrim / ::backdrop 遮罩", "note": "模态时平台自动画的压暗层，不是 DOM 节点——所以点它时事件目标是 dialog 本身，这是坐标兜底法的原理" },
+    { "part": "Title 标题", "note": "一句话说清要决定什么；用 aria-labelledby 关联，读屏打开时先听到它" },
+    { "part": "Body 正文", "note": "决定所需的上下文与后果说明；危险动作要明确「可不可撤销」" },
+    { "part": "Actions 动作区", "note": "1–3 个按钮，`<form method=\"dialog\">` 里各带 value = returnValue；主行动右、破坏性动作上色" },
+    { "part": "Invoker 触发器", "note": "页面上唤出它的那个按钮，`commandfor`+`command=\"show-modal\"` 声明式驱动（0 JS），关闭后焦点自动回到它" }
+  ],
+  "nativePath": "lite-js",
+  "implSchool": ["semantic-native", "css-state", "active-compute"],
+  "jsLines": 30,
+  "promptTemplate": {
+    "core": "实现一个 Modal Dialog 模态对话框，用真 `<dialog>` 元素而不是 div 模拟：容器圆角 {RADIUS}px、宽 min(420px, 100vw - 32px)、白底、投影 0 24px 60px rgba(0,0,0,.22)，内部三分节（标题区 / 后果说明条 / 底部动作区），动作区在 `<form method=\"dialog\">` 里放两个提交按钮 value=\"cancel\" 与 value=\"confirm\"（靠表单原生关闭，不要给它们写 click 处理）。打开：页面上的「删除」按钮写 `commandfor=\"dlg\" command=\"show-modal\"` 声明式唤出，同时用 `\"commandFor\" in HTMLButtonElement.prototype` 探测，不支持时才绑一条 click→showModal()（两条都生效会让 showModal 抛 InvalidStateError）。关闭退路三条都要成立：Esc（平台白送）、`closedby=\"any\"`（支持时平台包办点遮罩关）、不支持 closedby 时 JS 兜底——在 dialog 的 click 里判 `e.target === dlg` 且 clientX/Y 落在 getBoundingClientRect 之外（含 8px 容差）才 close('cancel')。状态回显：只在 `close` 事件里读 `dlg.returnValue` 更新页面一行文字，别自己写焦点管理。遮罩浓度 {SCRIM}（0–0.8）通过 `::backdrop{background:rgba(10,8,6,var(--scrim))}` 传入。进出场：包 `@supports (transition-behavior: allow-discrete)`，用 opacity + translateY(10px)→0 + scale(.98)→1、时长 {DUR}ms、曲线 cubic-bezier(.2,.8,.2,1)，配 `@starting-style` 给 [open] 写初始态；不支持时瞬开瞬合但功能完好。",
+    "stack": "原生 `<dialog>` + showModal() + ::backdrop + form method=dialog + invoker commands（commandfor/command）+ closedby；CSS 侧 @starting-style 与 transition-behavior: allow-discrete。交互 JS 只允许出现在「能力探测 + 两条降级 + returnValue 回显」三处。",
+    "constraints": [
+      "不要用 div + 手写 focus trap + 手写 body overflow 锁来模拟模态——showModal() 一个调用就把 top-layer、遮罩、Esc、焦点陷阱、背景 inert 五件事办了，重写这四五十行正是浮层库当年的全部成本",
+      "不要用 showModal() 之外的 .open 属性/setAttribute(\"open\") 唤出——非模态的 open 属性没有 backdrop、不锁背景、不做焦点管理，用户能 Tab 进背后页面，那是 Drawer 的行为不是 Dialog",
+      "不要给遮罩单独画一个 position:fixed 的 div——`::backdrop` 是平台伪元素，画了 div 就会出现「两层遮罩叠加变黑」和「z-index 与 top-layer 打架」两种经典 bug",
+      "不要在「点遮罩关闭」的兜底里只判 `e.target === dlg` 就关——点在 dialog 自身的 padding 区（比如圆角附近）也满足这个条件，必须叠加矩形外坐标判定",
+      "不要取消 Esc 的默认行为（keydown 里 preventDefault）——Esc 关模态是用户肌肉记忆，也是 a11y 检查表上的一项；要控制「能不能关」请用 closedby 属性",
+      "不要把破坏性动作和取消按钮放同样颜色——同一权重会让误删变成用户的事而不是设计的事",
+      "不要漏 prefers-reduced-motion：动画时长归零，但开合、returnValue 回显、三条关闭退路都要照常可用"
+    ],
+    "verify": [
+      "点「删除」，弹窗居中浮起、背景整页压暗，弹窗内第一个按钮获得焦点",
+      "弹窗打开时连按 Tab 绕几圈，焦点始终困在弹窗内的可聚焦元素之间，背后的页面一个也 Tab 不到",
+      "按 Esc 能关；点遮罩能关；点弹窗内部（含表单文字、按钮间距区）不能关",
+      "点「确认删除」关闭后，页面状态行显示「已删除（returnValue = \"confirm\"）」；点「取消」显示「已取消」；用 Esc/遮罩关也计入取消",
+      "关闭后焦点自动回到「删除」按钮，页面恢复可滚动（无需自己写 overflow 锁）",
+      "拖动滑杆，圆角/遮罩浓度/时长即时生效；把系统切到「减少动效」，弹窗瞬开瞬合但以上行为全部不变",
+      "在不支持 closedby 或 commandfor 的浏览器（Firefox 旧版）打开，页面上的轨道文字会写明走的是 JS 兜底，且开合关闭功能一样成立"
+    ],
+    "reference": "参考气质：GitHub 删除仓库那个红字确认弹窗（标题说后果、按钮分清危险与退出）；macOS 系统的「要移到废纸篓吗？」（居中、两个动作、Esc 等价取消）。克制、不贪心、问完就走。",
+    "variants": [
+      { "label": "禁点遮罩关（真正确认框）", "delta": "去掉 closedby=\"any\" 与坐标兜底，只留 Esc 与两个按钮——APG 对 alertdialog 的建议：不给「不回答就消失」的退路" },
+      { "label": "完全声明式（0 行 JS）", "delta": "删掉所有能力探测与兜底，只留 commandfor + closedby + form method=dialog；代价是旧浏览器上按钮点了没反应，需要接受支持面" }
+    ]
+  },
+  "params": [
+    { "key": "RADIUS", "label": "弹窗圆角 (px)", "def": 14, "min": 0, "max": 28, "step": 1, "hint": "0=工程感；>22 在窄弹窗上会显得像个卡片而不像个决定" },
+    { "key": "SCRIM", "label": "遮罩浓度", "def": 0.45, "min": 0, "max": 0.8, "step": 0.05, "hint": "0=看不出被模态锁住；>0.7 完全隔绝底图，用户会忘了自己从哪来" },
+    { "key": "DUR", "label": "进出场时长 (ms)", "def": 220, "min": 0, "max": 600, "step": 20, "hint": "0=瞬开（减少动效下的等价物）；>360 会让人觉得系统在犹豫" }
+  ],
+  "scenarios": [
+    "GitHub「Destroy repository」永久删除确认（标题写后果 + 输入仓库名才算二次确认）",
+    "macOS 访达「要移到废纸篓吗？」二选一确认",
+    "Notion 页面「删除整页并连带子页面」的危险确认",
+    "SaaS 退订流程里「确认取消订阅 · 服务保留到本周期结束」的后果告知",
+    "表单弹窗：新建项目 / 编辑标签这类「填完就走、不留底图上下文」的小任务"
+  ],
+  "pitfalls": [
+    "`showModal()` 与 `open` 属性不是「一个带遮罩一个不带」的区别，而是两种语义：前者让 dialog 进 top-layer 的模态态（平台自动加 backdrop、锁背景 inert、管焦点），后者只是一个布尔属性开关（非模态，等于一个能 Tab 出去的浮层）。把 `<dialog open>` 当模态用，会得到一个「看起来压暗了但其实背景还能 Tab 进去」的假模态",
+    "点遮罩为什么需要 JS 兜底：`::backdrop` 是伪元素、不是 DOM 节点，点击它时事件目标是 `<dialog>` 本身——所以旧写法「判 e.target === dialog 就关」在 dialog 有 padding 或圆角留白时，会把「点在弹窗自己边缘」误判成「点在遮罩上」而误关，必须叠加一层坐标矩形外判定。`closedby=\"any\"` 属性（Chrome 134+）正是平台把这段逻辑收了去",
+    "`<form method=\"dialog\">` 里的提交按钮不会真提交（不发请求、不刷新），它只是把 value 写进 `dialog.returnValue` 并调 `close()`——这是「关窗 + 带回一个值」的 0 JS 正解。很多人以为它还能带字段名提交，于是把表单校验写在外面；输入校验请在各自的 input 上做，关闭后读 returnValue 再决定后续动作",
+    "invoker commands（`commandfor`/`command=\"show-modal\"`）能力探测和 click 兜底只能二选一：Chrome 135+ 里声明式和手动 click 都会生效，用户点一下按钮就调了两次 `showModal()`，第二次抛 `InvalidStateError: Modal state could not be set: the element has an ancestor that is a dialog`。用 `\"commandFor\" in HTMLButtonElement.prototype` 判过之后再决定绑不绑",
+    "进出场动画卡在 display 这一关：dialog 关闭是 `display:none`，没有过渡起点/终点，纯 CSS 写 transition 不生效。要滑入滑出必须 `transition: ... display .2s allow-discrete, overlay .2s allow-discrete` 并给 `[open]` 补 `@starting-style`；这三样都是 2024–2025 才齐的能力，不支持的浏览器里请安静退化成瞬开瞬合（用 `@supports (transition-behavior: allow-discrete)` 整段包住），别为了动画把 dialog 换回 div",
+    "焦点归还与滚动锁不需要你写：`showModal()` 打开时把背景标成 inert（Tab 与读屏双双进不去）、关闭时把焦点还给触发元素、并自带 body 滚动锁。手写派这四件事（focus trap / inert / scroll lock / focus restore）占了浮层库一半的代码量与几乎全部的历史 bug——这正是「该把活儿交回平台」的论据，写进词条的 whenToUse 也合适",
+    "长内容弹窗在 iOS 上会把「::backdrop + position:fixed」的组合顶坏：底图滚动 + 键盘弹起会让弹窗位置漂。正解是给 dialog 内部（不是整个 dialog）设 `max-height: calc(100dvh - 64px); overflow: auto`，让弹窗自己成为滚动容器，别指望 backdrop 帮你裁"
+  ],
+  "related": ["popover", "bottom-sheet", "drawer", "command-palette", "alert-dialog", "lightbox"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog",
+    "https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal",
+    "https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.4)", "reviewer": "skkjkk", "date": "2026-09-27" }
+  ],
+  "verifiedWith": "Qwen3.8-Flash · replay 2026-09-26 · 1/1 生成通过"
+}

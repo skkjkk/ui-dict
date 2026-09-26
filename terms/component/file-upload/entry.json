@@ -1,0 +1,93 @@
+{
+  "id": "file-upload",
+  "no": "C-19",
+  "category": "component",
+  "nameZh": "文件上传 / 拖放区",
+  "nameEn": "File Upload / Dropzone",
+  "aliases": [
+    "把图片拖进去那块虚线框",
+    "选文件那个按钮",
+    "传头像的地方点开能挑图",
+    "拖进来就能预览上传的框",
+    "截图粘贴上去的那个区域",
+    "Drop Zone / Drag & Drop Upload"
+  ],
+  "definition": "一个承接用户本地文件的界面：一块虚线框（或按钮）负责唤起系统文件选择器，拖放与粘贴是另外两条把同一份 FileList 喂进来的通道。它是「看起来复杂其实原生可做」的最佳教学案例——整件事的底座是一个 `<input type=file>` 加一个 `for` 指向它的 label（0 行 JS 就能选文件），JS 只负责三条增强：拖放高亮、FileReader 本地预览、粘贴收图。与「上传」这个词要分清：本词条管的是「把文件交到页面上」，字节真正进服务器是之后的事（demo 零网络请求；生产在 drop 里接 fetch + FormData）。与表单文件字段的区别：后者只有「选完显示一个文件名」的最小形态，没有拖放区、缩略图与多文件管理。",
+  "whenNotToUse": [
+    "只需要「选一个文件」且对样式无要求 → 原生 `<input type=file>` 就够，套 dropzone 是杀鸡用牛刀",
+    "要选取的是页面里已有的资源（图库、知识库）→ 用选择列表 / Modal Picker，File Upload 的语义前提是文件在用户本地",
+    "需要读取本地整个目录、跨会话续传大文件、写回用户磁盘 → FileSystem API / 原生客户端，单文件 demo 不承诺这些",
+    "只是要把一段文本存下来 → 文本域 + 下载按钮即可；把它做成「拖个 .txt 进来」是自我感动",
+    "移动端主流量场景需要「直接开相机」→ 给 input 加 `capture` 或干脆放两个按钮（拍照 / 从相册），拖放手势在触屏上不存在"
+  ],
+  "confusedWith": ["drag-reorder", "tag-input", "lightbox"],
+  "anatomy": [
+    { "part": "Zone 拖放区", "note": "那块虚线框：既是 label（点它开文件框）又是 drop 目标；高亮态由 .drag 类驱动" },
+    { "part": "Hidden input", "note": "真 `<input type=file multiple accept>`，clip-path 视觉隐藏但保留键盘与读屏；accept 是建议不是安全边界" },
+    { "part": "Drag Counter 计数法", "note": "dragenter ++ / dragleave --，归零才移除高亮——对付子元素事件风暴的必需品" },
+    { "part": "FileList 汇流", "note": "三条通道（change / drop / paste）汇进同一个 accept()，校验只写一遍" },
+    { "part": "Preview 缩略图", "note": "FileReader.readAsDataURL → data: URI 塞 img.src，本地读盘不发请求；非图片回退文件图标 + MIME" },
+    { "part": "File Chip 回显", "note": "文件名 + 大小 + 移除链接的胶囊行——「已选清单」是 dropzone 最重要的子模式" }
+  ],
+  "nativePath": "styled-js",
+  "implSchool": ["capability-api", "active-compute"],
+  "jsLines": 70,
+  "promptTemplate": {
+    "core": "实现一个 File Upload / Dropzone 文件上传拖放区：一块虚线框（最小高 {ZONE_H}px、{BORDER}px dashed #cfc9bd、圆角 12px、#fbfaf7 底），它同时是 `<label for=\"ipt\">`（点它开系统文件框，0 JS 底座）与拖放目标；真 `<input id=ipt type=file multiple accept=\"image/*\">` 用 clip-path 视觉隐藏但保持可聚焦。三条收文件通道汇进同一个 accept(list) 函数：① input 的 change 事件；② drop 事件的 e.dataTransfer.files；③ document 的 paste 事件里 e.clipboardData.files（截图直接可贴）。拖放高亮必须用计数法：dragenter 里 depth++、dragleave 里 depth--，归零才移除 .drag 类（子元素会各触发一轮 enter/leave，直接判 leave 会闪烁）；dragover 里 preventDefault() 并设 dropEffect=\"copy\"；同时在 document 上 preventDefault 掉 dragover/drop，防止浏览器把文件当链接直接打开。校验：单文件 ≤5 MB（超限拒绝并在状态行红字提示，不静默丢弃）、按 f.type.startsWith(\"image/\") 分流。预览：图片用 new FileReader().readAsDataURL(f)、onload 里把 rd.result 写进 img.src（本地读盘、零网络），缩略图 {THUMB}px 见方、object-fit: cover、圆角 8px；非图片渲染文件图标 + MIME 文字。每个文件配一行文件名+大小的回显 chip，带「移除」入口（容器事件委托 + splice 数组 + 重绘），状态行显示「N 个文件 · 累计 X KB」。键盘：label 加 tabindex=0 与 role=button，Enter/Space 调 ipt.click()；aria-label 把三条通道都念出来。`prefers-reduced-motion` 下高亮态去 transform 缩放只留颜色。",
+    "stack": "原生 File API（input[type=file] / DataTransfer.files / FileReader.readAsDataURL）+ Pointer/DnD 事件；无组件库、无网络请求。",
+    "constraints": [
+      "不要在 demo 里真的上传（禁 fetch/XHR 到任何地址）——收文件、预览、移除全在本地完成；生产形态写成注释里的 fetch 加 FormData，别写成能跑的现实",
+      "不要用 dragover 的 e.target 判「离开」或用 dragleave 直接 removeClass——指针移到框内子元素时 leave 立刻触发，高亮会疯狂闪烁；计数法（或 relatedTarget 判定）是这类事件风暴的通用解",
+      "不要在 document 上不拦 dragover/drop——没拦的时候用户把图片拖到框外（或框的空白处）浏览器会放弃当前页面直接打开那张图，整页状态全丢",
+      "不要以为 accept=\"image/*\" 是安全边界——它只是文件选择器的过滤建议，拖放与粘贴通道能绕过它，服务端与前端都必须再校验 MIME 与体积",
+      "不要用 blob URL（createObjectURL）替代 dataURL 做单文件 demo——blob: 在刷新后失效、需要手动 revokeObjectURL 否则内存泄漏；dataURL 更胖但生命周期干净，本词条的预览只要活过一屏就够",
+      "不要把隐藏 input 写成 display:none——那样读屏与键盘完全看不到它、label 的 for 在某些旧浏览器会失效；clip-path 视觉隐藏保住可交互",
+      "不要漏掉「已选清单可移除」——只能进不能出的上传框会把误选变成灾难，删除入口与文件名回显是同一枚硬币的两面",
+      "不要在大图预览上直接塞原图 dataURL——几百张 4 MB 图的 base64 会把内存吃穿，预览前用 createImageBitmap + canvas 缩放（或至少限制张数并写明这是简化）"
+    ],
+    "verify": [
+      "点虚线框弹出系统文件选择器，选 2 张图 → 出现两枚缩略图 + 两枚文件名 chip，状态行显示「2 个文件 · 累计 X KB」",
+      "把图片从桌面拖到框上：框变蓝、变实线、轻微放大；移开（哪怕只在框内子元素间划过）高亮不闪烁，真正离开时才复位；松手后文件被收下",
+      "Ctrl/Cmd+V 粘贴一张剪贴板截图，与拖放走同一渲染路径",
+      "拖入一个 .zip（非图片）→ 回退成文件图标 + MIME 文字，不出现破图",
+      "拖入 >5 MB 的文件 → 被拒绝并在状态行红字说明原因，合法文件仍正常收下",
+      "点某枚 chip 的「移除」：对应缩略图与 chip 一起消失，累计数与总大小同步；移除全部后回到「0 个文件」的空态",
+      "Tab 能停在虚线框（有 focus ring）并按 Enter 打开文件框；DevTools Network 面板全程零请求"
+    ],
+    "reference": "参考气质：Google Drive 网页版的拖放区（虚线框 + 拖入变蓝）；Notion 内联图片上传（拖放 + 粘贴 + 缩略图三合一）。工程感来自「三条通道、一个入口」的干净。",
+    "variants": [
+      { "label": "带进度条（真上传）", "delta": "accept 后逐枚 XHR/fetch + 进度回调，chip 右侧挂环形进度、失败态转红并给「重试」；代价是引入网络与状态机，jsLines 翻倍" },
+      { "label": "整页拖放蒙层", "delta": "把 drop 目标从框换成 body（document 级 dragenter 显示全屏蒙层），适合 Dropbox 式「整页都是上传口」；计数法要搬到 document 上，与页面其他拖放目标（排序）抢手势时要加 dataTransfer.type 判别" }
+    ]
+  },
+  "params": [
+    { "key": "ZONE_H", "label": "拖放区高 (px)", "def": 160, "min": 90, "max": 280, "step": 10, "hint": "移动端命中区至少 120；<90 已经不像一个「区」而像一个按钮" },
+    { "key": "THUMB", "label": "缩略图 (px)", "def": 92, "min": 48, "max": 160, "step": 4, "hint": "太小就看不出传对了图；>140 时多文件一挤就把框撑得很高" },
+    { "key": "BORDER", "label": "虚线粗细 (px)", "def": 2, "min": 1, "max": 4, "step": 1, "hint": "1px 在浅色底上几乎隐形；>3 会显得像个未完成的骨架" }
+  ],
+  "scenarios": [
+    "Google Drive / 百度网盘网页版的拖放上传区",
+    "头像与封面上传（Notion、GitHub Settings 的「拖一张进来」）",
+    "工单系统附件（多文件 + 文件名回显 + 可移除是本词条的标准三件套）",
+    "AI 对话里的图片/文档投喂框（粘贴截图直接进来是主路径）",
+    "身份证/营业执照采集（前端只收文件与预览，校验留给 OCR 服务）"
+  ],
+  "pitfalls": [
+    "dragenter/dragleave 会为你的每一个子元素各发一轮：指针从虚线框移进里面的图标 span，leave（框）与 enter（span）几乎同帧到达，直接按事件删类，高亮就在闪烁中度过整个拖拽过程——所以用 depth 计数：enter ++、leave --，只有归零才是「真的走了」。另一条等价解法是 dragleave 里判 !e.relatedTarget || !zone.contains(e.relatedTarget)，但 relatedTarget 在 Safari 的 drag 事件里长期不可靠，计数法是更稳的那把尺子",
+    "不在 document 上 preventDefault 掉 dragover/drop，用户把图片拖偏了 10 像素，浏览器就当成「打开这个文件」的导航请求——当前页面整个被替换，未保存的表单一起没了。这条是文件上传类页面最贵的 bug，因为复现只需要手抖一下",
+    "FileReader 是异步的：for 循环里连续 readAsDataURL 然后立刻 img.src = rd.result，拿到的永远最后一次 result（闭包共享同一个 rd 对象）。要么每次循环 new 一个 FileReader（本 demo 的做法），要么用 onload 闭包捕获 index——「预览全是最后一张图」就是踩过这条的经典症状",
+    "dataURL 是内存里的 base64，体积约为原文件的 1.37 倍：把 200 张原图直接读成 dataURL 塞进缩略图，标签页会因内存崩溃——预览必须先把位图缩到目标尺寸（createImageBitmap + canvas，或退而求其次：CSS 撑小的同时限制张数）。用 blob URL（createObjectURL）能省这份 base64，代价是要记得 revokeObjectURL，否则浏览器直到页面卸载都不会回收那块内存",
+    "accept 与「拖放/粘贴」不是一条路：`accept=\"image/*\"` 只能给系统文件选择器一个过滤建议，拖放与粘贴通道进来的文件类型一概不由它管——所以校验必须写在 JS 里（type/size 双查），服务端再查一遍。把 accept 当安全边界的实现，遇到用户拖一个 .exe 就现原形",
+    "隐藏 input 的 display:none 会让 label 点击在部分场景失灵、并让读屏彻底找不到这个控件（它连「这里能传文件」都念不出来）；clip-path 视觉隐藏保住的是可交互与语义。同理，把整个拖放区做成一个 <div> 而不是 label，就得自己写 ipt.click()，还容易漏掉键盘入口——label 的 for 属性是最便宜的 0 JS 正确实现",
+    "多选删除后如果「可见的 chip 顺序」和「内部数组顺序」不同步，点第 2 个移除按钮删掉的是第 3 个文件：所有变更都从数组出发再重绘 DOM（单向数据流），永远不要改完 DOM 再反过来读 DOM 拼数组——后者在事件委托的下标错位上必翻车"
+  ],
+  "related": ["tag-input", "drag-reorder", "lightbox", "file-dropzone", "upload-progress"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/API/File",
+    "https://developer.mozilla.org/en-US/docs/Web/API/FileReader",
+    "https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/File_drag_and_drop"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.4)", "reviewer": "skkjkk", "date": "2026-09-27" }
+  ]
+}

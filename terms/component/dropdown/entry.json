@@ -1,0 +1,92 @@
+{
+  "id": "dropdown",
+  "no": "C-14",
+  "category": "component",
+  "nameZh": "下拉菜单",
+  "nameEn": "Dropdown Menu",
+  "aliases": [
+    "点开的一列小菜单",
+    "齿轮旁边那个",
+    "更多操作冒号三个点的菜单",
+    "点一下掉下来几条命令的列表",
+    "带快捷键提示的弹出菜单",
+    "Menu Button"
+  ],
+  "definition": "挂在触发按钮下方（或翻转到上方）的命令清单：每一项是一个立即执行的动作（重命名 / 复制 / 删除），执行完菜单自动收起，不产生「选中值」。中文语境里它和 Select 常被混叫「下拉框」，分界看内容：菜单装动作、选择器装取值；再和 Context Menu 分界看位置：Dropdown 由锚点按钮决定弹在哪，Context Menu 由鼠标右击的指针坐标决定。它是实现流派叠代最完整的标本——四代做法至今并存：① :hover/:focus-within 纯 CSS 派（键盘与触屏双瞎），② checkbox+label 状态机派（0 JS 但没有菜单语义），③ details>summary 派（白送开合却管不了点外关闭），④ popover+anchor 新平台派（本词条 demo 走的路线：开关、点外关、Esc、top-layer 全 0 JS，定位交给 CSS）。",
+  "whenNotToUse": [
+    "用户要的是「选一个值填进表单」而不是「执行命令」→ 用 Select（值随表单提交、有回显、键盘是上下键选值语义）",
+    "动作需要配合当前指针位置（对某一行、某张图做什么）→ 用 Context Menu，右击在哪弹在哪",
+    "候选项 ≥ 20 条且用户知道关键词 → 用可搜索的命令面板 / Combobox，翻长菜单是滚轮地狱",
+    "只是给一个图标补解释 → 用 Tooltip，别把说明塞进要点开的菜单里藏一层",
+    "菜单项只有 1 个 → 直接放那个按钮，「更多」套一层是把一步变两步"
+  ],
+  "confusedWith": ["select", "context-menu", "command-palette", "popover"],
+  "anatomy": [
+    { "part": "Trigger 触发器", "note": "那个按钮（或 ⋯ 图标）；popovertarget 指它 0 JS 开关，aria-expanded/aria-controls 挂在它身上" },
+    { "part": "Menu 容器", "note": "popover=\"auto\" 的浮层，进 top-layer 免裁剪；role=menu 只在含 menuitem 时才是合法语义" },
+    { "part": "Menu Item 菜单项", "note": "一个动作一个按钮，role=menuitem；禁用项用 disabled 属性而不是从清单里删掉" },
+    { "part": "Shortcut Hint 快捷键提示", "note": "右侧灰色 ⌘C / F2——是提示不是承诺，真快捷键要在全局 keydown 里另实现" },
+    { "part": "Separator 分隔线", "note": "把危险动作与安全动作切开的那条线，role=separator" },
+    { "part": "Placement 定位策略", "note": "默认锚点下方、放不下翻上方（flip-block）、贴右缘则内收——anchor()+position-try 白送，无支持时 JS getBoundingClientRect 兜底" }
+  ],
+  "nativePath": "lite-js",
+  "implSchool": ["platform-overlay", "css-state", "semantic-native", "active-compute"],
+  "jsLines": 40,
+  "promptTemplate": {
+    "core": "实现一个 Dropdown Menu 下拉菜单：工具栏右侧一个「更多操作」按钮（宽菜单 {WIDTH}px、菜单项高 {ITEM_H}px、锚点间距 {GAP}px），点击后在其下方弹出一个命令清单（宽 {WIDTH}px、白底、1px #e5e1d8 描边、圆角 10px、投影 0 12px 30px rgba(0,0,0,.16)），含 2–3 个普通动作项（右侧灰字快捷键提示）、一条分隔线、一个红色危险项、一个 disabled 项。开关与显隐必须 0 JS：菜单元素写 popover=\"auto\"，按钮写 popovertarget 指向它；点外部关闭与 Esc 由 popover 的 auto 语义白送。定位走两条轨道：支持 anchor  positioning 的浏览器用 CSS——按钮设 anchor-name，菜单 position-anchor 到它，top: anchor(bottom) / right: anchor(right) 配 margin-top {GAP}px，再 position-try-fallbacks: flip-block, flip-inline 让空间不足时自动翻转（整段包 @supports (anchor-name: --a)）；不支持时 JS 兜底：beforetoggle 里读触发器 getBoundingClientRect() 算 top/left（下方不足翻上方、贴边水平钳位 ≥8px），写成 --x/--y 变量。键盘规格（APG Menu Button）：打开后焦点自动进第一项；↓↑ 在可用项间循环、Home/End 跳首尾、Tab 在菜单内 preventDefault；Enter/Space 执行当前项；Esc 关闭（popover 白送）并把焦点归还触发按钮。执行动作：容器上 click 委托（closest('.mi')，禁用项跳过），把动作名回显到页面一行「最近动作：X」，然后 hidePopover()。进出场：opacity + translateY(-4px)→0 共 160ms cubic-bezier(.2,.8,.2,1)，配 overlay/display allow-discrete 与 @starting-style，不支持的浏览器瞬开瞬合。按钮挂 aria-haspopup=menu 与 aria-expanded（toggle 事件里同步）。",
+    "stack": "原生 Popover API（popover/popovertarget）+ CSS anchor positioning（@supports 包裹）+ 少量原生 JS（键盘导航 + 定位兜底 + toggle 同步 aria）。",
+    "constraints": [
+      "不要只靠 :hover 打开——触屏（hover:none）没有 hover，键盘用户也无法悬停；hover 至多是桌面增强，click/popover 必须是主路径",
+      "不要把动作清单做成 <select> 或 <a href=\"#\">——菜单项是按钮语义（role=menuitem / button 元素），链接会诱导用户新标签打开、下拉框会带上「取值」语义",
+      "不要给每个菜单项单独 addEventListener——用容器事件委托，否则动态增删项就漏绑，且「同时只能开一个」之类的状态管理会散成一地",
+      "不要裸写 anchor() 定位——anchor positioning 支持面约 86% 且各浏览器 partial 程度不一，必须 @supports 包裹并提供 getBoundingClientRect 兜底路径，两条路都要能过验收",
+      "不要用 display:none 做菜单初始态——popover 的 hidden 匹配态由 UA 管理（content-visibility），自己再写 display:none 会打架；动画做在 opacity/transform 上",
+      "别忘了 popover 的 top-layer 会把菜单从祖先的 overflow/transform 上下文里摘出去——这是特性不是坑（免裁剪），但如果你给它写了 position:absolute 期望跟随滚动，滚动时它会钉在原地与锚点脱开；要跟随就让 anchor() 活着或 beforetoggle/scroll 时重算",
+      "不要漏 prefers-reduced-motion 降级（过渡归零）与 disabled 项的键盘跳过"
+    ],
+    "verify": [
+      "点击「更多操作」菜单在按钮下方弹出、右缘与按钮对齐；再点按钮或点页面任意处或按 Esc，三种方式都能关闭",
+      "菜单打开时按 ↓↑，焦点在可用项间循环移动，disabled 项被跳过；Home/End 跳首尾；Enter 执行并把「最近动作：X」回显到页面，菜单自动收起",
+      "把按钮滚到视口底部附近再打开（或直接用页面上的滚动垫），菜单自动翻到按钮上方，不溢出视口——两条定位轨道（anchor 或 JS 兜底）下都必须成立",
+      "Tab 键在菜单打开期间不会跑到页面其他元素；关闭后焦点回到触发按钮",
+      "禁用 JavaScript：菜单仍然能开关、点外关、Esc 关（0 JS 开关的自证），只是方向键导航与动作回显失效",
+      "触屏模式（DevTools hover:none）下单击即可开合，无任何 hover 依赖"
+    ],
+    "reference": "参考气质：Figma 画布右键「⋯」菜单的密度与快捷键排版；Linear 议题行右侧菜单的翻转与钳位。安静的白色浮层、34px 行高、右侧一列灰字键位。",
+    "variants": [
+      { "label": "hover 即开（桌面增强）", "delta": "trigger 的 pointerenter 延时 150ms 调 showPopover()、离开 300ms hidePopover()（留移向菜单的桥接死区）；click 路径原样保留给触屏与键盘" },
+      { "label": "子菜单", "delta": "「移动到…」改 aria-haspopup=menu 嵌套第二层 popover，父项 hover 300ms 开、兄弟互斥关——工程复杂度陡增，词条正文标注这是 dropdown 家族的重型变体" }
+    ]
+  },
+  "params": [
+    { "key": "WIDTH", "label": "菜单宽 (px)", "def": 200, "min": 140, "max": 280, "step": 10, "hint": "以最长动作名 + 快捷键提示为准；<140 会把 ⌘C 挤到换行" },
+    { "key": "ITEM_H", "label": "菜单项高 (px)", "def": 34, "min": 28, "max": 44, "step": 2, "hint": "触屏下限 40；macOS 系统菜单 32 附近的紧凑档" },
+    { "key": "GAP", "label": "锚点间距 (px)", "def": 6, "min": 0, "max": 16, "step": 1, "hint": "0=菜单压住按钮（像连体），>12 归属感到断；hover 派还要吃这条缝" }
+  ],
+  "scenarios": [
+    "文件列表行右侧 ⋯ 的操作菜单（重命名 / 复制链接 / 删除，Notion / Google Drive 式）",
+    "编辑器工具栏「格式」下拉（Figma 顶部菜单族）",
+    "数据表格「列设置 / 导出」的齿轮菜单",
+    "邮件客户端列表行的「归档 / 转交 / 删除」更多菜单（Gmail）",
+    "播放器「音质 / 倍速」设置浮层里的命令清单（B 站 / YouTube 的 ⚙）"
+  ],
+  "pitfalls": [
+    "hover 打开的菜单永远慢一步：指针从按钮移向菜单要穿过 GAP 那段不属于任何一方的空隙，mouseleave 先到、菜单先消失，用户伸手出去就点空——所以 hover 只能做「桌面延时增强」（enter 150ms / leave 300ms 桥接），click 必须是主路径，触屏（hover:none）与键盘根本没有 hover 可言",
+    "checkbox hack 与 details 两派能把「显隐」做成 0 JS，却做不出「菜单语义」：CSS 状态改不了 aria-expanded 的取值、也进不了 top-layer，读屏永远不知道菜单开了没——0 JS 不是免费的，它免的是显隐，欠的是可访问性；popover 流派的价值恰恰是把语义（点外关/Esc/focus）也白送给 0 JS",
+    "aria-expanded 必须挂在触发按钮而不是菜单容器上：展开态是「按钮的属性」，读屏聚焦按钮时要先听到「已折叠 按钮」再决定按不按；菜单容器自己的 role=menu 不携带开合状态。popover 的开关是 UA 行为，JS 得在 toggle 事件里手动同步这个属性——这是「0 JS 开关」词条里唯一躲不掉的 aria 债",
+    "菜单项用 <a href=\"#\"> 是历史惯性不是设计：Enter 之后页面跳顶、菜单不关、还把动作塞进了「链接」语义里；动作就用 <button>，disabled 用原生 disabled 属性（同时天然跳出 Tab 序与方向键循环——前提是你的方向键导航查的是 :not([disabled]) 列表）",
+    "快捷键提示 ⌘C 印在菜单里只是「地图」，不是「司机」：不写全局 keydown 监听的话它就是骗人的承诺；要么实现它，要么删掉提示——半套快捷键比没有更伤信任",
+    "点外关闭在 popover 派是白送的（auto 态的 light dismiss），但在手写派是一整页 outside-click + contains() 判定 + 捕获/冒泡阶段的恩恩怨怨（mousedown 还是 pointerdown、iframe 内点击漏捕）——这正是「浮层库的一半体积该还给平台」的证据，也是本词条把 popover+anchor 列为第四代的理由",
+    "菜单里再套 hover 展开的子菜单，两兄弟间的斜向移动路径是三角形的死区，指针一偏就出父项 300ms 延时消失——要么放弃子菜单（多数场景本来就该扁平），要么给子菜单开「桥接热区」；这是 dropdown 家族公认的重型变体，能不碰就不碰"
+  ],
+  "related": ["select", "context-menu", "popover", "command-palette", "menu"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/API/Popover_API",
+    "https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/",
+    "https://developer.mozilla.org/en-US/docs/Web/API/CSS_anchor_positioning_API"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.4)", "reviewer": "skkjkk", "date": "2026-09-27" }
+  ],
+  "verifiedWith": "Qwen3.8-Flash · replay 2026-09-26 · 1/1 生成通过"
+}

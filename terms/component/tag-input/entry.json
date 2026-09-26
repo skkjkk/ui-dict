@@ -1,0 +1,91 @@
+{
+  "id": "tag-input",
+  "no": "C-18",
+  "category": "component",
+  "nameZh": "标签输入框",
+  "nameEn": "Tag Input",
+  "aliases": [
+    "打了字回车就变成一个小标签的输入框",
+    "输一个加一个带小叉的框",
+    "邮件收件人那种框",
+    "回车变胶囊的输入",
+    "可以一直往里丢关键词的框",
+    "Chips Input / Token Field"
+  ],
+  "definition": "一个把「自由文本输入」与「已选集合展示」焊在同一只框里的控件：打字，按回车（或逗号）后文本被收编成一枚可点叉删除的胶囊标签，光标退回空输入框继续下一个。与 Select 的分界：候选不存在、由用户凭空创造，且天然多值；与 Combobox 的分界：没有下拉建议列表（挂上建议列表它就长成 Combobox——同一只框的两个进化方向）。它是词汇站集体盲区（Mobbin / UI-Patterns / component.gallery 实测三站全缺），但邮件客户端、笔记软件、后台配置里天天见——口语描述极生动，是「按描述反查」的招牌命中区。",
+  "whenNotToUse": [
+    "候选是固定集合 → 用 Select / Multi-select；自由创造 + 固定候选混着要，那是 Combobox（带建议的 tag input）",
+    "值是有限格式实体（邮箱 / 日期 / 邮编）→ 用带校验的专用控件，胶囊框会把错误延迟到提交",
+    "只需要一串逗号分隔的原始文本（后端自己 split）→ 老实放一个 textarea，别为一次性输入维护一套胶囊状态机",
+    "标签数预期上百（给一篇文章打 200 个词）→ 虚拟列表 + 计数面板，胶囊流会挤爆输入区",
+    "多选但选项需要图片/描述富展示 → Checkbox 卡片组，胶囊装不下富内容"
+  ],
+  "confusedWith": ["select", "otp-input", "combobox", "multi-select"],
+  "anatomy": [
+    { "part": "容器 Frame", "note": "伪装成输入框的 flex-wrap 流：chips 与真 input 同排共处，focus-within 点亮整框描边" },
+    { "part": "真 input", "note": "永远躲在最后一个胶囊后面，flex:1 吃余宽；placeholder 随已选数量变化" },
+    { "part": "Chip 胶囊", "note": "已选值的可见形态：文本 + 删除钮；圆角 {RADIUS}px 决定药丸或方角气质" },
+    { "part": "删除叉 ×", "note": "可聚焦 button（不是 ::after 画的假按钮——那会键盘不可达），aria-label=删除标签 X" },
+    { "part": "收编触发", "note": "Enter / 半角逗号 / 全角逗号 / 粘贴分发——四个入口共用同一条 add() 校验（去空白、查重、限 {MAX} 个）" },
+    { "part": "镜像值", "note": "生产形态应有隐藏 input 或 data 属性承接数组，提交时序列化——demo 底部回显行就是它" }
+  ],
+  "nativePath": "lite-js",
+  "implSchool": ["capability-api", "active-compute", "css-state"],
+  "jsLines": 40,
+  "promptTemplate": {
+    "core": "实现一个 Tag Input 标签输入框：一只伪装成输入框的 flex-wrap 容器（min-height 44px、圆角 10px、描边 #cfc9bd、focus-within 变主色 #0b4f6c + 3px 光环），内部一枚胶囊挨一枚排开、最后一个位置是真 <input>（flex:1、min-width 90px、无边框）。键盘规格逐条实现：① Enter / 半角「,」/ 全角「，」把输入值 trim 后收编成胶囊并清空输入框；② 输入框为空时按 Backspace 删除最后一个胶囊（e.preventDefault 拦住浏览器退格翻页——这条规则与 ① 分开写，不是同一条 if）；③ 点胶囊上的 × 删除该胶囊、焦点归还输入框。校验：去首尾空白、空串不收、数组查重、数量上限 {MAX} 个，违反任何一条 → 容器 shake 抖动 300ms（keyframes 位移 ±3px）+ 红描边一闪，输入值原样保留让用户改。粘贴：paste 后把 a,b,c 按逗号切段逐个走 add()。胶囊：背景 #eef4f7、主色文字、圆角 {RADIUS}px、间距 {GAP}px、入场 pop 动画 scale(.85)→1 共 180ms cubic-bezier(.2,.8,.2,1)。无障碍：容器 role=group + aria-label；× 是真实 <button aria-label=删除标签 {tag}>，Tab 可达回车可触发；下方一行说明文案 id 挂到 input 的 aria-describedby。底部回显「表单实际提交：tags=[...]」（encodeURIComponent(JSON.stringify)），让人看见可见形态与数据形态的对应。",
+    "stack": "原生 JS（keydown/paste 事件 + 数组状态 + 全量重绘）+ 原生 CSS；不引组件库。",
+    "constraints": [
+      "不要用 contenteditable div 当输入框——光标管理是深坑：胶囊插入点、跨胶囊选区删除、中文输入法 composition 打断、粘贴带样式污染，每一条都要一段补丁；真 input + 数组状态才是可控的正解",
+      "不要用 ::after 画删除叉——画得出来、点得到（整颗胶囊）、但键盘与读屏到不了；× 必须是真 button",
+      "不要在每个 × 上单独 addEventListener——胶囊是动态增删的，逐颗绑定必然漏绑或泄漏；容器事件委托 closest(\".x\")，配合 dataset.i 定位数组下标",
+      "不要漏 Backspace 空态分支里的 preventDefault——浏览器原生「退格=后退一页」会把你整页带走，这是 tag input 最凶的隐形坑",
+      "不要用中文逗号只收半角——中文输入法下用户打出来的是「，」，两个都要收，否则中文用户永远收不进第二个标签",
+      "不要让查重失败静默无事发生——不抖不提示，用户以为加进去了，提交后才发现少了；「拒绝 + 保留输入内容」是失败路径的全部设计",
+      "不要用 flex-wrap 却不给 input min-width——长标签会把输入区挤成 0 宽光标，用户看不见自己打的字；min-width 90px + nowrap ellipsis 的胶囊是配套的"
+    ],
+    "verify": [
+      "输入「张三」按回车，它变成一枚胶囊、输入框清空、光标仍在框内；再按逗号也能收编",
+      "输入已有标签「王芳」按回车：胶囊没加上、框体抖了一下、输入的「王芳」原样留着",
+      "输入框空着按 Backspace：最后一个胶囊消失；连着按能倒序删完；有文字时按 Backspace 只删字不碰胶囊",
+      "粘贴「a,b,c」一次得到三枚胶囊（末段没逗号则留在框里）",
+      "Tab 能逐个走到每枚 ×（焦点环可见），回车删除并把焦点送回输入框；读屏播报「删除标签 a，按钮」",
+      "加到上限 {MAX} 个后再添加 → 抖动拒绝；底部提交回显行始终与胶囊序列一致",
+      "窄容器（DevTools 拖窄）下胶囊自动换行、输入框永远可用；减少动效下无 pop 无抖但全部行为不变"
+    ],
+    "reference": "参考气质：Gmail 收件人框（贴一串地址自动分枚）；Notion 页面 Property 的 Multi-select（胶囊 + ×，中文逗号也认）。手感核心是「回车那一下的干脆」。",
+    "variants": [
+      { "label": "带建议列表（升级为 Combobox）", "delta": "输入时下方浮出过滤后的候选 popover，↑↓ 选择——收编逻辑不变，词条关系上这就是从 Tag Input 跨进 Combobox 的那一步" },
+      { "label": "可拖拽排序", "delta": "胶囊接 pointerdown 拖序（复用 I-03 drag-reorder 的 FLIP 让位）；代价是 jsLines 翻倍且触屏拖拽与文本选择抢手势" }
+    ]
+  },
+  "params": [
+    { "key": "MAX", "label": "标签上限 (个)", "def": 8, "min": 2, "max": 20, "step": 1, "hint": "演示拒绝路径的闸门；生产按后端字段约束来，没有约束就别设" },
+    { "key": "RADIUS", "label": "胶囊圆角 (px)", "def": 999, "min": 4, "max": 999, "step": 1, "hint": "999=药丸（Gmail 态）；≤6 方角更像表格单元——同一控件两副气质" },
+    { "key": "GAP", "label": "胶囊间距 (px)", "def": 6, "min": 2, "max": 14, "step": 1, "hint": "<4 胶囊会糊成一坨读不清边界；>10 容器虚胖、不像一只框" }
+  ],
+  "scenarios": [
+    "Gmail / Outlook 收件人与抄送框（粘贴一串邮箱自动分枚是本条目的验收级行为）",
+    "Notion / Confluence 页面的标签属性编辑",
+    "后台「白名单域名 / IP 段」配置（粘贴批量分发是刚需）",
+    "博客发布器的关键词框（SEO tags 数常受上限约束，拒绝提示必须有）",
+    "Jira 缺陷单的组件多选（先建议后自由输入 = 向 Combobox 演化中的中间态）"
+  ],
+  "pitfalls": [
+    "contenteditable 派的坑在于它把「光标」从浏览器手里接了回来：胶囊是个内嵌 span，删它时光标可能停在 span 前后两个位置、跨胶囊框选再打字会把兄弟节点连坐、中文输入法的 composition 节点直接插进胶囊肚子里——每一条补丁都是十行起步的 Range/Selection 手术；真 input 派把这些全部让渡给浏览器，代价只是「光标永远在框尾」这一个可接受的限制，这就是流派选型的分水岭",
+    "Backspace 空态删末位要 preventDefault：不拦的话浏览器原生行为是「退格=后退一页」，用户在框里顺手多按一下整个表单页被夺走——桌面 Chrome 已收紧了这条（可编辑区内不再触发后退），但 Safari/Firefox 历史行为不一，别赌用户浏览器",
+    "逗号要半角全角双收（, 与 ，）：只收半角时中文输入法用户打出的「，」会留在文本里变成标签的一部分，「前端，设计」成了一枚脏胶囊——查重失败还会雪上加霜；同理还有末尾空白与连续逗号，收编前一律 trim 掉",
+    "删除叉画在 ::after 上是视觉正确、无障碍全错：伪元素没有可聚焦性，键盘用户只能删末位（靠空态 Backspace 一条腿），读屏连「这枚胶囊可以删」都不知道；× 做成 <button aria-label=\"删除标签 X\"> 顺带还白送了指针命中区放大的机会（18px 圆 + focus ring）",
+    "状态数组与 DOM 是两份真相：点了 × 只删 DOM 节点不改数组，提交时读 DOM  innerText 拼装，查重与上限全部失灵——单向数据流（数组 → render()）在 60 行的 demo 里也是正解，「全量重绘」在两位数集合下没有任何性能义务，提前上 diff 更新才是过度设计",
+    "事件委托里 dataset.i 存的是「渲染时下标」：删除一枚后其余胶囊的 i 全部错位——所以本 demo 每次变更后 render() 重建并重写 dataset.i；不做全量重绘的话，就得改存不可变 id + findIndex，这是委托式删除最容易埋的雷"
+  ],
+  "related": ["otp-input", "select", "popover", "tag", "chips"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/API/Element/paste_event",
+    "https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/group_role"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.4)", "reviewer": "skkjkk", "date": "2026-09-27" }
+  ],
+  "verifiedWith": "Qwen3.8-Flash · replay 2026-09-26 · 1/1 生成通过"
+}

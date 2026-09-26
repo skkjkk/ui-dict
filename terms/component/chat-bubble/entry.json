@@ -1,0 +1,92 @@
+{
+  "id": "chat-bubble",
+  "no": "C-20",
+  "category": "component",
+  "nameZh": "对话气泡 / 消息流",
+  "nameEn": "Chat Bubble / Message Flow",
+  "aliases": [
+    "AI 回答那个气泡框",
+    "聊天气泡带尾巴的",
+    "打字机一样往外冒字的那个框",
+    "往上翻不会被新消息拽走的消息列表",
+    "右边自己左边对方那种对话框",
+    "Message Scroller / Chat UI"
+  ],
+  "definition": "聊天的单条消息形态（左右分侧、圆角、带小尾巴的气泡）与其容器行为的合称：容器侧叫消息流（Message Flow），负责滚动锚定、流式追加、分组与时序分隔。两个维度正交——气泡管「一条长什么样」，流管「新的来了往哪滚」。与 Snackbar 的分界：消息流是对话历史、持久可回看，Snackbar 是瞬时反馈、阅后即焚；与 Empty State 的分界：气泡是「有话」的形态，开场引导/无会话态该换缺省页。2026 年的时间窗词条：shadcn v4 刚把 Bubble / Message Scroller / Attachment 定为官方词，中文用户此刻搜「AI 聊天界面组件」仍近乎零命中——词族官方化与词库收录之间有几个月的空位。",
+  "whenNotToUse": [
+    "单向系统反馈（保存成功、操作失败）→ 用 Snackbar/Toast，给用户一个不需要回复的消息气泡会误导出「可以对话」的预期",
+    "通知中心、消息列表（只读、要点开才成对话）→ 用 List + 详情页，聊天气泡的左右分侧在没有「对方正在看」语境的场景里是伪装",
+    "需要逐条引用/编辑/折叠的长文档讨论（代码评审、批注）→ 用线程化 Thread 视图，气泡流的线性时间轴撑不住引用树",
+    "表单式往来（工单回复、邮件）→ 带元信息的卡片流更合适：气泡装不下「状态、处理人、SLA」这些字段",
+    "纯播报场景（系统公告、日志）→ 直接列表，尾巴与分侧这两个特征没有信息量还占横向空间"
+  ],
+  "confusedWith": ["snackbar", "list", "bottom-sheet"],
+  "anatomy": [
+    { "part": "Bubble 气泡", "note": "单条内容容器：max-width {MAXW}ch、圆角 {RADIUS}px、白-space: pre-wrap 保住换行" },
+    { "part": "Tail 尾巴", "note": "贴在下角的三角，::before 边框三角形画；指向「谁在说」——只有组首条需要它" },
+    { "part": "Side 分侧", "note": "用户右、AI/对方左；配色双档（主色实心 vs 灰底）——左右轴就是「谁」的语义" },
+    { "part": "Group 分组", "note": "同角色连续消息：只第一条露头像与尾巴，间距收紧——IM 标准态，不做就一眼假" },
+    { "part": "Flow 消息流", "note": "滚动容器 + overflow-anchor 锚定 + overscroll-behavior: contain，流式与历史加载不跳视" },
+    { "part": "Composer 输入区", "note": "textarea 自增高 ≤3 行；Enter 发送 / Shift+Enter 换行，isComposing 防输入法误发" },
+    { "part": "Time Separator 时间分隔", "note": "「今天 14:02」居中小字细线——消息流的章节标记，消息间隔超阈值才插" }
+  ],
+  "nativePath": "lite-js",
+  "implSchool": ["passive-observer", "css-state", "active-compute", "capability-api"],
+  "jsLines": 60,
+  "promptTemplate": {
+    "core": "实现一个 Chat Bubble / Message Flow 对话组件：顶部消息流容器（height 400px、overflow-y:auto、overscroll-behavior:contain、role=log + aria-live=polite），底部一行输入区（textarea + 发送按钮）。气泡：max-width {MAXW}ch、圆角 {RADIUS}px、padding 9px 13px、font-size 13.5px、line-height 1.75、white-space:pre-wrap；用户右（主色 #0b4f6c 实心白字）、AI 左（#f1ede4 底深字），各用一个 ::before 边框三角形做 5px 小尾巴贴在本侧下角；AI 行带 26px 方头像。分组：同角色连续消息只第一条露头像与尾巴，其余加 .grouped 收紧 margin。流式回复：发送后先 push 一条空气泡，420ms 后（模拟 TTFT）起一个 setInterval 每 {TYPE_MS}ms 追加 2~4 个码点（打字机光标 7×14px 主色方块 steps(2) 闪烁），吐完摘光标；prefers-reduced-motion 下整段直出无光标。贴底不跳（本词条的灵魂）：滚动锚定交给原生 overflow-anchor:auto（消息元素显式写上），尾部放 1px 锚点元素 + IntersectionObserver（root=flow）判定「当前是否贴底」——贴底时新内容与流式追加才 scrollTop=scrollHeight 跟随，用户往上翻后 atBottom=false，新消息不拽视口、浮出「↓ 回到底部」胶囊钮（点击 scroll 到底）。输入区：textarea rows=1 自增高（input 事件里 height:auto 再回写 scrollHeight，封顶 96px≈3 行）；Enter 且非 Shift 且非 e.isComposing 才 requestSubmit()——输入法组词回车不发送。时间戳气泡右下角小字；会话中段插「今天 14:02」分隔线（两侧细线 ::before/::after flex:1）。demo 全程零网络请求，流式接口位置写注释（fetch 流 reader 与 setInterval 走同一条 append 路径）。",
+    "stack": "原生 CSS（overflow-anchor / ::before 尾巴 / pre-wrap）+ 原生 JS（setInterval 流式模拟 + IntersectionObserver 贴底哨兵 + textarea 自增高）；无框架无依赖。",
+    "constraints": [
+      "不要用「每条新消息 scrollTo 底部」的裸写法——用户正在往上翻历史时会被新消息生硬拽回底部（聊天应用最被恨的 bug）；贴底与否必须先判（IO 哨兵或 scrollTop 与阈值比较），滚动锚定 overflow-anchor 是第一道防线、JS 跟随是第二道",
+      "不要把滚动锚定写成手动「记录高度差再补偿 scrollTop」的体操——CSS overflow-anchor 原生就在做这件事（Chrome/Safari/FF 皆 ship），手写补偿是它出现之前各 IM 的祖传苦役；降级才补（Firefox 桌面历史版本曾不开启锚定，实测后再决定）",
+      "不要用 <input> 做消息输入框——多行、Shift+Enter 换行、自增高都无处安放；textarea + rows=1 + scrollHeight 回写是唯一顺路",
+      "不要在 keydown Enter 里忘查 e.isComposing——中文输入法组词状态下回车是「确认候选词」，不查它会把拼音半成品直接发送出去，中文用户第一印象就毁",
+      "不要把尾巴画成独立 <img>/SVG 背景——一个 ::before 边框三角足够；伪元素不占 DOM、不抢事件，换主题色时继承 currentColor 家族样式",
+      "不要给每条消息都放头像和时间——「分组 + 组首露全」才是 IM 的真实形态；每条都带头像会把 26px 的节奏噪声乘到整屏",
+      "不要在 aria-live=polite 的容器里用 aria-hidden 塞满装饰（头像、尾巴、分隔线都要 aria-hidden 或不出现在可访问名里），否则读屏逐条播报 ✦、三角和一堆时间戳"
+    ],
+    "verify": [
+      "输入消息按 Enter：右侧立刻出现你的气泡（带时间），约 0.4s 后左侧空气泡开始逐字吐出回复，光标闪烁，吐完光标消失",
+      "回复打到一半时往上滚动：视野停在你读的位置不被拽走，底部浮出「↓ 回到底部」钮，点后视口回到底部继续跟随",
+      "连续发两条消息：第二条气泡与第一条之间间距收紧、右侧不再重复出时间戳行（分组生效）；换 AI 回复时分组断开、头像重新露出",
+      "Shift+Enter 换行且输入框长高（最多 3 行后内部滚动）；用中文输入法打「xiao xi」按回车不会误发送",
+      "窄屏（375px 模拟）下气泡 max-width 不超过 82%、长英文单词被 break-word 折行不破容器",
+      "DevTools 里给消息流连发 200 条后滚动仍流畅（锚定与 IO 的代价可控）；减少动效下流式改整段直出、锚定行为不变",
+      "读屏进入容器播报 role=log，每条消息顺序可读，装饰元素不被念出"
+    ],
+    "reference": "参考气质：ChatGPT/Claude 网页版的消息流（流式吐字 + 上翻不跳 + 回到底部钮，是当代用户对「AI 说话」的全部肌肉记忆）；iMessage 的分组与尾巴。",
+    "variants": [
+      { "label": "真·流式接 API", "delta": "setInterval 换成 fetch response.body 的 reader 逐 chunk append——下游渲染路径一字不改，这正是 demo 分层的原因；生产加中断（AbortController + 「停止生成」钮）" },
+      { "label": "Markdown 渲染版", "delta": "气泡内支持代码块/表格/列表：气泡底色统一改白 + 描边、代码块横滚——代价是「气泡」的圆润形态被文档化切碎，ChatGPT 走的正是这条妥协路" }
+    ]
+  },
+  "params": [
+    { "key": "MAXW", "label": "气泡宽 (ch)", "def": 42, "min": 24, "max": 64, "step": 2, "hint": "ch 跟随字号缩放；>64 时短消息也拉成横幅，气泡感消失" },
+    { "key": "RADIUS", "label": "气泡圆角 (px)", "def": 12, "min": 0, "max": 22, "step": 1, "hint": "0=短信 App 复古方框；尾巴那角单独压到 4px 才有「从头像长出来」的指向感" },
+    { "key": "TYPE_MS", "label": "打字节奏 (ms/批)", "def": 26, "min": 0, "max": 80, "step": 2, "hint": "0=整段直出（等价 reduced-motion）；>60 像网络卡了，26×3 字/批 ≈ 每秒 100+ 字的舒适流" }
+  ],
+  "scenarios": [
+    "AI 助手的 Web 对话界面（ChatGPT/Claude/Kimi 式——本词条 2026 年的主场）",
+    "客服工单的人机混排会话（系统气泡 + 人工气泡 + 时间分隔）",
+    "电商App 的售前咨询（气泡 + 底部快捷提问 chip 行）",
+    "协作工具的私信面板（Slack/飞书侧边栏，分组与未读分隔线是主角）",
+    "游戏/社交 App 的公屏聊天（气泡简化到只有文本 + 等级角标）"
+  ],
+  "pitfalls": [
+    "「新消息来了 scrollTo 底部」是新手实现与工业品的分水岭：用户凌晨三点往上翻两屏前的回复，被一条新推送拽回底部，这个体验恶毒到 WhatsApp/Telegram 都专门做了「N 条新消息↓」的缓冲钮。根因是滚动容器的锚定语义：CSS 的 overflow-anchor 默认让「视口里靠前的元素」钉住滚动位置（所以上翻天然稳），但底部附近锚点会换到最新消息上——流式内容每追加一字符都在微涨高度，第二道防线（贴底才 scrollTop=scrollHeight 的 JS 跟随）必须与 IO 哨兵（是否贴底）配套，三者缺一就跳",
+    "Enter 发送不查 e.isComposing 会让中文用户把「ni hao 回车选词」变成「已发送」：keydown 触发时输入法候选词还没落地，value 里是拼音原串。这是所有含输入框的组件共享的坑（搜索框、评论框、tag input 全中招），修复只多一个条件但 90% 的自研聊天框没写",
+    "尾巴三角用 ::before 的 5px 边框画法，在气泡设了 border 的那一侧会露出直角接缝：尾巴的 border-right-color 与描边对不齐——要么气泡不带描边（用底色区分角色），要么尾巴改 SVG/clip-path 画法；小尾巴看着两行 CSS，配色一深就现形，这正是它值得进 anatomy 的原因",
+    "aria-live=polite 整挂消息流是双刃剑：读屏会逐条播报每条新消息（含流式的每次 DOM 变更），ChatGPT 早期版本因此被骂「一个字一个字念」——后来的通行解法：容器挂 role=log 保留上下文语义，流式中的气泡设 aria-busy=true 并在节流后播报，或对整条完成消息一次性播报（append 完成才进可访问性树）；纯前端词典不展开，但 prompt 的 constraints 里提了装饰元素 aria-hidden 这条底线",
+    "textarea 自增高的经典死循环：height:100% 或 min-height 不设导致 scrollHeight 永远等于整页余高——正解 rows=1 + 先 height:auto 再回写 min(scrollHeight, 上限px)，上限那一下 overflow-y:auto 才接管；直接写 max-height 不回 auto 的，删字后高度永远缩不回去",
+    "同角色分组若按「DOM 里相邻」判定，时间分隔线一插就断组，视觉上突然多出一个头像——判定逻辑要跳过 .daysep 这类非消息节点（或用数据层的 role+作者 id 序列判定）；「隔了 20 分钟还连头像」则是另一头，工业实现都按时间阈值（≈2–5 分钟）强制断组，本 demo 的简化要如实写进注释"
+  ],
+  "related": ["snackbar", "bottom-sheet", "skeleton", "tag-input", "message-flow"],
+  "refs": [
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-anchor",
+    "https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API",
+    "https://www.w3.org/WAI/ARIA/apg/patterns/log/"
+  ],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.4)", "reviewer": "skkjkk", "date": "2026-09-27" }
+  ]
+}
