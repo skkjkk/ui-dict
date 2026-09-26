@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>翻转滚动 Flip Scroll · ui-dict M-09</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: #0a0a0f; color: #f5f5f0; }
+
+  /* 拖拽画布：整个视口就是组件。水平位移由鼠标/手指拖动驱动，
+     progress ∈ [0,1] 映射队列位置——不依赖页面滚动，放进任何高度容器都能玩 */
+  .app { position: relative; height: 100vh; height: 100svh; overflow: hidden;
+         background: radial-gradient(130% 100% at 50% 0%, #17171f, #0a0a0f);
+         touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none;
+         outline: none; }
+  .app.dragging { cursor: grabbing; }
+  .app:focus-visible { box-shadow: inset 0 0 0 2px rgba(255,255,255,.45); }
+
+  /* 卡片：绝对定位同位堆叠居中，横向排布全靠 JS 写 translateX（队列胶片）。
+     宽度封顶 60svh（×4/3 ≈ 80svh 高）：矮视口（首页预览 iframe 280px）也完整放下整张卡 */
+  .slot { position: absolute; left: 50%; top: 50%; width: min(380px, 84vw, 60svh);
+          aspect-ratio: 3 / 4; will-change: transform; }
+  .card { position: absolute; inset: 0; transform-style: preserve-3d;
+          will-change: transform; }
+
+  /* 正面：图片位（零依赖 → 渐变卡面 + 大号编号），translateZ(1px) 防与背面 z-fighting */
+  .front { position: absolute; inset: 0; border-radius: 24px; backface-visibility: hidden;
+           -webkit-backface-visibility: hidden; transform: translateZ(1px);
+           display: grid; place-content: center; text-align: center;
+           box-shadow: 0 30px 80px rgba(0,0,0,.5); overflow: hidden; }
+  .front .num { font-size: clamp(64px, 16vmin, 120px); font-weight: 700; line-height: 1;
+                text-shadow: 0 6px 30px rgba(0,0,0,.35); }
+  .front .cap { margin-top: 12px; font-size: clamp(13px, 2.2vmin, 16px); letter-spacing: .4em; opacity: .9; }
+
+  /* 背面："?" 黑面，rotateY(180°) + translateZ(-1px)，双面各自 backface 隐藏 */
+  .back { position: absolute; inset: 0; border-radius: 24px; backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+          transform: rotateY(180deg) translateZ(-1px);
+          background: #000; border: 1px solid rgba(255,255,255,.15);
+          display: grid; place-items: center; font-weight: 700;
+          font-size: clamp(56px, 14vmin, 104px); color: #fff; }
+
+  .f1 { background: linear-gradient(160deg, #2b3a8f, #7a4ecb); }
+  .f2 { background: linear-gradient(160deg, #e07b39, #c94277); }
+  .f3 { background: linear-gradient(160deg, #14b8a6, #0f766e); }
+  .f4 { background: linear-gradient(160deg, #b91c5c, #6d1f4e); }
+  .f5 { background: linear-gradient(160deg, #1e293b, #0b1120); }
+
+  .hint { position: absolute; left: 0; right: 0; bottom: 20px; text-align: center;
+          font-size: 12px; letter-spacing: .2em; opacity: .5; z-index: 5; pointer-events: none; }
+
+  /* 降级：无 3D 旋转、无弹簧，卡片直接平移 + 淡入淡出表意 */
+  @media (prefers-reduced-motion: reduce) {
+    .card { transition: opacity .2s linear; }
+  }
+</style>
+</head>
+<body>
+  <div class="app" id="app" tabindex="0" role="group" aria-label="翻转卡片队列：左右拖动或用左右方向键浏览，拖到中间的卡片会亮出正面">
+    <div class="slot"><div class="card"><div class="front f1" role="img" aria-label="第 1 张：黎明"><div class="num">01</div><div class="cap">黎 明</div></div><div class="back" aria-hidden="true">?</div></div></div>
+    <div class="slot"><div class="card"><div class="front f2" role="img" aria-label="第 2 张：午后"><div class="num">02</div><div class="cap">午 后</div></div><div class="back" aria-hidden="true">?</div></div></div>
+    <div class="slot"><div class="card"><div class="front f3" role="img" aria-label="第 3 张：深海"><div class="num">03</div><div class="cap">深 海</div></div><div class="back" aria-hidden="true">?</div></div></div>
+    <div class="slot"><div class="card"><div class="front f4" role="img" aria-label="第 4 张：暮色"><div class="num">04</div><div class="cap">暮 色</div></div><div class="back" aria-hidden="true">?</div></div></div>
+    <div class="slot"><div class="card"><div class="front f5" role="img" aria-label="第 5 张：夜航"><div class="num">05</div><div class="cap">夜 航</div></div><div class="back" aria-hidden="true">?</div></div></div>
+    <div class="hint">按住左右拖动 —— 拖到中间的卡片会亮出正面</div>
+  </div>
+
+<script>
+(function () {
+  /* ui-dict:params:start */
+  const PARAMS = { "SPREAD": 400, "PERSP": 1000 };
+  /* ui-dict:params:end */
+
+  const app = document.getElementById("app");
+  const slots = Array.from(app.querySelectorAll(".slot"));
+  const cards = slots.map((s) => s.querySelector(".card"));
+  const N = slots.length;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  slots.forEach((s) => (s.style.perspective = PARAMS.PERSP + "px"));
+
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  // 区间线性插值：useTransform([x…],[y…]) 的等价物（区间外取端点）
+  function makeTransform(xs, ys) {
+    return (v) => {
+      if (v <= xs[0]) return ys[0];
+      for (let k = 0; k < xs.length - 1; k++) {
+        if (v <= xs[k + 1]) {
+          const t = (v - xs[k]) / (xs[k + 1] - xs[k]);
+          return ys[k] + t * (ys[k + 1] - ys[k]);
+        }
+      }
+      return ys[ys.length - 1];
+    };
+  }
+
+  // 卡 i 的中心进度：0…1 均布。p = center_i 时该卡居中且正面亮出
+  const centerOf = (i) => i / (N - 1);
+  const SPAN = (N - 1) * PARAMS.SPREAD;          // 队列全程横向行程
+  // 翻面只发生在中心附近的窄带：|d|≤0.01 全正，|d|≥0.03 全背，之间快速翻
+  const ryOf = makeTransform([-0.03, -0.01, 0.01, 0.03], [180, 0, 0, -180]);
+
+  let p = 0;                                      // 当前进度
+  function apply() {
+    for (let i = 0; i < N; i++) {
+      const tx = (centerOf(i) - p) * SPAN;        // p=0 时卡 0 居中，队列向右排开
+      const d = p - centerOf(i);
+      if (reduce) {
+        cards[i].style.opacity = Math.abs(d) < 0.5 / (N - 1) ? "1" : "0";
+        cards[i].style.transform = "none";
+        slots[i].style.transform = "translate(-50%, -50%) translateX(" + tx.toFixed(2) + "px)";
+      } else {
+        cards[i].style.transform = "rotateY(" + ryOf(d).toFixed(2) + "deg)";
+        slots[i].style.transform = "translate(-50%, -50%) translateX(" + tx.toFixed(2) + "px)";
+      }
+    }
+  }
+
+  // ---- 拖拽驱动：pointer 横向位移直接映射 progress（跟手，无二阶缓动） ----
+  let dragging = false, startX = 0, startP = 0, animId = 0;
+  app.addEventListener("pointerdown", (e) => {
+    dragging = true; startX = e.clientX; startP = p;
+    cancelAnimationFrame(animId);
+    app.classList.add("dragging");
+    app.setPointerCapture(e.pointerId);
+  });
+  app.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const raw = startP - (e.clientX - startX) / SPAN;   // 左拖 → 队列左移 → 下一张进中心
+    // 越界 rubber-band：越出 [0,1] 的部分按 30% 跟随
+    p = raw < 0 ? raw * 0.3 : raw > 1 ? 1 + (raw - 1) * 0.3 : raw;
+    apply();
+  });
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    app.classList.remove("dragging");
+    snapTo(Math.round(clamp(p, 0, 1) * (N - 1)));
+  }
+  app.addEventListener("pointerup", endDrag);
+  app.addEventListener("pointercancel", endDrag);
+
+  // ---- 松手吸附：弹簧式滑到最近卡位（reduced-motion 直接跳位） ----
+  function snapTo(idx) {
+    const target = clamp(idx, 0, N - 1) / (N - 1);
+    if (reduce) { p = target; apply(); return; }
+    const from = p, delta = target - from, t0 = performance.now();
+    cancelAnimationFrame(animId);
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / 340);
+      const ease = 1 - Math.pow(1 - t, 3);            // ease-out cubic，无过冲
+      p = from + delta * ease;
+      apply();
+      if (t < 1) animId = requestAnimationFrame(step);
+    };
+    animId = requestAnimationFrame(step);
+  }
+
+  // 键盘可达：左右方向键逐张切换
+  app.addEventListener("keydown", (e) => {
+    const cur = Math.round(clamp(p, 0, 1) * (N - 1));
+    if (e.key === "ArrowRight") { snapTo(cur + 1); e.preventDefault(); }
+    if (e.key === "ArrowLeft") { snapTo(cur - 1); e.preventDefault(); }
+  });
+
+  // ---- 自动巡演：加载后完整走一遍队列（0→1→0），让静态嵌入位（不滚动的预览窗）
+  // 也能看到全过程；用户一旦拖动/按键立即接管并停演 ----
+  let userTouched = false;
+  function autoTour() {
+    if (userTouched) return;
+    const t0 = performance.now(), DUR = 5200;    const leg = (now) => {
+      if (userTouched) return;
+      const t = Math.min(1, (now - t0) / DUR);
+      // 0→1→0 的往返缓动：前半去、后半回，全程连续
+      const wave = t < 0.5 ? 1 - Math.pow(1 - t * 2, 3) : 1 - Math.pow((t - 0.5) * 2, 3);
+      p = reduce ? Math.round(wave * (N - 1)) / (N - 1) : wave;
+      apply();
+      if (t < 1) { animId = requestAnimationFrame(leg); } else { p = 0; apply(); }
+    };
+    animId = requestAnimationFrame(leg);
+  }
+  const takeover = () => { userTouched = true; cancelAnimationFrame(animId); app.classList.remove("dragging"); };
+  app.addEventListener("pointerdown", takeover, { capture: true });
+  app.addEventListener("keydown", takeover, { capture: true });
+  if (!reduce) setTimeout(autoTour, 700); else { p = 0; apply(); }
+
+  apply();
+})();
+</script>
+</body>
+</html>

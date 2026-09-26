@@ -1,0 +1,79 @@
+{
+  "id": "flip-scroll",
+  "no": "M-09",
+  "category": "motion",
+  "nameZh": "翻转滚动",
+  "nameEn": "Flip Scroll",
+  "aliases": [
+    "拖动时卡片一张张翻过去",
+    "卡片从右边排着队拖到中间翻正",
+    "像翻牌一样拖着换图",
+    "一排卡片横着走走到面前亮出正面",
+    "背面是问号拖到中间才翻出图",
+    "拖拽翻牌",
+    "Flip Scroll",
+    "drag flip cards"
+  ],
+  "definition": "把一排卡片的水平位移与绕竖轴翻转同时绑定到拖拽进度上的动效：整排卡片横向排开，左右拖动时队列像胶片一样掠过，每张卡在远离中心时背面朝外（示\"?\"暗面），被拖到中心附近时绕 Y 轴翻正亮出正面、松手吸附停留，离开中心再翻回背面。与视差滚动（Parallax）的区别：视差是多层同屏不同速率位移制造纵深、内容不变形；翻转队列是卡片按拖拽进度做立体姿态更替，拖的是'翻到第几张'。与轮播（Carousel）的区别：轮播是整页翻页、只有当前帧可见；翻转队列全程看得到前后卡片的背面，翻面过程本身是叙事的一部分。",
+  "whenNotToUse": [
+    "图片需要驻足端详或横向对比时 → 卡片只在中心停留，用普通画廊/灯箱",
+    "卡片承载可读文字或按钮等交互内容 → 翻面过程中文字镜像/背对，点击目标不稳定",
+    "超过 10 张的长序列 → 拖动行程太长，用户不知道还要拖多久，中途就流失",
+    "需要精确定位到某一张的高频操作 → 拖拽+吸附效率低于带指示器的轮播"
+  ],
+  "confusedWith": ["carousel", "drag-reorder"],
+  "anatomy": [
+    { "part": "Canvas 拖拽画布", "note": "接收 pointer 事件的舞台，横向拖动位移直接映射进度 0→1" },
+    { "part": "Card 卡片对", "note": "正面（图片位）+ 背面（\"?\"暗面）叠成 3D 对，backface 双面各自隐藏" },
+    { "part": "Flip 翻面区间", "note": "|d|≤0.01 全正、|d|≥0.03 全背——翻面只发生在中心附近的窄进度带" },
+    { "part": "Snap 吸附位", "note": "松手后以 ease-out cubic 滑到最近卡位，卡片正面停留为结束态" }
+  ],
+  "promptTemplate": {
+    "core": "实现一个拖拽驱动的翻转卡队列（Flip Scroll）：画布占满容器、overflow hidden；N 张卡绝对定位同位堆叠居中（宽 min(380px, 84vw, 60svh)、3:4、圆角 24px），每张卡是正面（图片位，translateZ(1px)）+ 背面（黑色\"?\"暗面，rotateY(180deg) translateZ(-1px)）组成的 3D 对，两面都 backface-visibility: hidden，perspective 1000px 逐卡设置。横向进度 p ∈ [0,1]，卡 i 的中心进度 = i/(N−1)：每张卡 translateX = (中心进度 − p) × (N−1) × 400px，即整排卡片横向排开、随拖动整体掠过；rotateY = 分段映射 [−0.03, −0.01, 0.01, 0.03] → [180°, 0°, 0°, −180°]，即卡片只在距中心 ±0.01~0.03 的窄带内快速翻面，居中时正面停留、两侧全是背面。pointer 按住横向拖动直接映射进度（左拖下一张进中心，跟手无二阶缓动），越界有 0.3 系数的 rubber-band；松手以 340ms ease-out cubic 吸附到最近卡位。加载后自动巡演一遍全程（0→1→0 往返），用户首次 pointerdown/按键立即接管停演；左右方向键逐张切换。",
+    "stack": "原生 CSS + 原生 JS（Pointer Events + rAF + transform），零第三方依赖、零网络请求、单文件粘贴即可运行。",
+    "constraints": [
+      "不要把翻面区间铺满全程——rotateY 用中心附近 ±0.01~0.03 的窄区间分段插值，翻面只发生在卡片经过中心的一小段进度里，全程匀速翻转是另一种效果",
+      "不要把 perspective 加在整个画布共享层——逐卡 perspective 每张卡有自己的灭点，翻面观感一致；共享画布会让两端卡片的侧视角度失真",
+      "正面与背面必须各自 backface-visibility: hidden，且背面 rotateY(180deg) translateZ(-1px)、正面 translateZ(1px) 错开深度，否则同位两平面 z-fighting 闪烁",
+      "拖拽不要只监听 mouse 事件——用 Pointer Events 统一鼠标/触屏，画布设 touch-action: pan-y 防止移动端浏览器把横向拖动抢给页面滚动",
+      "pointermove 里直接写 transform 没问题（单元素合成器层），但吸附/巡演动画必须 rAF 驱动并在新交互开始时 cancel 旧帧，否则两路动画打架",
+      "prefers-reduced-motion 下降级为纯平移+淡入淡出切换：移除全部 3D 旋转与弹簧吸附"
+    ],
+    "verify": [
+      "初始画面：卡 01 正面居中，卡 02 背面在右侧探出一角，队列向右排开",
+      "按住向左拖：卡 01 翻回\"?\"背面退向左侧，卡 02 在接近中心时翻正亮出，跟手无跳变",
+      "松手后队列滑到最近卡位，居中卡正面停留；越界拖动有橡皮筋回弹",
+      "页面加载后自动完整巡演一遍往返，拖动或按键后立即停演交出控制权",
+      "左右方向键可逐张切换；系统开启减少动效后只剩平移与淡入淡出"
+    ],
+    "reference": "参考气质：ObsidianUI Flip Scroll 演示（水平胶片 + 中心翻牌）；Apple 官网产品页的滚动翻牌。翻幅克制、跟手、无过冲。",
+    "variants": [
+      { "label": "滚动驱动", "delta": "把进度输入从 pointer 拖拽换成页面滚动（sticky 轨道），其余映射不变——滚动版适合放进长页叙事" },
+      { "label": "交替翻面", "delta": "奇偶卡的 rotateY 取反向映射，相邻卡翻向相反，版式更活泼" }
+    ]
+  },
+  "params": [
+    { "key": "SPREAD", "label": "卡间距 (px)", "def": 400, "min": 200, "max": 700, "step": 20, "hint": "相邻两卡的横向距离，越大队列越散" },
+    { "key": "PERSP", "label": "透视距离 (px)", "def": 1000, "min": 500, "max": 2400, "step": 50, "hint": "越小灭点越近、翻面越夸张" }
+  ],
+  "scenarios": [
+    "摄影/婚摄作品集的逐张翻阅（拖到中心才亮出这张）",
+    "新品发布页的卖点逐张翻转亮相（Apple 式产品页）",
+    "盲盒/竞猜页：背面\"?\"拖到中心才揭晓的悬念感",
+    "首页 hero 的可玩卡片橱窗：预览位自动巡演、悬停即可上手拖"
+  ],
+  "pitfalls": [
+    "翻面区间若铺满全程，每张卡会全程在转、队列变成'旋转的传送带'——正确语义是翻面只占中心附近 ±0.03 的窄进度带，其余时间卡是静止的（背面或正面）",
+    "正面与背面同处一个 3D 对时若不写 translateZ 错开（正面 +1px、背面 −1px），同位两平面会 z-fighting 闪烁；backface-visibility: hidden 必须两面都写，漏一面就穿帮",
+    "perspective 的粒度决定观感：逐卡 perspective 每张卡独立灭点、翻面观感统一；若加到共享画布，两端卡片的侧视角度会严重失真",
+    "Pointer Events 的 pointermove 触发频率高于屏幕刷新率——拖拽映射本身是纯计算可以直写，但吸附动画必须 rAF 驱动，且新 pointerdown 时必须 cancel 旧动画帧，否则拖动与吸附两路 transform 互相覆盖",
+    "触屏上不设 touch-action: pan-y 的话，横向 pointermove 会被浏览器抢占成页面滚动，收不到 pointercancel 之外的任何拖拽事件——这是移动端'拖不动'的头号原因",
+    "晕动症用户对 3D 旋转与大幅横移都敏感，reduced-motion 下不能只把幅度调小——旋转与弹簧全部移除，降级成纯平移淡入淡出，自动巡演也不该开"
+  ],
+  "related": ["drag-reorder", "parallax", "scrollytelling", "z-stack-cards", "hover-image"],
+  "refs": ["https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events"],
+  "verifiedWith": "原版源码对照重写 + 拖拽化改造 2026-09-25 · QA/build 通过 · 浏览器截图判读（未跑模型回放）",
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "skkjkk", "date": "2026-09-25" }
+  ]
+}
