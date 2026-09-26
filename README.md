@@ -136,15 +136,25 @@ ui-dict/
 ├── REPLAY.md          ← prompt 回放测试工具说明
 ├── poc/               ← 早期零构建 POC（srcdoc 同源可行性验证，已完成使命）
 ├── astro.config.mjs   ← Astro + Tailwind + @/ 别名
-├── scripts/           ← 数据管线：sync-demofiles / qa-demofiles / gen-client-data · 回归：regression-check · 回放：replay-test（REPLAY.md）
+├── scripts/           ← 管线地图见 scripts/README.md
+│   ├── 数据管线：sync-demofiles → qa-demofiles → gen-client-data（site-data/demo-urls/demos 三产物）
+│   ├── 词条工厂：new-term（一键骨架，编号自动分配）· qa-one
+│   ├── 回归/验收：regression-check · verify-live-grid / verify-live-edge · verify-marquee(-page)
+│   ├── 可观测：audit-page（真浏览器 CDP：load/传输/长任务/iframe/堆，性能预算闸）
+│   └── 回放：replay-test（REPLAY.md）
 ├── src/
-│   ├── lib/           ← params.mjs（参数块契约）· validate.mjs（zod 入库闸）· terms.mjs（加载器）· prompt.mjs（拼装）· html-gate.mjs（单文件铁律共享闸）· browser.mjs（零依赖 CDP 渲染器）
+│   ├── lib/           ← 分层规则：types（schema 权威）· validate（闸）· terms（加载）
+│   │                    · params / prompt / previews / search（纯逻辑，Node+浏览器双端）
+│   │                    · html-gate（单文件铁律共享闸）· browser.mjs（零依赖 CDP 渲染器）
 │   ├── layouts/       ← Base.astro 编辑部外壳
 │   ├── pages/         ← index.astro 索引墙 · term/[slug].astro 详情页
-│   ├── scripts/       ← 浏览器岛：frame / home（反查搜索）/ entry（滑杆同步）
+│   │                    （demo 代码 SSR 内联进各自页面；客户端岛不携带全量 demo）
+│   ├── scripts/       ← 浏览器岛：frame（iframe 懒挂载+离视口回收）· home（搜索 DOM 薄层）
+│   │                    · entry（滑杆 rAF 节流+srcdoc 去重）· site（动效开关）
 │   ├── styles/        ← global.css（Tailwind v4 + 词典排版层）
-│   └── generated/     ← 构建产物（gitignore）：demos.js · site-data.js
-└── terms/             ← 词条数据：一条一目录（entry.json + demo.html），五类 30 条
+│   └── generated/     ← 构建产物（gitignore）：site-data.js（元数据）· demo-urls.js · demos.js（仅 SSR）
+└── terms/             ← 词条数据：一条一目录（entry.json + demo.html），五类 33 条
+    └── _template/     ← 词条工厂模板（pnpm new-term 复制源；QA 自动跳过）
 ```
 
 ## 状态
@@ -160,7 +170,9 @@ ui-dict/
 - [x] 本地 git 管理（独立仓库，main 分支，LF 统一，构建产物已 ignore）
 - [x] **首版 10 条标杆词条集齐**（五类全覆盖，QA+zod+构建+浏览器实测全绿）
 - [x] **词条扩到 20 条**（组件7 · 动效4 · 交互2 · 布局4 · 风格3；写手并行管线二次验证）
-- [x] **词条扩到 30 条**（组件11 · 交互4 · 布局6 · 动效6 · 风格3；5 写手并行、目录互不重叠。新增 C-08 气泡卡片 / C-09 分段控件 / C-10 分格验证码输入 / C-11 上下文菜单 / I-03 拖拽排序 / I-04 滑动行操作 / L-05 滚动叠卡 / L-06 破格长文栏 / M-05 共享元素过渡 / M-06 错峰入场。规格见 [BATCH-30.md](BATCH-30.md)，`pnpm gen` + `astro build` + 详情页回归 30/30 全绿）
+- [x] **词条扩到 33 条**（组件12 · 动效8 · 交互4 · 布局6 · 风格3。新增 C-12 灯箱 / I-03 拖拽排序 / I-04 滑动行操作 / L-05 滚动叠卡 / L-06 破格长文栏 / M-05 共享元素过渡 / M-06 错峰入场 / **M-08 拖拽跑马灯**。M-08 由 Obsidian UI 的 Draggable Marquee 改写：去掉 GSAP Draggable、next/image 与 CDN 图源，等价替换为原生 Pointer Events 指针捕获 + 帧率无关惯性衰减 + 取模回绕，落零依赖单文件铁律）
+- [x] **详情页双列严格同高**（第六段左列预览面板用 CSS Grid `stretch` 跟右列等高，IFrame 吃掉剩余空间；「展开全码」时左列转 `sticky` 定高。断言脚本 `pnpm verify:grid` 覆盖 33 词条 × 4 宽度）
 - [x] **首页编辑部词典排版 v0.2**：报头双线 + 罗马数字目录 + 发刊词（引 AI articulation barrier）+ 页边注四步管线 + 分节活词条墙 + 分节搜索收起
+- [x] **架构优化 v0.3**（2026-09-25）：分层清晰（schema 权威层/纯逻辑层/浏览器岛层）· 客户端 bundle 不再携带全量 demo（首页 622KB → 60KB 量级，卡片按需 fetch）· iframe 离视口 3s 回收 · 滑杆 rAF 节流+srcdoc 去重 · 词条工厂一键脚手架（`pnpm new-term`）· 可观测审计（`pnpm audit` 真浏览器性能预算闸）——细节见 [scripts/README.md](scripts/README.md)
 - [ ] 部署上线（GitHub Pages / Vercel + 独立域名 + 主动归档 Internet Archive；决策见 DEPLOY.md）
 - [x] **prompt 回放测试工具化**（`pnpm replay`：生成→铁律→真浏览器渲染→视觉判读→回填 verifiedWith；兑现出厂自检第二关，见 [REPLAY.md](REPLAY.md)）——**全 20 条双关验证回填**（Qwen3.8-Flash · 2026-09-25：20/20 生成通过 + 20/20 视觉还原判读通过）
