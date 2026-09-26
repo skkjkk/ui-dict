@@ -1,13 +1,16 @@
 // scripts/qa-demofiles.mjs
-// 出厂自检（静态部分）：
+// 出厂自检（静态部分）——「同一道闸」闸住所有入库词条：
 //  1. 单文件铁律：demo.html 禁止外部 http(s) 引用、禁止 import/require、禁止 node_modules 依赖
 //  2. 必须含 <!DOCTYPE html>（POC 实测 template 剥离会落 quirks mode，这里直接卡源文件）
 //  3. 若 entry.json 声明了 params，demo 必须含合法 /* ui-dict:params */ 块且键一一对应
+//  4. 身份一致性：entry.id == 目录名；category == 所在分类目录；no 前缀 == 分类
+//     （AI 批量产词条最常见的三类"目录约定"错误在这里全部拦下）
 import { fileURLToPath } from "node:url";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { getParams } from "../src/lib/params.mjs";
 import { gateHtml } from "../src/lib/html-gate.mjs";
+import { NO_PREFIX } from "../src/lib/types.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TERMS = path.join(ROOT, "terms");
@@ -17,7 +20,7 @@ const ERRORS = [];
 
 async function dirs(p) {
   try {
-    return (await fs.readdir(p, { withFileTypes: true })).filter((d) => d.isDirectory());
+    return (await fs.readdir(p, { withFileTypes: true })).filter((d) => d.isDirectory() && d.name !== "_template");
   } catch (e) {
     if (e.code === "ENOENT") return [];
     throw e;
@@ -39,9 +42,17 @@ for (const cat of await dirs(TERMS)) {
       continue;
     }
     if (!entry.id) ERRORS.push(`${tag}: entry.json 缺少 id`);
+    else if (entry.id !== id.name) ERRORS.push(`${tag}: entry.id(${entry.id}) 与目录名(${id.name}) 不一致`);
     if (!entry.category) ERRORS.push(`${tag}: entry.json 缺少 category`);
     else if (entry.category !== cat.name)
       ERRORS.push(`${tag}: category(${entry.category}) 与所在目录(${cat.name}) 不一致`);
+    if (typeof entry.no === "string" && NO_PREFIX[cat.name] && !entry.no.startsWith(NO_PREFIX[cat.name] + "-"))
+      ERRORS.push(`${tag}: 编号(${entry.no}) 前缀与分类(${cat.name} → ${NO_PREFIX[cat.name]}-xx) 不一致`);
+
+    // 草稿检测：new-term 骨架未填就提交时给出显眼提醒（不阻断，内容判断仍归人工审校）
+    if (entry.nameZh === "词条中文名" || entry.reviewer === "TODO-审校人" ||
+        (Array.isArray(entry.contributors) && entry.contributors.some((c) => c.reviewer === "TODO-审校人")))
+      WARNINGS.push(`${tag}: 疑似未填的 new-term 骨架（nameZh/审校人还是占位符），发布前请完成内容与审校`);
 
     let demo;
     try {

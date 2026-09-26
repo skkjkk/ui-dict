@@ -1,0 +1,55 @@
+{
+  "id": "模板词条（new-term 脚本会替换成目录名）",
+  "no": "C-XX",
+  "category": "component",
+  "nameZh": "词条中文名",
+  "nameEn": "English Name",
+  "aliases": [
+    "口语感觉描述一（用户会说的人话）",
+    "口语感觉描述二",
+    "口语感觉描述三",
+    "English alias"
+  ],
+  "definition": "是什么（1-2 句）+ 何时用（1 句）+ 与最近邻词的辨析一句。辨析句是硬要求：读者靠它精确选词。",
+  "whenNotToUse": [
+    "场景一 → 一句话因果理由",
+    "场景二 → 一句话因果理由"
+  ],
+  "confusedWith": ["最近邻词条-id"],
+  "anatomy": [
+    { "part": "部位名", "note": "一句话职责（这些词会进 prompt 正文）" }
+  ],
+  "promptTemplate": {
+    "core": "行为规格：触发条件 + 运动模型（曲线/弹簧给数值）+ 时长量级 + 结束态。参数用 {KEY} 占位，与 params 的 key 对应。动效/交互类四要素缺一退回。",
+    "stack": "原生 CSS + 原生 JS（写明关键 API，如 Pointer Events / IntersectionObserver / requestAnimationFrame）。",
+    "constraints": [
+      "负向清单一：禁止 X——因为会 Y",
+      "负向清单二",
+      "触屏 (hover:none) 或无 JS 环境的降级要求（如适用）"
+    ],
+    "verify": [
+      "生成后你应该看到：可观察的行为一",
+      "生成后你应该看到：可观察的行为二",
+      "键盘/触屏路径也正常（如适用）"
+    ],
+    "reference": "参考气质：某个具体产品/官网的同类效果（锚点胜过十个形容词）",
+    "variants": [
+      { "label": "更含蓄", "delta": "数值怎么改" },
+      { "label": "更戏剧", "delta": "数值怎么改" }
+    ]
+  },
+  "params": [
+    { "key": "KEY_NAME", "label": "中文名", "def": 100, "min": 0, "max": 200, "step": 5, "hint": "一句话影响" }
+  ],
+  "scenarios": [
+    "具体到产品的场景（如「Apple Music 播放面板」），不写『适合移动端』这种空话"
+  ],
+  "pitfalls": [
+    "张鑫旭式因果句：X 与 Y 并存是为了兼容 Z，否则会 W"
+  ],
+  "related": ["相关词条-id"],
+  "refs": [],
+  "contributors": [
+    { "generator": "AI (ui-dict 工厂 v0.2)", "reviewer": "TODO-审校人", "date": "2026-09-25" }
+  ]
+}
