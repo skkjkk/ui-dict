@@ -77,11 +77,25 @@ const sections = Array.from(document.querySelectorAll(".cat-section"));
 // ---------- 分类筛选：点左侧导航，只显示对应分类 ----------
 let activeCat = "all";
 const sideItems = Array.from(document.querySelectorAll("[data-cat-filter]"));
+// ---------- v0.3 原生路径筛选：「0 JS 原生件」与分类互斥的单开关 ----------
+let activeNp = "";
+const npItems = Array.from(document.querySelectorAll("[data-np-filter]"));
 
 sideItems.forEach((btn) => {
   btn.addEventListener("click", () => {
     activeCat = btn.dataset.catFilter;
+    activeNp = "";
     sideItems.forEach((b) => b.classList.toggle("active", b === btn));
+    npItems.forEach((b) => b.classList.remove("active"));
+    applyView();
+  });
+});
+npItems.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    activeNp = activeNp === btn.dataset.npFilter ? "" : btn.dataset.npFilter;
+    npItems.forEach((b) => b.classList.toggle("active", !!activeNp && b === btn));
+    sideItems.forEach((b) => b.classList.toggle("active", !activeNp && b.dataset.catFilter === activeCat));
+    if (!activeNp) activeCat = "all";
     applyView();
   });
 });
@@ -92,7 +106,8 @@ function applyView() {
   if (!query) {
     // 纯分类模式
     cards.forEach((c) => {
-      c.style.display = activeCat === "all" || c.dataset.cat === activeCat ? "" : "none";
+      const npOk = !activeNp || c.dataset.np === activeNp;
+      c.style.display = npOk && (activeCat === "all" || c.dataset.cat === activeCat) ? "" : "none";
       c.style.order = "";
     });
     sections.forEach((sec) => {
@@ -113,7 +128,8 @@ function run() {
   let shown = 0;
   for (const c of cards) {
     const hitCat = activeCat === "all" || c.dataset.cat === activeCat;
-    const hit = hitCat && order.has(c.dataset.slug);
+    const hitNp = !activeNp || c.dataset.np === activeNp;
+    const hit = hitCat && hitNp && order.has(c.dataset.slug);
     c.style.display = hit ? "" : "none";
     if (hit) { c.style.order = String(100 + order.get(c.dataset.slug)); shown++; }
   }

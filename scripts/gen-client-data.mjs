@@ -38,6 +38,9 @@ const clientTerms = terms.map((t) => ({
   refs: t.refs ?? [],
   verifiedWith: t.verifiedWith ?? "",
   contributors: t.contributors ?? [],
+  nativePath: t.nativePath ?? "",
+  implSchool: t.implSchool ?? [],
+  jsLines: t.jsLines ?? null,
   promptTemplate: t.promptTemplate, // 浏览器岛滑杆变化时重拼装（与展示永远同源）
 }));
 
@@ -64,6 +67,7 @@ md.push("> 用法：整份贴进 Cursor / Claude Code / v0 的上下文，让 AI
 for (const t of terms) {
   md.push(`---\n\n## ${t.no} ${t.nameZh}（${t.nameEn}）· ${CATEGORY_LABELS[t.category]}`);
   if (t.aliases?.length) md.push(`\n**口语别名**：${t.aliases.join(" / ")}`);
+  if (t.nativePath) md.push(`\n**原生路径**：${t.nativePath}${typeof t.jsLines === "number" ? ` · 交互 JS ≤${t.jsLines} 行` : ""}`);
   md.push(`\n**定义**：${t.definition}`);
   if (t.whenNotToUse?.length) md.push(`\n**何时不要用**：\n${t.whenNotToUse.map((s) => `- ${s}`).join("\n")}`);
   if (t.confusedWith?.length) md.push(`\n**易混淆**：${t.confusedWith.join(" / ")}`);

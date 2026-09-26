@@ -6,6 +6,7 @@ import Base from "@/layouts/Base.astro";
 import { TERMS, CATEGORY_LABELS } from "@/generated/site-data.js";
 import demos from "@/generated/demos.js";
 import { assemblePrompt } from "@/lib/prompt.mjs";
+import { NATIVE_PATHS, IMPL_SCHOOLS } from "@/lib/types.mjs";
 
 export function getStaticPaths() {
   return TERMS.map((t) => ({ params: { slug: t.slug } }));
@@ -43,6 +44,21 @@ const termClient = JSON.stringify(t).replace(/</g, "\\u003c");
       {t.aliases?.length > 0 && (
         <div class="flex flex-wrap gap-2 mt-4">
           {t.aliases.map((a) => <span class="chip">{a}</span>)}
+        </div>
+      )}
+      {(t.nativePath || t.implSchool?.length > 0 || typeof t.jsLines === "number") && (
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-[14px] mono" style="color:var(--color-muted)">
+          {t.nativePath && (
+            <span class="np-badge" title="原生实现路径（调研线 05a：HTML/CSS 平台能力覆盖度）">
+              {NATIVE_PATHS[t.nativePath].badge} {NATIVE_PATHS[t.nativePath].label}
+            </span>
+          )}
+          {typeof t.jsLines === "number" && <span>交互 JS ≤{t.jsLines} 行</span>}
+          {t.implSchool?.length > 0 && (
+            <span class="np-schools">
+              实现流派：{t.implSchool.map((s) => IMPL_SCHOOLS[s]?.short ?? s).join(" ｜ ")}
+            </span>
+          )}
         </div>
       )}
     </header>

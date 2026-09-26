@@ -147,6 +147,16 @@
   padding: 4px 12px; border-radius: 2px;
 }
 
+/* v0.3 原生路径徽章：详情页页眉行 + 首页卡片小角标 */
+.np-badge { color: var(--color-ink); }
+.np-schools { letter-spacing: .01em; }
+.card-np {
+  position: absolute; left: 10px; bottom: 10px;
+  font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .03em;
+  background: rgba(255, 255, 255, .82); color: #44403a;
+  padding: 3px 9px; border-radius: 999px; backdrop-filter: blur(2px);
+}
+
 /* 参数滑杆 */
 input[type=range] { width: 100%; accent-color: var(--color-accent); }
 

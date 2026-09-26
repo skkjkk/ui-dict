@@ -44,7 +44,7 @@ if (!targets.length) {
 }
 
 // ---------- 增量：manifest 记录 slug → 源 hash（demo + 补丁注册表 + 管线版本） ----------
-const PIPELINE_VERSION = "2"; // 截图组装逻辑变化时 +1 强制全量重截
+const PIPELINE_VERSION = "3"; // 截图组装逻辑变化时 +1 强制全量重截（v3：activate 覆盖原生 dialog/[popover] + C-13/C-16 预览豁免）
 const manifestPath = path.join(OUT, "manifest.json");
 let manifest = {};
 try { manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")); } catch { /* 首跑 */ }

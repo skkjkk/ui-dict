@@ -243,7 +243,7 @@ export class Page {
    *  目的：命令面板/抽屉/弹层这类「点开才见」的词条，静态截图必须拍到展开态，否则视觉判读会误杀。 */
   async activate() {
     const find = () => this.eval(`(() => {
-      const sel = '[role=dialog],[aria-modal=true],.sheet,.drawer,.palette,.modal,.overlay,.popover,.tooltip,.toast,.snackbar,.cmdk,.panel,.menu';
+      const sel = '[role=dialog],[aria-modal=true],.sheet,.drawer,.palette,.modal,.overlay,.popover,.tooltip,.toast,.snackbar,.cmdk,.panel,.menu,dialog:not([open]),[popover]:not(:popover-open)';
       const hidden = [...document.querySelectorAll(sel)].filter((el) => {
         const s = getComputedStyle(el); const r = el.getBoundingClientRect();
         return s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0 || r.width < 2 || r.height < 2 || r.top >= innerHeight || r.bottom <= 0;

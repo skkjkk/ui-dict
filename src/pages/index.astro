@@ -4,6 +4,7 @@
 import Base from "@/layouts/Base.astro";
 import { TERMS, CATEGORY_LABELS } from "@/generated/site-data.js";
 import { previewModeOf } from "@/lib/preview-modes.mjs";
+import { NATIVE_PATHS } from "@/lib/types.mjs";
 
 const terms = TERMS;
 const cats = Object.keys(CATEGORY_LABELS);
@@ -45,6 +46,9 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
             <span class="num">{ROMAN[i]}</span><span class="flex-1 text-left">{c.label} <i class="side-key">{c.key}</i></span><span class="side-count">{c.items.length}</span>
           </button>
         ))}
+        <button type="button" class="side-item side-np" data-np-filter="css-only">
+          <span class="num">🟢</span><span class="flex-1 text-left">0 JS 原生件 <i class="side-key">css-only</i></span><span class="side-count">{terms.filter((t) => t.nativePath === "css-only").length}</span>
+        </button>
       </nav>
     </aside>
 
@@ -101,12 +105,15 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
       </div>
       <div class="wall grid gap-8 mt-8" style={`grid-template-columns:repeat(auto-fill,minmax(540px,1fr))`}>
         {c.items.map((t) => (
-          <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug} data-cat={t.category} data-mode={previewModeOf(t)}>
+          <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug} data-cat={t.category} data-mode={previewModeOf(t)} data-np={t.nativePath ?? ""}>
             {/* 预览槽双层：静态截图打底（构建期生成，0 运行时开销）；live/hover 态按
                 data-mode 由 home.js 在恰当时机把 iframe 挂到 slot 里叠在截图上方。 */}
             <div class="preview-slot" data-preview-slot={t.slug}>
               <img class="preview-shot" src={`/shots/${t.slug}.webp`} alt="" loading="lazy" decoding="async"
                 width="1080" height="560" />
+              {t.nativePath === "css-only" && (
+                <span class="card-np mono">🟢 0 行 JS</span>
+              )}
               {previewModeOf(t) === "static" && (
                 <span class="preview-badge mono">静态预览 · 详情页可玩</span>
               )}
@@ -226,6 +233,8 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
     border-radius: 2px; padding: 1px 8px;
   }
   .side-item.active .side-count { background: var(--color-accent); color: #fff; }
+  /* 原生徽章筛选：与分类导航用一条细线分开（它是横切维度，不是第五个分类） */
+  .side-np { margin-top: 10px; border-top: 1px dashed var(--color-line); border-radius: 3px; }
   /* 窄屏：侧导航横向滚动成一行 */
   @media (max-width: 1023px) {
     .side-nav { position: static; }

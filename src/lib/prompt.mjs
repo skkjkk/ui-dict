@@ -18,6 +18,8 @@ export function assemblePrompt(t, overrides = {}) {
   lines.push("【技术约束】");
   lines.push(v(p.stack).trim());
   lines.push("单个自包含 HTML 文件；零第三方依赖、零网络请求、无构建步骤，粘贴即可运行。");
+  if (typeof t.jsLines === "number")
+    lines.push(`交互逻辑 JS ≤${t.jsLines} 行（原生 API；参数滑杆样板 ≤15 行不计入）。`);
   if (p.constraints?.length) {
     lines.push("");
     lines.push("【避免】");
@@ -41,6 +43,11 @@ export function termMarkdown(t, { overrides = {}, demoHtml = null } = {}) {
   const L = [];
   L.push(`# ${t.no} · ${t.nameZh} ${t.nameEn}`);
   if (t.aliases?.length) L.push(`\n别名：${t.aliases.join(" / ")}`);
+  const meta = [];
+  if (t.nativePath) meta.push(`原生路径：${t.nativePath}`);
+  if (typeof t.jsLines === "number") meta.push(`交互 JS ≤${t.jsLines} 行`);
+  if (t.implSchool?.length) meta.push(`实现流派：${t.implSchool.join(" / ")}`);
+  if (meta.length) L.push(`\n${meta.join(" ｜ ")}`);
   L.push(`\n## 定义\n${t.definition}`);
   if (t.anatomy?.length) L.push(`\n## 解剖\n${t.anatomy.map((a) => `- **${a.part}**${a.note ? ` — ${a.note}` : ""}`).join("\n")}`);
   if (t.whenNotToUse?.length) L.push(`\n## 何时不要用\n${t.whenNotToUse.map((s) => `- ${s}`).join("\n")}`);

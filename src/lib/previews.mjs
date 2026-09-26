@@ -12,6 +12,9 @@
 // 独立打开与复制出去的代码依旧是完整 demo（三态同源不受影响）。
 
 export const PREVIEW_FIXES = {
+  // C-13 模态对话框：通用规则藏 h2/p 会把 <dialog> 内部的标题与后果说明一起误伤，
+  // 弹窗只剩一排按钮——豁免 dialog 内部文字，demo 载荷不动
+  "C-13": "dialog h2,dialog p{display:block!important}",
   // C-05 抽屉：压暗主内容区的教学文案（.card）属说明文字，预览里隐藏
   "C-05": ".card{display:none!important}",
   // C-07 手风琴：demo 脚本本来就默认展开第一条、可点折叠（setExpanded(item, i===0)）。
@@ -34,6 +37,9 @@ export const PREVIEW_FIXES = {
   ].join(""),
   // C-11 上下文菜单：数据行已在 demo 源里补足，预览不再撑高，保持自然高度
   "C-11": "",
+  // C-16 标签页：面板内的 h3/p 是「切页签内容有肉眼差别」的验收证据，
+  // 通用规则把 p 藏了面板就空了——豁免面板正文
+  "C-16": '[role=tabpanel] h3,[role=tabpanel] p{display:block!important}',
   // M-09 翻转卡队列：通用注入把 body 改成 flex 居中后，100svh 画布 + 3D 背面的绘制
   // 上下文被破坏（整个画布画不出来，预览黑屏）。补丁把 html/body 恢复 block 即可——
   // demo 自身是拖拽驱动 + 加载自动巡演全程（0→1→0），预览窗不需要任何定格适配，
