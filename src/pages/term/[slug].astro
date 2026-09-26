@@ -1,25 +1,30 @@
 ---
 // src/pages/term/[slug].astro —— 词条详情页（十段版式的 v0.1 实装）
-// 数据源：构建期产物 site-data.js（TERMS + DEMOS），SSR 不碰文件系统。
+// 数据源：构建期产物 site-data.js（元数据）+ demos.js（仅 SSR 读，代码内联进本页静态 HTML，
+// 浏览器 bundle 不携带全量 demo），SSR 不碰文件系统。
 import Base from "@/layouts/Base.astro";
-import { TERMS, DEMOS, CATEGORY_LABELS } from "@/generated/site-data.js";
+import { TERMS, CATEGORY_LABELS } from "@/generated/site-data.js";
+import demos from "@/generated/demos.js";
 import { assemblePrompt } from "@/lib/prompt.mjs";
-
-const all = TERMS.map((t) => ({ ...t, demoCode: DEMOS[t.slug] ?? "" }));
 
 export function getStaticPaths() {
   return TERMS.map((t) => ({ params: { slug: t.slug } }));
 }
 const { slug } = Astro.params;
-const t = all.find((x) => x.slug === slug);
+const t = TERMS.find((x) => x.slug === slug);
 if (!t) throw new Error(`词条不存在：${slug}`);
+// 本页词条的 demo 源码（SSR 期从全量映射取，随页面静态内联；客户端岛零携带）
+const demoCode = demos[slug] ?? "";
 
-const known = new Map(all.map((x) => [x.id, x]));
-const idx = all.findIndex((x) => x.id === t.id);
-const prev = idx > 0 ? all[idx - 1] : null;
-const next = idx < all.length - 1 ? all[idx + 1] : null;
+const known = new Map(TERMS.map((x) => [x.id, x]));
+const idx = TERMS.findIndex((x) => x.id === t.id);
+const prev = idx > 0 ? TERMS[idx - 1] : null;
+const next = idx < TERMS.length - 1 ? TERMS[idx + 1] : null;
 
 const promptDefault = assemblePrompt(t);
+// 词条元数据随页内联（JSON 岛）：entry.js 从 DOM 读取，不再 import 全量 site-data——
+// 详情页客户端只带自己这一条的数据 + 4KB 脚本，词库体积与词条数解耦。
+const termClient = JSON.stringify(t).replace(/</g, "\\u003c");
 ---
 <Base title={`${t.nameZh} ${t.nameEn} · ${t.no} · UI 词典`} desc={`${t.nameZh}：${t.definition.slice(0, 80)}…`}>
   <nav class="num mb-4 text-[14px]">
@@ -91,7 +96,7 @@ const promptDefault = assemblePrompt(t);
         <div class="demo-panel">
           <iframe id="live" class="demo-frame" sandbox="allow-scripts" title={`${t.nameZh} live demo`}></iframe>
           <div class="demo-panel-meta mono text-[13px]">
-            <span data-demo-meta>零依赖单文件 · {Math.round((t.demoCode?.length ?? 0) / 1024 * 10) / 10} KB · 0 网络请求</span>
+            <span data-demo-meta>零依赖单文件 · {Math.round(demoCode.length / 1024 * 10) / 10} KB · 0 网络请求</span>
           </div>
         </div>
       </div>
@@ -117,7 +122,7 @@ const promptDefault = assemblePrompt(t);
           <button class="code-toggle" data-code-toggle type="button" aria-expanded="false">展开全码 ↓</button>
         </div>
         <div class="code-scroll border hair rounded-sm bg-[#232323] text-[#d8d5cc]">
-          <pre class="p-4"><code id="code">{t.demoCode}</code></pre>
+          <pre class="p-4"><code id="code">{demoCode}</code></pre>
         </div>
       </div>
     </div>
@@ -190,8 +195,8 @@ const promptDefault = assemblePrompt(t);
     {next ? <a class="num underline" href={`/term/${next.slug}`}>{next.no} {next.nameZh} →</a> : <span class="num">末条 →</span>}
   </nav>
 
+  <script type="application/json" id="term-data" set:html={termClient} />
   <script>
     import "@/scripts/entry.js";
   </script>
 </Base>
-

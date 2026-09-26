@@ -1,7 +1,14 @@
 // scripts/gen-client-data.mjs
-// 数据管线第三步：loadTerms（含 zod 校验）→ 产出浏览器可用的纯数据模块。
-// 客户端岛（搜索/滑杆/iframe）import 这个模块，而不是在页面里手嵌 JSON
-// —— demoCode 含 </script>，嵌进内联 script 标签会截断文档，模块文件则安全。
+// 数据管线第三步：loadTerms（含 zod 校验）→ 产出三份各司其职的产物：
+//
+//   src/generated/site-data.js   词条元数据（无 demo 代码体）—— 客户端岛（搜索/滑杆/复制）import，
+//                                bundle 不再背全部 demo HTML（此前 ~600KB 全量进首页包）
+//   src/generated/demo-urls.js   slug → /demos/<slug>.html 直链映射 —— 首页卡片按需 fetch 的地址簿
+//   src/generated/demos.js       slug → demoCode 全量映射 —— 仅构建期/Node 脚本使用（[slug].astro
+//                                在 SSR 时把当前词条的代码内联进该页静态 HTML，浏览器岛不 import 它）
+//
+// 客户端不内联 demo 代码体的同源保障：public/demos/<slug>.html 由 sync-demofiles 与 demos.js
+// 从同一份字符串写出（逐字节同源）；详情页代码块 SSR 自 demos.js 注入，textContent 即源码本体。
 import { fileURLToPath } from "node:url";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -31,20 +38,22 @@ const clientTerms = terms.map((t) => ({
   refs: t.refs ?? [],
   verifiedWith: t.verifiedWith ?? "",
   contributors: t.contributors ?? [],
-  promptText: assemblePrompt(t),          // 默认参数拼装（SSR 展示基准）
-  promptTemplate: t.promptTemplate,        // 浏览器岛滑杆变化时重拼装（与展示永远同源）
+  promptTemplate: t.promptTemplate, // 浏览器岛滑杆变化时重拼装（与展示永远同源）
 }));
 
-const demos = Object.fromEntries(terms.map((t) => [t.slug, t.demoCode]));
+const demoUrls = Object.fromEntries(terms.map((t) => [t.slug, `/demos/${t.slug}.html`]));
 
-const out =
-  "// 由 scripts/gen-client-data.mjs 生成，勿手改。改数据请编辑 terms/ 后跑 pnpm gen。\n" +
-  `export const TERMS = ${esc(clientTerms)};\n` +
-  `export const DEMOS = ${esc(demos)};\n` +
-  `export const CATEGORY_LABELS = ${esc(CATEGORY_LABELS)};\n`;
+const banner = "// 由 scripts/gen-client-data.mjs 生成，勿手改。改数据请编辑 terms/ 后跑 pnpm gen。\n";
 
 await fs.mkdir(OUT, { recursive: true });
-await fs.writeFile(path.join(OUT, "site-data.js"), out);
+await fs.writeFile(
+  path.join(OUT, "site-data.js"),
+  banner + `export const TERMS = ${esc(clientTerms)};\n` + `export const CATEGORY_LABELS = ${esc(CATEGORY_LABELS)};\n`,
+);
+await fs.writeFile(
+  path.join(OUT, "demo-urls.js"),
+  banner + `export const DEMO_URLS = ${esc(demoUrls)};\n`,
+);
 
 // ---------- 全站导出：public/ui-dict.md（喂 AI 的离线资产，index.how skill 同款思路） ----------
 // 收录名字/别名/定义/辨析/prompt 全文；不含代码体（代码走 /demos/<slug>.html 直链，控制体积）。
@@ -65,4 +74,4 @@ for (const t of terms) {
 await fs.mkdir(path.join(ROOT, "public"), { recursive: true });
 await fs.writeFile(path.join(ROOT, "public", "ui-dict.md"), md.join("\n"));
 
-console.log(`✓ gen-client-data: ${terms.length} 条词条 → site-data.js + public/ui-dict.md`);
+console.log(`✓ gen-client-data: ${terms.length} 条词条 → site-data.js（元数据）+ demo-urls.js + public/ui-dict.md`);

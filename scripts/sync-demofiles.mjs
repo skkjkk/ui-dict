@@ -23,9 +23,9 @@ const demos = {};
 let count = 0;
 try {
   for (const cat of await fs.readdir(TERMS, { withFileTypes: true })) {
-    if (!cat.isDirectory()) continue;
+    if (!cat.isDirectory() || cat.name.startsWith("_")) continue; // _template 等下划线目录非词条
     for (const id of await fs.readdir(path.join(TERMS, cat.name), { withFileTypes: true })) {
-      if (!id.isDirectory()) continue;
+      if (!id.isDirectory() || id.name.startsWith("_")) continue;
       const file = path.join(TERMS, cat.name, id.name, "demo.html");
       try {
         demos[id.name] = await fs.readFile(file, "utf8");

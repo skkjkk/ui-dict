@@ -44,6 +44,10 @@
 
 .mono { font-family: var(--font-mono); }
 
+/* 长页面分段渲染跳过：视口外的分节浏览器跳过其布局/绘制（首帧长任务的主要来源）。
+   contain-intrinsic-size 给占位高度，滚动条不跳动；进入视口时自动补全真实渲染。 */
+.cat-section { content-visibility: auto; contain-intrinsic-size: auto 1100px; }
+
 /* 词条卡：demo 即缩略图（iframe 活的），悬停整卡微抬 */
 .term-card {
   border: 1px solid var(--color-line);
