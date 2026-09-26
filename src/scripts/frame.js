@@ -40,17 +40,31 @@ export function hoverMountIframes(select, getHtml) {
     if (!f.isConnected) return;
     if (f.srcdoc && f.srcdoc !== "about:blank") return;
     f.srcdoc = html;
+    // 淡入真身：CSS 里 hover iframe 默认 opacity:0（空 iframe 不渲染 about:blank 文字、
+    // 不遮截图，且 opacity:0 保留命中测试——visibility:hidden 会退出命中测试已踩过）。
+    f.style.opacity = "1";
+  };
+  const blank = (f) => {
+    // 仅当当前是已挂载内容才清——空 iframe（srcdoc=""）本就什么都没渲染，
+    // 不清，避免把「即将写入」的状态误置成 about:blank（竞态：leave 的 800ms
+    // 定时器在 enter 触发的 fetch 尚未决议时触发，会把刚要写入的 srcdoc 顶掉）。
+    if (f.srcdoc && f.srcdoc !== "about:blank") {
+      f.srcdoc = "about:blank";
+      f.style.opacity = "";
+    }
   };
   for (const f of nodes) {
     f.addEventListener("pointerenter", () => {
       clearTimeout(timers.get(f));
+      timers.delete(f);
       if (!f.srcdoc || f.srcdoc === "about:blank") {
         const html = getHtml(f);
-        html instanceof Promise ? html.then((h) => apply(f, h)) : (f.srcdoc = html);
+        html instanceof Promise ? html.then((h) => apply(f, h)) : apply(f, html);
       }
     });
     f.addEventListener("pointerleave", () => {
-      if (f.srcdoc) timers.set(f, setTimeout(() => { f.srcdoc = "about:blank"; }, 800));
+      clearTimeout(timers.get(f));
+      timers.set(f, setTimeout(() => blank(f), 800));
     });
   }
 }

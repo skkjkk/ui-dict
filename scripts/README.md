@@ -42,7 +42,7 @@ src/pages/term/[slug].astro  详情页：demo 源码 SSR 内联进 #code，浏�
 - 首页卡片 DOM：构建期只出 `.preview-slot`（截图 `<img>` + 角标），**iframe 由 home.js 运行时按需创建**——static 卡零 iframe 开销。
 - 截图：`pnpm gen` 增量生成（manifest 记录 demo 源 hash；`--force` 全量重截，`--only` 重截指定词条）。
 - 激活态截图：hover 态词条在截图前调 `Page.activate()`（找隐藏浮层 → 点触发钮 / Ctrl+K），截图 = 浮层展开后的「主体可见」状态。
-- 技术陷阱（已踩过）：Astro scoped 样式给子代选择器加 `[data-astro-cid]` 属性限定，运行时 `appendChild` 的 iframe 没有该属性——叠层规则必须用 `:global()` 打破作用域；`pointer-events:none` 的 iframe 会吞 `pointerenter`——hover 态挂载的 iframe 必须 `pointer-events:auto`。
+- 技术陷阱（已踩过）：Astro scoped 样式给子代选择器加 `[data-astro-cid]` 属性限定，运行时 `appendChild` 的 iframe 没有该属性——叠层规则必须用 `:global()` 打破作用域；`pointer-events:none` 的 iframe 会吞 `pointerenter`——hover 态挂载的 iframe 必须 `pointer-events:auto`；**`visibility:hidden` 会退出命中测试**（鼠标穿透到截图，`pointerenter` 永远收不到）——未挂载的空 iframe 要用 `opacity:0`（保留命中测试、不渲染 about:blank 文字），挂载写入 srcdoc 后 JS 淡入。
 
 ## 分层（改哪里）
 
