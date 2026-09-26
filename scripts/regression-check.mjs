@@ -1,5 +1,5 @@
 // 批量回归：对每条词条详情页做结构断言（十段版式关键锚点 + 滑杆 + 三按钮 + demo 直链）
-import { TERMS, DEMOS } from "../src/generated/site-data.js";
+import { TERMS } from "../src/generated/site-data.js";
 
 const BASE = "http://localhost:4332";
 const results = [];
