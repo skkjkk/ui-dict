@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "gen": "node scripts/sync-demofiles.mjs && node scripts/qa-demofiles.mjs && node scripts/gen-client-data.mjs",
+    "gen": "node scripts/sync-demofiles.mjs && node scripts/qa-demofiles.mjs && node scripts/gen-client-data.mjs && node scripts/gen-previews.mjs",
     "new-term": "node scripts/new-term.mjs",
     "audit": "node scripts/audit-page.mjs",
     "predev": "pnpm gen",
@@ -15,6 +15,7 @@
     "qa": "node scripts/sync-demofiles.mjs && node scripts/qa-demofiles.mjs",
     "regression": "node scripts/regression-check.mjs",
     "verify:origin": "node scripts/verify-same-origin.mjs",
+    "verify:modes": "node scripts/verify-preview-modes.mjs",
     "verify:grid": "node scripts/verify-live-grid.mjs",
     "verify:grid-edge": "node scripts/verify-live-edge.mjs",
     "verify:marquee": "node scripts/verify-marquee.mjs && node scripts/verify-marquee-page.mjs",

@@ -3,6 +3,7 @@
 // 数据源：构建期产物 src/generated/site-data.js（CLI 读盘生成，SSR 不碰 fs）。
 import Base from "@/layouts/Base.astro";
 import { TERMS, CATEGORY_LABELS } from "@/generated/site-data.js";
+import { previewModeOf } from "@/lib/preview-modes.mjs";
 
 const terms = TERMS;
 const cats = Object.keys(CATEGORY_LABELS);
@@ -100,8 +101,16 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
       </div>
       <div class="wall grid gap-8 mt-8" style={`grid-template-columns:repeat(auto-fill,minmax(540px,1fr))`}>
         {c.items.map((t) => (
-          <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug} data-cat={t.category}>
-            <iframe data-demo={t.slug} sandbox="allow-scripts" scrolling="no" title={`${t.nameZh} 实时预览`} loading="lazy"></iframe>
+          <a class="term-card" href={`/term/${t.slug}`} data-slug={t.slug} data-cat={t.category} data-mode={previewModeOf(t)}>
+            {/* 预览槽双层：静态截图打底（构建期生成，0 运行时开销）；live/hover 态按
+                data-mode 由 home.js 在恰当时机把 iframe 挂到 slot 里叠在截图上方。 */}
+            <div class="preview-slot" data-preview-slot={t.slug}>
+              <img class="preview-shot" src={`/shots/${t.slug}.webp`} alt="" loading="lazy" decoding="async"
+                width="1080" height="560" />
+              {previewModeOf(t) === "static" && (
+                <span class="preview-badge mono">静态预览 · 详情页可玩</span>
+              )}
+            </div>
             <div class="p-7 pt-5">
               <div class="flex items-baseline justify-between gap-3">
                 <div class="text-[26px] font-semibold leading-snug">
@@ -162,6 +171,34 @@ const ROMAN = ["Ⅰ", "", "Ⅲ", "Ⅳ", "Ⅴ"];
     color: var(--color-accent); text-decoration: underline;
   }
   .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* ---------- 首页预览槽（截图打底 + 按需 iframe） ---------- */
+  /* .preview-slot：截图与 iframe 的公共容器（卡片第一行，280px 高，与旧 iframe 一致）。
+     截图 1080×560 按槽宽等比缩放（≈2× 视网膜密度），object-fit:cover 兜住轻微裁切。 */
+  /* 关键：scoped 样式会给子代选择器加 [data-astro-cid] 属性限定——运行时 JS appendChild
+     的 iframe 没有该属性，scoped 规则不命中。因此叠层规则必须用 :global() 打破作用域。 */
+  .preview-slot {
+    position: relative; overflow: hidden;
+    height: 280px; background: #f6f5f2;
+  }
+  .preview-slot .preview-shot {
+    width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block;
+  }
+  /* live/hover 态挂载的 iframe 叠在截图上方：背景不透明（截图仅打底，不可透过 iframe 看见） */
+  .preview-slot :global(iframe) {
+    position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+    background: #f6f5f2;
+  }
+  /* static 卡的角标：告诉用户这卡不交互，去详情页玩 */
+  .preview-badge {
+    position: absolute; right: 10px; bottom: 10px;
+    font-size: 11.5px; letter-spacing: .04em;
+    background: rgba(20, 20, 20, .55); color: #fff;
+    padding: 3px 10px; border-radius: 999px;
+    opacity: 0; transition: opacity .18s ease;
+    pointer-events: none;
+  }
+  .term-card:hover .preview-badge { opacity: 1; }
 
   /* 左侧分类导航：词典目录页的立体化 */
   .side-nav { position: sticky; top: 2rem; }

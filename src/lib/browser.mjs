@@ -165,8 +165,10 @@ export class Page {
     return this.c.send(method, params ?? {}, this.sessionId);
   }
   /** 渲染一段 HTML 源码（临时文件 + file:/// 导航，等价于双击打开 demo.html）。
+   *  @param {object} [opts] width/height 逻辑视口；settleMs 稳定等待；scale 设备像素比
+   *    （2 = 视网膜密度截图——截图管线用，540 逻辑宽截图 1080 物理像素，卡片里不糊）。
    *  @returns {Promise<{console:string[],runtime:string[],failed:string[],title:string}>} */
-  async render(html, { width = 900, height = 650, settleMs = 2500 } = {}) {
+  async render(html, { width = 900, height = 650, settleMs = 2500, scale = 1 } = {}) {
     const errors = { console: [], runtime: [], failed: [] };
     const onExcep = (p) => errors.runtime.push(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "(exception)");
     const onReqFail = (p) => { if (!p.cancelled) errors.failed.push(`${p.type ?? "?"} ${p.request?.url ?? p.url ?? "?"} — ${p.errorText ?? "?"}`); };
@@ -178,6 +180,9 @@ export class Page {
     await this.#send("Log.enable");
     await this.#send("Network.enable");
     await this.#send("Page.enable");
+    await this.#send("Emulation.setDeviceMetricsOverride", {
+      width, height, deviceScaleFactor: scale, mobile: false,
+    });
 
     // 渲染副本：缺 DOCTYPE 时补一个（仅影响渲染，不改被闸检查的源字符串）
     const renderHtml = /^\s*<!doctype html>/i.test(html) ? html : "<!DOCTYPE html>\n" + html;
@@ -190,7 +195,6 @@ export class Page {
       const h = (_p, sid) => { if (sid === this.sessionId) { this.c.off("Page.loadEventFired", h); res(); } };
       this.c.on("Page.loadEventFired", h);
     });
-    await this.#send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
     await this.#send("Page.navigate", { url });
     await Promise.race([loaded, sleep(6000)]);
     await sleep(settleMs); // 等动效/异步行为稳定
@@ -203,9 +207,14 @@ export class Page {
     this.c.off("Network.loadingFailed", onReqFail);
     return { ...errors, title };
   }
-  /** 截图（PNG Buffer）。full=true 时捕获整页（滚动驱动类 demo 的证据在折叠线以下）。 */
-  async screenshot({ full = true } = {}) {
-    const r = await this.#send("Page.captureScreenshot", { format: "png", captureBeyondViewport: full });
+  /** 截图（Buffer）。full=true 时捕获整页（滚动驱动类 demo 的证据在折叠线以下）；
+   *  format=webp+quality=82 是截图管线的默认（比 png 小 60-70%，照片级内容几乎无损）；
+   *  clip 可指定视口内区域（预览截图只要首屏 540×280 逻辑区域，不截整页）。 */
+  async screenshot({ full = true, format = "png", quality, clip } = {}) {
+    const params = { format, captureBeyondViewport: full };
+    if (format === "webp" || format === "jpeg") params.quality = quality ?? 82;
+    if (clip) params.clip = { x: 0, y: 0, width: clip.width, height: clip.height, scale: clip.scale ?? 1 };
+    const r = await this.#send("Page.captureScreenshot", params);
     return Buffer.from(r.data, "base64");
   }
   /** 页内求值（returnByValue + awaitPromise）。 */

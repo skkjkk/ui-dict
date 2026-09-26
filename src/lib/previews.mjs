@@ -34,6 +34,11 @@ export const PREVIEW_FIXES = {
   ].join(""),
   // C-11 上下文菜单：数据行已在 demo 源里补足，预览不再撑高，保持自然高度
   "C-11": "",
+  // M-09 翻转卡队列：通用注入把 body 改成 flex 居中后，100svh 画布 + 3D 背面的绘制
+  // 上下文被破坏（整个画布画不出来，预览黑屏）。补丁把 html/body 恢复 block 即可——
+  // demo 自身是拖拽驱动 + 加载自动巡演全程（0→1→0），预览窗不需要任何定格适配，
+  // 卡片尺寸也用 60svh 封顶自适应矮视口，280px 预览窗能完整放下整张卡。
+  "M-09": "html,body{display:block!important}",
 };
 
 /** 从 demo <title>（形如 "… · ui-dict C-07"）里取词条号；取不到返回空串。 */

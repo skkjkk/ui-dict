@@ -48,7 +48,9 @@
    contain-intrinsic-size 给占位高度，滚动条不跳动；进入视口时自动补全真实渲染。 */
 .cat-section { content-visibility: auto; contain-intrinsic-size: auto 1100px; }
 
-/* 词条卡：demo 即缩略图（iframe 活的），悬停整卡微抬 */
+/* 词条卡：预览槽（截图打底）+ 按需 iframe（home.js 按 data-mode 挂载）
+   hover 语义变化：static 卡不挂 iframe（截图即全部）；hover/live 卡挂 iframe 后，
+   悬停整卡即可交互。iframe pointer-events 由 home.js 在挂载时按需开启。 */
 .term-card {
   border: 1px solid var(--color-line);
   background: #fff;
@@ -61,11 +63,13 @@
   box-shadow: 0 10px 30px rgba(0,0,0,.07);
   transform: translateY(-2px);
 }
-.term-card iframe {
-  width: 100%; height: 280px; border: 0; display: block;
-  background: #f6f5f2; pointer-events: none;   /* 索引卡只看不玩，点击进详情页 */
+.term-card .preview-slot iframe {
+  pointer-events: none; /* 默认只看不玩，点击进详情页 */
 }
-.term-card:hover iframe { pointer-events: auto; }  /* 悬停后允许交互：卡片即活 demo */
+.term-card:hover .preview-slot iframe { pointer-events: auto; } /* 悬停后允许交互 */
+/* hover 态的挂载信号要从卡片冒泡到 iframe：iframe 自身 pointer-events:none 会吞掉
+   pointerenter（事件目标是它自己却不可命中），冒泡监听收不到——iframe 也保持可命中。 */
+.term-card .preview-slot iframe[data-hover-mounted] { pointer-events: auto; }
 
 /* 详情页 Live Demo 框 */
 .demo-frame {
